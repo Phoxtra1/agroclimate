@@ -9,6 +9,8 @@ import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Weather from "./pages/Weather";
 import CropCalendar from "./pages/CropCalendar";
+import CropProduction from "./pages/CropProduction";
+import Livestock from "./pages/Livestock";
 import Alerts from "./pages/Alerts";
 import Profile from "./pages/Profile";
 import Aquaculture from "./pages/Aquaculture";
@@ -34,6 +36,8 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CropCalendar /></ProtectedRoute>} />
+      <Route path="/crops" element={<ProtectedRoute><CropProduction /></ProtectedRoute>} />
+      <Route path="/livestock" element={<ProtectedRoute><Livestock /></ProtectedRoute>} />
       <Route path="/aquaculture" element={<ProtectedRoute><Aquaculture /></ProtectedRoute>} />
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

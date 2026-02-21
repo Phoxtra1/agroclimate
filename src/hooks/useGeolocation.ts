@@ -1,12 +1,24 @@
 import { useState, useEffect } from "react";
 
-interface GeoPosition {
+export interface GeoPosition {
   lat: number;
   lon: number;
   locationName: string;
+  community: string;
+  district: string;
+  region: string;
+  country: string;
 }
 
-const DEFAULT_POSITION: GeoPosition = { lat: 5.6037, lon: -0.187, locationName: "Accra, Ghana" };
+const DEFAULT_POSITION: GeoPosition = {
+  lat: 5.6037, lon: -0.187,
+  locationName: "Accra, Greater Accra",
+  community: "Accra",
+  district: "Accra Metropolitan",
+  region: "Greater Accra",
+  country: "Ghana",
+};
+
 const GEO_CACHE_KEY = "agroclimate_geo_cache";
 
 export function useGeolocation() {
@@ -28,17 +40,26 @@ export function useGeolocation() {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           locationName: "Your Location",
+          community: "",
+          district: "",
+          region: "",
+          country: "Ghana",
         };
 
-        // Reverse geocode for location name
         try {
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${geo.lat}&lon=${geo.lon}&format=json&zoom=10`
+            `https://nominatim.openstreetmap.org/reverse?lat=${geo.lat}&lon=${geo.lon}&format=json&zoom=14&addressdetails=1`
           );
           const data = await res.json();
-          const city = data.address?.city || data.address?.town || data.address?.village || "";
-          const state = data.address?.state || data.address?.region || "";
-          geo.locationName = [city, state].filter(Boolean).join(", ") || "Your Location";
+          const addr = data.address || {};
+
+          geo.community = addr.suburb || addr.village || addr.neighbourhood || addr.town || addr.city || "";
+          geo.district = addr.county || addr.city_district || addr.state_district || addr.town || "";
+          geo.region = addr.state || addr.region || "";
+          geo.country = addr.country || "Ghana";
+
+          const parts = [geo.community, geo.district, geo.region].filter(Boolean);
+          geo.locationName = parts.length > 0 ? parts.slice(0, 2).join(", ") : "Your Location";
         } catch {
           // Keep default name
         }
@@ -48,7 +69,7 @@ export function useGeolocation() {
         setLoading(false);
       },
       () => {
-        setLoading(false); // Use default/cached position
+        setLoading(false);
       },
       { timeout: 10000, maximumAge: 300000 }
     );

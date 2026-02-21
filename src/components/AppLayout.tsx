@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Wheat, Bug } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -10,10 +10,20 @@ import { useState } from "react";
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Dashboard" },
   { to: "/weather", icon: Cloud, label: "Weather" },
-  { to: "/calendar", icon: CalendarDays, label: "Crops" },
+  { to: "/crops", icon: Sprout, label: "Crops" },
+  { to: "/livestock", icon: Bug, label: "Livestock" },
   { to: "/aquaculture", icon: Fish, label: "Aquaculture" },
+  { to: "/calendar", icon: CalendarDays, label: "Calendar" },
   { to: "/alerts", icon: Bell, label: "Alerts" },
   { to: "/profile", icon: User, label: "Profile" },
+];
+
+const bottomNavItems = [
+  { to: "/dashboard", icon: Home, label: "Home" },
+  { to: "/weather", icon: Cloud, label: "Weather" },
+  { to: "/crops", icon: Sprout, label: "Crops" },
+  { to: "/livestock", icon: Bug, label: "Livestock" },
+  { to: "/alerts", icon: Bell, label: "Alerts" },
 ];
 
 function NavItems({ onClick }: { onClick?: () => void }) {
@@ -48,10 +58,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   if (isMobile) {
     return (
       <div className="min-h-screen bg-background">
-        {/* Mobile top bar */}
         <header className="sticky top-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sprout className="h-5 w-5 text-primary" />
+            <Wheat className="h-5 w-5 text-primary" />
             <span className="font-bold text-sm">AgroClimate</span>
           </div>
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -60,7 +69,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </SheetTrigger>
             <SheetContent side="left" className="bg-sidebar w-64 p-4">
               <div className="flex items-center gap-2 mb-6">
-                <Sprout className="h-6 w-6 text-sidebar-primary" />
+                <Wheat className="h-6 w-6 text-sidebar-primary" />
                 <span className="font-bold text-sidebar-foreground">AgroClimate</span>
               </div>
               <nav className="space-y-1">
@@ -77,10 +86,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <main className="pb-20">{children}</main>
 
-        {/* Bottom nav for mobile */}
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
           <div className="flex items-center justify-around h-16">
-            {navItems.slice(0, 5).map((item) => (
+            {bottomNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -100,12 +108,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Desktop: sidebar layout
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
         <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
-          <Sprout className="h-6 w-6 text-sidebar-primary" />
+          <Wheat className="h-6 w-6 text-sidebar-primary" />
           <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
