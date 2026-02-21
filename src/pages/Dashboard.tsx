@@ -1,16 +1,21 @@
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
 import { AlertCard } from "@/components/AlertCard";
 import { AdvisoryCard } from "@/components/AdvisoryCard";
+import { AICropAdvisory } from "@/components/AICropAdvisory";
 import { CropCalendarView } from "@/components/CropCalendarView";
 import { alerts, todayAdvisory, cropCalendars } from "@/data/mock-data";
-import { MapPin, ChevronRight, Wifi, WifiOff } from "lucide-react";
+import { MapPin, ChevronRight, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useAuth } from "@/hooks/useAuth";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { useCropAdvisory } from "@/hooks/useCropAdvisory";
 
 export default function Dashboard() {
-  const { forecast, loading: weatherLoading, isLive } = useWeather();
+  const { position, loading: geoLoading } = useGeolocation();
+  const { forecast, loading: weatherLoading, isLive } = useWeather(position.lat, position.lon);
   const { user } = useAuth();
+  const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
   const unreadAlerts = alerts.filter((a) => !a.read);
 
   return (
@@ -21,7 +26,11 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold">Welcome back</h1>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
             <MapPin className="h-3.5 w-3.5" />
-            <span>Ashanti Region, Ghana</span>
+            {geoLoading ? (
+              <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Detecting location…</span>
+            ) : (
+              <span>{position.locationName}</span>
+            )}
             {isLive ? (
               <span className="flex items-center gap-1 text-success text-xs"><Wifi className="h-3 w-3" /> Live</span>
             ) : (
@@ -68,6 +77,16 @@ export default function Dashboard() {
 
         {/* Sidebar */}
         <div className="space-y-5">
+          {/* AI Crop Advisory */}
+          <section>
+            <h2 className="font-bold mb-3">🌱 AI Crop Advisory</h2>
+            <AICropAdvisory
+              advisory={advisory}
+              loading={advisoryLoading}
+              onRefresh={() => fetchAdvisory(forecast[0], position.locationName)}
+            />
+          </section>
+
           {unreadAlerts.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-3">

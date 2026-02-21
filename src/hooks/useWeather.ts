@@ -8,6 +8,8 @@ const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 interface CachedWeather {
   data: WeatherDay[];
   timestamp: number;
+  lat: number;
+  lon: number;
 }
 
 function mapOwmToWeatherDay(item: any, index: number): WeatherDay {
@@ -33,17 +35,20 @@ function mapOwmToWeatherDay(item: any, index: number): WeatherDay {
   };
 }
 
-export function useWeather(lat = 6.69, lon = -1.62) {
+export function useWeather(lat?: number, lon?: number) {
   const [forecast, setForecast] = useState<WeatherDay[]>(mockForecast);
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
-    // Try cache first
+    if (lat === undefined || lon === undefined) return;
+
+    // Try cache first (check location proximity)
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
       const parsed: CachedWeather = JSON.parse(cached);
-      if (Date.now() - parsed.timestamp < CACHE_DURATION) {
+      const sameArea = Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
+      if (sameArea && Date.now() - parsed.timestamp < CACHE_DURATION) {
         setForecast(parsed.data);
         setIsLive(true);
         return;
@@ -60,7 +65,6 @@ export function useWeather(lat = 6.69, lon = -1.62) {
         if (error || data?.error) throw new Error(data?.error || "Fetch failed");
 
         const forecastList = data.forecast?.list || [];
-        // Group by day and pick one per day
         const dailyMap = new Map<string, any>();
         forecastList.forEach((item: any) => {
           const dateKey = new Date(item.dt * 1000).toDateString();
@@ -72,7 +76,7 @@ export function useWeather(lat = 6.69, lon = -1.62) {
         if (days.length > 0) {
           setForecast(days);
           setIsLive(true);
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: days, timestamp: Date.now() }));
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: days, timestamp: Date.now(), lat, lon }));
         }
       } catch (err) {
         console.warn("Weather API unavailable, using cached/mock data:", err);
