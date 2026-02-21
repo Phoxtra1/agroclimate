@@ -1,40 +1,37 @@
-import { ArrowLeft, MapPin, Phone, Globe, Wheat } from "lucide-react";
-import { Link } from "react-router-dom";
+import { MapPin, Phone, Globe, Wheat, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
 export default function Profile() {
-  return (
-    <div className="pb-20 max-w-lg mx-auto">
-      <header className="px-4 pt-6 pb-4 flex items-center gap-3">
-        <Link to="/" className="p-2 -ml-2 rounded-lg hover:bg-muted">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <h1 className="text-xl font-bold">My Profile</h1>
-      </header>
+  const { user, signOut } = useAuth();
+  const initials = user?.email?.slice(0, 2).toUpperCase() || "AG";
 
-      <div className="px-4 space-y-5">
-        {/* Avatar & name */}
+  return (
+    <div className="p-4 lg:p-8 max-w-3xl mx-auto">
+      <h1 className="text-xl font-bold mb-6">My Profile</h1>
+
+      <div className="space-y-5">
         <div className="bg-card rounded-xl p-5 shadow-sm text-center">
           <div className="h-16 w-16 rounded-full bg-primary mx-auto flex items-center justify-center text-primary-foreground text-xl font-bold">
-            KA
+            {initials}
           </div>
-          <h2 className="font-bold mt-3">Kwame Asante</h2>
+          <h2 className="font-bold mt-3">{user?.user_metadata?.display_name || user?.email}</h2>
           <p className="text-sm text-muted-foreground">Farmer</p>
         </div>
 
-        {/* Details */}
         <div className="bg-card rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-3">
             <MapPin className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Location</p>
-              <p className="text-sm font-medium">Ashanti Region, Kumasi, Ghana</p>
+              <p className="text-sm font-medium">Ashanti Region, Ghana</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Phone className="h-4 w-4 text-muted-foreground" />
             <div>
-              <p className="text-xs text-muted-foreground">Phone</p>
-              <p className="text-sm font-medium">+233 24 XXX XXXX</p>
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="text-sm font-medium">{user?.email}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -53,9 +50,7 @@ export default function Profile() {
           </div>
         </div>
 
-        <button className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity">
-          Edit Profile
-        </button>
+        <Button className="w-full">Edit Profile</Button>
       </div>
     </div>
   );
