@@ -14,7 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      farmer_crops: {
+        Row: {
+          created_at: string
+          crop_name: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crop_name: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crop_name?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fish_ponds: {
+        Row: {
+          created_at: string
+          dissolved_oxygen: number | null
+          feeding_schedule: string | null
+          id: string
+          last_feeding: string | null
+          name: string
+          notes: string | null
+          ph_level: number | null
+          pond_size_sqm: number | null
+          species: string
+          stock_count: number | null
+          updated_at: string
+          user_id: string
+          water_temp: number | null
+        }
+        Insert: {
+          created_at?: string
+          dissolved_oxygen?: number | null
+          feeding_schedule?: string | null
+          id?: string
+          last_feeding?: string | null
+          name: string
+          notes?: string | null
+          ph_level?: number | null
+          pond_size_sqm?: number | null
+          species: string
+          stock_count?: number | null
+          updated_at?: string
+          user_id: string
+          water_temp?: number | null
+        }
+        Update: {
+          created_at?: string
+          dissolved_oxygen?: number | null
+          feeding_schedule?: string | null
+          id?: string
+          last_feeding?: string | null
+          name?: string
+          notes?: string | null
+          ph_level?: number | null
+          pond_size_sqm?: number | null
+          species?: string
+          stock_count?: number | null
+          updated_at?: string
+          user_id?: string
+          water_temp?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          community: string | null
+          country: string | null
+          created_at: string
+          display_name: string | null
+          district: string | null
+          farm_size: string | null
+          id: string
+          phone: string | null
+          preferred_language: string | null
+          region: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          community?: string | null
+          country?: string | null
+          created_at?: string
+          display_name?: string | null
+          district?: string | null
+          farm_size?: string | null
+          id?: string
+          phone?: string | null
+          preferred_language?: string | null
+          region?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          community?: string | null
+          country?: string | null
+          created_at?: string
+          display_name?: string | null
+          district?: string | null
+          farm_size?: string | null
+          id?: string
+          phone?: string | null
+          preferred_language?: string | null
+          region?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
