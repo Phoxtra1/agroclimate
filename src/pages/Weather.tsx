@@ -1,9 +1,11 @@
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
 import { useWeather } from "@/hooks/useWeather";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { Droplets, Thermometer, Wind } from "lucide-react";
 
 export default function Weather() {
-  const { forecast, isLive } = useWeather();
+  const { position } = useGeolocation();
+  const { forecast, isLive } = useWeather(position.lat, position.lon);
   const today = forecast[0];
 
   return (
