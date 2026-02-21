@@ -83,7 +83,7 @@ export default function Dashboard() {
             <AICropAdvisory
               advisory={advisory}
               loading={advisoryLoading}
-              onRefresh={() => fetchAdvisory(forecast[0], position.locationName)}
+              onRefresh={() => fetchAdvisory(forecast[0], position.locationName, position)}
             />
           </section>
 

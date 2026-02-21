@@ -1,6 +1,7 @@
 import { CropAdvisory } from "@/hooks/useCropAdvisory";
-import { Sprout, AlertTriangle, CheckCircle, Loader2, Lightbulb } from "lucide-react";
+import { Sprout, AlertTriangle, CheckCircle, Loader2, Lightbulb, Droplets, Fish } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   advisory: CropAdvisory | null;
@@ -13,7 +14,7 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
     return (
       <div className="bg-card rounded-xl p-5 shadow-sm text-center">
         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-2">Generating AI crop advisory…</p>
+        <p className="text-sm text-muted-foreground mt-2">Generating AI advisory…</p>
       </div>
     );
   }
@@ -22,7 +23,7 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
     return (
       <div className="bg-card rounded-xl p-5 shadow-sm text-center">
         <Sprout className="h-8 w-8 mx-auto text-primary/40" />
-        <p className="text-sm text-muted-foreground mt-2">Get AI-powered crop recommendations based on your local weather</p>
+        <p className="text-sm text-muted-foreground mt-2">Get AI-powered crop, livestock & fish farming recommendations</p>
         <Button size="sm" className="mt-3" onClick={onRefresh}>
           <Lightbulb className="h-4 w-4 mr-1" /> Get Advisory
         </Button>
@@ -41,8 +42,11 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
           {advisory.recommendedCrops.map((crop, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className="text-lg">{crop.icon}</span>
-              <div>
-                <p className="font-semibold text-sm">{crop.name}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-sm">{crop.name}</p>
+                  {crop.category && <Badge variant="outline" className="text-[9px] py-0">{crop.category}</Badge>}
+                </div>
                 <p className="text-xs text-muted-foreground">{crop.reason}</p>
               </div>
             </div>
@@ -63,6 +67,42 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
           ))}
         </ul>
       </div>
+
+      {/* Irrigation Advice */}
+      {advisory.irrigationAdvice && (
+        <div className={`rounded-xl p-4 ${advisory.irrigationAdvice.needed ? "bg-warning/10" : "bg-success/10"}`}>
+          <h3 className="font-bold text-sm flex items-center gap-2 mb-2">
+            <Droplets className="h-4 w-4 text-accent" /> Irrigation
+          </h3>
+          <p className="text-xs text-muted-foreground">{advisory.irrigationAdvice.reason}</p>
+          {advisory.irrigationAdvice.needed && (
+            <p className="text-xs font-medium mt-1">Method: {advisory.irrigationAdvice.method}</p>
+          )}
+        </div>
+      )}
+
+      {/* Livestock Advice */}
+      {advisory.livestockAdvice && advisory.livestockAdvice.length > 0 && (
+        <div className="bg-card rounded-xl p-4 shadow-sm">
+          <h3 className="font-bold text-sm mb-3">🐐 Livestock Advisory</h3>
+          {advisory.livestockAdvice.map((l, i) => (
+            <div key={i} className="mb-2 last:mb-0">
+              <p className="text-sm font-medium">{l.animal}</p>
+              <p className="text-xs text-muted-foreground">{l.advice}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Fish Farming */}
+      {advisory.fishFarmingAdvice && (
+        <div className="bg-card rounded-xl p-4 shadow-sm">
+          <h3 className="font-bold text-sm flex items-center gap-2 mb-2">
+            <Fish className="h-4 w-4 text-accent" /> Fish Farming
+          </h3>
+          <p className="text-xs text-muted-foreground">{advisory.fishFarmingAdvice}</p>
+        </div>
+      )}
 
       {/* Risks */}
       {advisory.risks.length > 0 && (

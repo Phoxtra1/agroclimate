@@ -15,29 +15,39 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { weatherData, locationName, currentCrops } = await req.json();
+    const { weatherData, locationName, location, currentCrops, advisoryType } = await req.json();
 
     const systemPrompt = `You are an expert agricultural advisor for West African farmers, especially in Ghana. 
-Given the current weather conditions and location, provide:
-1. Top 3 recommended crops to plant right now based on the weather and season
-2. Specific farming actions to take this week
-3. Any weather-related risks and how to mitigate them
+You have deep knowledge of:
+- Cash crops (cocoa, cashew, oil palm, rubber, coconut, mango, citrus, shea)
+- Food crops (maize, rice, yam, cassava, plantain, cocoyam, sorghum, millet)
+- Vegetables (tomato, pepper, onion, okra, garden egg, cabbage, lettuce, carrot)
+- Livestock (poultry, goats, sheep, cattle, pigs)
+- Fish farming (tilapia, catfish)
+- Irrigation requirements and water management
 
-Keep advice practical, concise, and actionable for smallholder farmers. 
-Respond in JSON format with this structure:
-{
-  "recommendedCrops": [{"name": "string", "reason": "string", "icon": "emoji"}],
-  "weeklyActions": ["string"],
-  "risks": [{"risk": "string", "mitigation": "string"}],
-  "tip": "string"
-}`;
+Given the current weather, location, and season, provide:
+1. Top 5 recommended crops/activities based on current weather, season, and location
+2. Specific farming actions to take this week (for crops, livestock, and fish)
+3. Weather-related risks and how to mitigate them
+4. Whether irrigation support is needed and recommendations
+5. Livestock seasonal advisory
 
-    const userPrompt = `Location: ${locationName || "Ghana"}
+Keep advice practical, concise, and actionable for smallholder farmers.
+Respond using the structured tool provided.`;
+
+    const district = location?.district || "";
+    const region = location?.region || "";
+    const community = location?.community || "";
+
+    const userPrompt = `Location: ${community}, ${district}, ${region}, ${locationName || "Ghana"}
 Current weather: Temperature ${weatherData?.tempHigh || 30}°C, Humidity ${weatherData?.humidity || 60}%, Rain probability ${weatherData?.rainProb || 0}%, Wind ${weatherData?.wind || 5} km/h, Conditions: ${weatherData?.description || "clear"}
 Current month: ${new Date().toLocaleString("en", { month: "long" })}
+Season: ${new Date().getMonth() + 1 >= 3 && new Date().getMonth() + 1 <= 6 ? "Major Rainy Season" : new Date().getMonth() + 1 >= 9 && new Date().getMonth() + 1 <= 10 ? "Minor Rainy Season" : "Dry Season"}
 ${currentCrops ? `Farmer's current crops: ${currentCrops}` : ""}
+${advisoryType ? `Focus area: ${advisoryType}` : ""}
 
-What crops should the farmer focus on and what actions should they take this week?`;
+What crops, livestock, and fish farming activities should the farmer focus on and what actions should they take this week? Include irrigation advice.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -56,7 +66,7 @@ What crops should the farmer focus on and what actions should they take this wee
             type: "function",
             function: {
               name: "provide_crop_advisory",
-              description: "Provide structured crop advisory data",
+              description: "Provide structured comprehensive agricultural advisory data",
               parameters: {
                 type: "object",
                 properties: {
@@ -66,10 +76,11 @@ What crops should the farmer focus on and what actions should they take this wee
                       type: "object",
                       properties: {
                         name: { type: "string" },
+                        category: { type: "string", enum: ["Cash Crop", "Food Crop", "Vegetable"] },
                         reason: { type: "string" },
                         icon: { type: "string" },
                       },
-                      required: ["name", "reason", "icon"],
+                      required: ["name", "category", "reason", "icon"],
                     },
                   },
                   weeklyActions: { type: "array", items: { type: "string" } },
@@ -84,9 +95,30 @@ What crops should the farmer focus on and what actions should they take this wee
                       required: ["risk", "mitigation"],
                     },
                   },
+                  irrigationAdvice: {
+                    type: "object",
+                    properties: {
+                      needed: { type: "boolean" },
+                      reason: { type: "string" },
+                      method: { type: "string" },
+                    },
+                    required: ["needed", "reason", "method"],
+                  },
+                  livestockAdvice: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        animal: { type: "string" },
+                        advice: { type: "string" },
+                      },
+                      required: ["animal", "advice"],
+                    },
+                  },
+                  fishFarmingAdvice: { type: "string" },
                   tip: { type: "string" },
                 },
-                required: ["recommendedCrops", "weeklyActions", "risks", "tip"],
+                required: ["recommendedCrops", "weeklyActions", "risks", "irrigationAdvice", "livestockAdvice", "fishFarmingAdvice", "tip"],
               },
             },
           },
