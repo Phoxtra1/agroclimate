@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
 import { AlertCard } from "@/components/AlertCard";
 import { weeklyForecast, alerts } from "@/data/mock-data";
-import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2 } from "lucide-react";
+import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2, Bot, Plane, Leaf, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
@@ -19,6 +21,10 @@ export default function Landing() {
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [farmerType, setFarmerType] = useState("smallholder");
+  const [droneOwnership, setDroneOwnership] = useState(false);
+  const [droneType, setDroneType] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,52 +48,54 @@ export default function Landing() {
   };
 
   const features = [
-    { icon: Cloud, title: "Weather Intelligence", desc: "Localized 7-day forecasts with rainfall, temperature & wind data" },
-    { icon: Sprout, title: "Crop Advisory", desc: "Planting windows, fertilizer timing & pest risk alerts" },
-    { icon: Bell, title: "Smart Alerts", desc: "Real-time warnings via app and SMS for extreme weather" },
-    { icon: Fish, title: "Aquaculture", desc: "Fish pond monitoring with water quality & feeding schedules" },
+    { icon: Bot, title: "Odeneho AI", desc: "Voice-first AI farming assistant powered by Amineva" },
+    { icon: Cloud, title: "Climate Intelligence", desc: "Hyperlocal weather, rainfall prediction, disaster alerts" },
+    { icon: Sprout, title: "Crop Advisory", desc: "AI-powered planting windows, irrigation, pest risk" },
+    { icon: Fish, title: "Aquaculture", desc: "Fish pond monitoring with water quality tracking" },
+    { icon: Plane, title: "Drone Advisory", desc: "Flight safety evaluation and mission planning" },
+    { icon: Leaf, title: "Environmental Monitor", desc: "Air quality, heat stress, turbulence modeling" },
+    { icon: Bell, title: "Smart Alerts", desc: "Real-time disaster warnings and crop risk alerts" },
+    { icon: Shield, title: "Multi-Sector", desc: "Agriculture, forestry, surveying, and agribusiness" },
   ];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero */}
       <header className="relative overflow-hidden bg-gradient-to-br from-primary/10 via-background to-accent/10">
         <div className="container mx-auto px-4 py-8 lg:py-16">
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
-            {/* Left: branding + features */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
                 <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
               </div>
+              <p className="text-xs font-medium text-primary mb-2">Powered by Amineva</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
-                Smart farming starts with <span className="text-gradient-primary">better weather data</span>
+                Agricultural & Environmental <span className="text-gradient-primary">Intelligence</span>
               </h2>
               <p className="text-muted-foreground text-lg mb-8 max-w-lg">
-                Reduce crop failure with localized forecasts, crop-specific guidance, climate risk alerts, and aquaculture monitoring — all in one app.
+                Climate-first, prediction-driven, AI-powered platform for farmers, extension officers, surveyors, and forestry agents across Africa.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 mb-8">
                 {features.map((f) => (
-                  <div key={f.title} className="flex gap-3 items-start">
-                    <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <f.icon className="h-5 w-5 text-primary" />
+                  <div key={f.title} className="flex gap-2 items-start">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <f.icon className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">{f.title}</p>
-                      <p className="text-xs text-muted-foreground">{f.desc}</p>
+                      <p className="font-semibold text-xs">{f.title}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{f.desc}</p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Right: Auth card */}
             <div className="w-full max-w-md mx-auto lg:mx-0 lg:ml-auto">
               <Card className="shadow-xl border-border/50">
                 <CardHeader className="text-center pb-2">
                   <CardTitle className="text-xl">Get Started</CardTitle>
-                  <CardDescription>Join thousands of farmers using AgroClimate</CardDescription>
+                  <CardDescription>Join the AgroClimate community</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="login">
@@ -110,7 +118,41 @@ export default function Landing() {
                       <form onSubmit={handleRegister} className="space-y-3">
                         <Input placeholder="Full Name" value={regName} onChange={(e) => setRegName(e.target.value)} required />
                         <Input placeholder="Email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required />
+                        <Input placeholder="Phone (optional)" type="tel" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} />
                         <Input placeholder="Password (min 6 chars)" type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required minLength={6} />
+                        
+                        <div>
+                          <label className="text-xs font-medium mb-1.5 block">I am a</label>
+                          <Select value={farmerType} onValueChange={setFarmerType}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="smallholder">Smallholder Farmer</SelectItem>
+                              <SelectItem value="commercial">Commercial Farmer</SelectItem>
+                              <SelectItem value="cooperative">Cooperative Member</SelectItem>
+                              <SelectItem value="surveyor">Land Surveyor</SelectItem>
+                              <SelectItem value="forestry">Forestry Agent</SelectItem>
+                              <SelectItem value="extension">Extension Officer</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="drone"
+                            checked={droneOwnership}
+                            onCheckedChange={(checked) => setDroneOwnership(checked === true)}
+                          />
+                          <label htmlFor="drone" className="text-xs">I own/operate a drone</label>
+                        </div>
+
+                        {droneOwnership && (
+                          <Input
+                            placeholder="Drone type/model (optional)"
+                            value={droneType}
+                            onChange={(e) => setDroneType(e.target.value)}
+                          />
+                        )}
+
                         <Button type="submit" className="w-full" disabled={loading}>
                           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Account"}
                         </Button>
@@ -124,7 +166,6 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Preview Section — accessible without login */}
       <section className="container mx-auto px-4 py-12">
         <div className="text-center mb-8">
           <h3 className="text-2xl font-bold mb-2">Preview: What You'll Get</h3>
@@ -132,7 +173,6 @@ export default function Landing() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Weather preview */}
           <div className="lg:col-span-2">
             <TodayWeather weather={weeklyForecast[0]} />
             <div className="bg-card rounded-xl p-4 shadow-sm mt-4">
@@ -142,7 +182,6 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Alerts preview */}
           <div className="space-y-3">
             <h4 className="font-bold text-lg">Recent Alerts</h4>
             {alerts.slice(0, 3).map((alert) => (
