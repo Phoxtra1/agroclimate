@@ -9,6 +9,7 @@ import { AlertCard } from "@/components/AlertCard";
 import { weeklyForecast, alerts } from "@/data/mock-data";
 import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import aminevaLogo from "@/assets/amineva-logo.png";
 
 export default function Landing() {
   const { signIn, signUp } = useAuth();
@@ -56,9 +57,7 @@ export default function Landing() {
             {/* Left: branding + features */}
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                  <Sprout className="h-6 w-6 text-primary-foreground" />
-                </div>
+                <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
                 <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
               </div>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
