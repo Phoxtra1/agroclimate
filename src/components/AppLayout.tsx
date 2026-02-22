@@ -1,19 +1,23 @@
 import { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import aminevaLogo from "@/assets/amineva-logo.png";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import aminevaLogo from "@/assets/amineva-logo.png";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Dashboard" },
+  { to: "/odeneho", icon: Bot, label: "Odeneho AI" },
   { to: "/weather", icon: Cloud, label: "Weather" },
   { to: "/crops", icon: Sprout, label: "Crops" },
   { to: "/livestock", icon: Bug, label: "Livestock" },
   { to: "/aquaculture", icon: Fish, label: "Aquaculture" },
+  { to: "/drone", icon: Plane, label: "Drone Advisory" },
+  { to: "/environment", icon: Leaf, label: "Environment" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar" },
   { to: "/alerts", icon: Bell, label: "Alerts" },
   { to: "/profile", icon: User, label: "Profile" },
@@ -21,13 +25,13 @@ const navItems = [
 
 const bottomNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
+  { to: "/odeneho", icon: Bot, label: "Odeneho" },
   { to: "/weather", icon: Cloud, label: "Weather" },
   { to: "/crops", icon: Sprout, label: "Crops" },
-  { to: "/livestock", icon: Bug, label: "Livestock" },
   { to: "/alerts", icon: Bell, label: "Alerts" },
 ];
 
-function NavItems({ onClick }: { onClick?: () => void }) {
+function NavItems({ onClick, isAdmin }: { onClick?: () => void; isAdmin?: boolean }) {
   return (
     <>
       {navItems.map((item) => (
@@ -47,6 +51,22 @@ function NavItems({ onClick }: { onClick?: () => void }) {
           <span>{item.label}</span>
         </NavLink>
       ))}
+      {isAdmin && (
+        <NavLink
+          to="/admin"
+          onClick={onClick}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
+              isActive
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+            }`
+          }
+        >
+          <Shield className="h-5 w-5" />
+          <span>Admin</span>
+        </NavLink>
+      )}
     </>
   );
 }
@@ -55,6 +75,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { signOut, user } = useAuth();
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
+        .then(({ data }) => setIsAdmin(!!data));
+    }
+  }, [user]);
 
   if (isMobile) {
     return (
@@ -74,7 +102,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <span className="font-bold text-sidebar-foreground">AgroClimate</span>
               </div>
               <nav className="space-y-1">
-                <NavItems onClick={() => setSheetOpen(false)} />
+                <NavItems onClick={() => setSheetOpen(false)} isAdmin={isAdmin} />
               </nav>
               <div className="mt-auto pt-6">
                 <Button variant="ghost" onClick={signOut} className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-foreground">
@@ -116,8 +144,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
           <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
         </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          <NavItems />
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          <NavItems isAdmin={isAdmin} />
         </nav>
         <div className="px-3 py-4 border-t border-sidebar-border">
           <p className="text-xs text-sidebar-foreground/50 mb-2 px-3 truncate">{user?.email}</p>

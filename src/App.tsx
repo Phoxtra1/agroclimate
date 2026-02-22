@@ -14,6 +14,10 @@ import Livestock from "./pages/Livestock";
 import Alerts from "./pages/Alerts";
 import Profile from "./pages/Profile";
 import Aquaculture from "./pages/Aquaculture";
+import OdenehoAI from "./pages/OdenehoAI";
+import DroneAdvisory from "./pages/DroneAdvisory";
+import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
+import AdminDashboard from "./pages/AdminDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +45,10 @@ function AppRoutes() {
       <Route path="/aquaculture" element={<ProtectedRoute><Aquaculture /></ProtectedRoute>} />
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+      <Route path="/odeneho" element={<ProtectedRoute><OdenehoAI /></ProtectedRoute>} />
+      <Route path="/drone" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
+      <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

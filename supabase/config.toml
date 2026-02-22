@@ -1,1 +1,7 @@
 project_id = "apoqexuhlysoirtcvgfo"
+
+[functions.odeneho-ai]
+verify_jwt = false
+
+[functions.drone-advisory]
+verify_jwt = false
