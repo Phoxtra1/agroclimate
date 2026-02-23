@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Mic, MicOff, Loader2, Bot, User } from "lucide-react";
+import { Send, Mic, MicOff, Loader2, Bot, User, Volume2, VolumeX } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ export default function OdenehoAI() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const { position } = useGeolocation();
@@ -101,7 +102,7 @@ export default function OdenehoAI() {
     try {
       await streamChat([...messages, userMsg]);
     } catch (e: any) {
-      toast({ title: "Odeneho AI Error", description: e.message, variant: "destructive" });
+      toast({ title: "Odeneho Error", description: e.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -140,25 +141,42 @@ export default function OdenehoAI() {
     setIsListening(true);
   };
 
-  // Speak response
   const speak = (text: string) => {
     if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
+      if (isSpeaking) {
+        speechSynthesis.cancel();
+        setIsSpeaking(false);
+        return;
+      }
+      const clean = text.replace(/[#*_`>\-]/g, "").replace(/\n+/g, ". ");
+      const utterance = new SpeechSynthesisUtterance(clean);
       utterance.lang = "en-GH";
-      utterance.rate = 0.9;
+      utterance.rate = 0.85;
+      utterance.onend = () => setIsSpeaking(false);
+      setIsSpeaking(true);
       speechSynthesis.speak(utterance);
     }
+  };
+
+  const stopSpeaking = () => {
+    speechSynthesis.cancel();
+    setIsSpeaking(false);
   };
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">
       {/* Header */}
       <div className="bg-card border-b border-border px-4 py-3 flex items-center gap-3">
-        <img src={aminevaLogo} alt="Odeneho AI" className="h-8 w-8 rounded-full" />
+        <img src={aminevaLogo} alt="Odeneho" className="h-8 w-8 rounded-full" />
         <div>
-          <h1 className="font-bold text-sm">Odeneho AI</h1>
+          <h1 className="font-bold text-sm">Odeneho</h1>
           <p className="text-xs text-muted-foreground">Your Agricultural Intelligence Assistant</p>
         </div>
+        {isSpeaking && (
+          <Button variant="ghost" size="sm" onClick={stopSpeaking} className="ml-auto text-xs text-destructive">
+            <VolumeX className="h-4 w-4 mr-1" /> Stop
+          </Button>
+        )}
       </div>
 
       {/* Messages */}
@@ -166,7 +184,7 @@ export default function OdenehoAI() {
         {messages.length === 0 && (
           <div className="text-center py-12">
             <img src={aminevaLogo} alt="Odeneho" className="h-16 w-16 rounded-full mx-auto mb-4 opacity-60" />
-            <h2 className="font-bold text-lg mb-2">Welcome to Odeneho AI</h2>
+            <h2 className="font-bold text-lg mb-2">Welcome to Odeneho</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
               Ask me anything about weather, farming, livestock, fish farming, food safety, or drone operations. I use your real-time location and current season to give you the best advice.
             </p>
@@ -213,9 +231,9 @@ export default function OdenehoAI() {
               {msg.role === "assistant" && (
                 <button
                   onClick={() => speak(msg.content)}
-                  className="mt-2 text-xs text-muted-foreground hover:text-foreground"
+                  className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                 >
-                  🔊 Listen
+                  <Volume2 className="h-3 w-3" /> Listen
                 </button>
               )}
             </div>
@@ -258,7 +276,7 @@ export default function OdenehoAI() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Odeneho AI anything..."
+            placeholder="Ask Odeneho anything..."
             disabled={isLoading}
             className="flex-1"
           />

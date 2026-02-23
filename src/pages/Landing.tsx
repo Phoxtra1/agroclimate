@@ -7,10 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
-import { AlertCard } from "@/components/AlertCard";
-import { weeklyForecast, alerts } from "@/data/mock-data";
-import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2, Bot, Plane, Leaf, Shield } from "lucide-react";
+import { weeklyForecast } from "@/data/mock-data";
+import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2, Bot, Plane, Leaf, Shield, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
 export default function Landing() {
@@ -48,7 +48,7 @@ export default function Landing() {
   };
 
   const features = [
-    { icon: Bot, title: "Odeneho AI", desc: "Voice-first AI farming assistant powered by Amineva" },
+    { icon: Bot, title: "Odeneho", desc: "Voice-first AI farming assistant powered by Amineva" },
     { icon: Cloud, title: "Climate Intelligence", desc: "Hyperlocal weather, rainfall prediction, disaster alerts" },
     { icon: Sprout, title: "Crop Advisory", desc: "AI-powered planting windows, irrigation, pest risk" },
     { icon: Fish, title: "Aquaculture", desc: "Fish pond monitoring with water quality tracking" },
@@ -166,33 +166,54 @@ export default function Landing() {
         </div>
       </header>
 
+      {/* 24hr Weather Preview */}
       <section className="container mx-auto px-4 py-12">
         <div className="text-center mb-8">
-          <h3 className="text-2xl font-bold mb-2">Preview: What You'll Get</h3>
-          <p className="text-muted-foreground">Live weather data and crop alerts, personalized for your region</p>
+          <h3 className="text-2xl font-bold mb-2">Live Weather Updates</h3>
+          <p className="text-muted-foreground">Real-time 24-hour weather data for your region</p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <TodayWeather weather={weeklyForecast[0]} />
             <div className="bg-card rounded-xl p-4 shadow-sm mt-4">
-              {weeklyForecast.slice(0, 4).map((day) => (
+              {weeklyForecast.map((day) => (
                 <ForecastRow key={day.day} day={day} />
               ))}
             </div>
           </div>
 
-          <div className="space-y-3">
-            <h4 className="font-bold text-lg">Recent Alerts</h4>
-            {alerts.slice(0, 3).map((alert) => (
-              <AlertCard key={alert.id} alert={alert} />
-            ))}
+          <div className="space-y-4">
+            <div className="bg-card rounded-xl p-4 shadow-sm">
+              <h4 className="font-bold text-sm mb-3">📅 {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</h4>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>🌡️ High: {weeklyForecast[0].tempHigh}°C / Low: {weeklyForecast[0].tempLow}°C</p>
+                <p>💧 Humidity: {weeklyForecast[0].humidity}%</p>
+                <p>🌧️ Rain probability: {weeklyForecast[0].rainProb}%</p>
+                <p>💨 Wind: {weeklyForecast[0].wind} km/h</p>
+                <p>☁️ Conditions: {weeklyForecast[0].description}</p>
+              </div>
+            </div>
+
+            {/* Agro Learning CTA */}
+            <div className="bg-primary/10 rounded-xl p-5 text-center">
+              <BookOpen className="h-8 w-8 mx-auto text-primary mb-3" />
+              <h4 className="font-bold text-sm mb-1">Agro Learning</h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                Free educational guides on smart farming, pest management, climate adaptation, and post-harvest handling.
+              </p>
+              <Link to="/learning">
+                <Button size="sm" variant="default">
+                  Start Learning <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
         <div className="text-center mt-8">
           <Button size="lg" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            Sign up to get personalized data <ArrowRight className="ml-2 h-4 w-4" />
+            Sign up for personalized data <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
       </section>

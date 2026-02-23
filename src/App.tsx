@@ -18,6 +18,7 @@ import OdenehoAI from "./pages/OdenehoAI";
 import DroneAdvisory from "./pages/DroneAdvisory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
 import AdminDashboard from "./pages/AdminDashboard";
+import AgroLearning from "./pages/AgroLearning";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
   if (!user) return <Navigate to="/" replace />;
   return <AppLayout>{children}</AppLayout>;
+}
+
+// Public route wrapped in AppLayout for authenticated users, or standalone for visitors
+function PublicOrProtectedRoute({ children, publicFallback }: { children: React.ReactNode; publicFallback: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
+  if (user) return <AppLayout>{children}</AppLayout>;
+  return <>{publicFallback}</>;
 }
 
 function AppRoutes() {
@@ -49,6 +58,12 @@ function AppRoutes() {
       <Route path="/drone" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+      {/* Agro Learning is public */}
+      <Route path="/learning" element={
+        <PublicOrProtectedRoute publicFallback={<AgroLearning />}>
+          <AgroLearning />
+        </PublicOrProtectedRoute>
+      } />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
