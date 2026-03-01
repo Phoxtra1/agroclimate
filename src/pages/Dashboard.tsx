@@ -1,29 +1,44 @@
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
 import { AlertCard } from "@/components/AlertCard";
-import { AdvisoryCard } from "@/components/AdvisoryCard";
 import { AICropAdvisory } from "@/components/AICropAdvisory";
 import { CropCalendarView } from "@/components/CropCalendarView";
-import { alerts, todayAdvisory, cropCalendars } from "@/data/mock-data";
+import { cropCalendars } from "@/data/mock-data";
 import { MapPin, ChevronRight, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useCropAdvisory } from "@/hooks/useCropAdvisory";
+import { useProfile } from "@/hooks/useProfile";
+import { useUserAlerts } from "@/hooks/useUserAlerts";
+import { AdvisoryCard } from "@/components/AdvisoryCard";
 
 export default function Dashboard() {
   const { position, loading: geoLoading } = useGeolocation();
   const { forecast, loading: weatherLoading, isLive } = useWeather(position.lat, position.lon);
   const { user } = useAuth();
+  const { profile } = useProfile();
   const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
-  const unreadAlerts = alerts.filter((a) => !a.read);
+  const { unreadAlerts, markRead, dismiss } = useUserAlerts();
+
+  // Dynamic advisory based on weather & location
+  const dynamicAdvisory = {
+    crop: (typeof advisory?.recommendedCrops?.[0] === "string" ? advisory.recommendedCrops[0] : advisory?.recommendedCrops?.[0]?.name) || "Your crops",
+    region: position.locationName || "Your area",
+    action: advisory?.weeklyActions?.[0] || getDynamicAction(forecast[0]),
+    detail: getDynamicDetail(forecast[0], position.locationName),
+    urgency: getDynamicUrgency(forecast[0]),
+  };
+
+  // Build display name
+  const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold">Welcome back</h1>
+          <h1 className="text-xl font-bold">Akwaaba, {displayName} 👋</h1>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5">
             <MapPin className="h-3.5 w-3.5" />
             {geoLoading ? (
@@ -44,7 +59,7 @@ export default function Dashboard() {
         {/* Main column */}
         <div className="lg:col-span-2 space-y-5">
           <TodayWeather weather={forecast[0]} />
-          <AdvisoryCard {...todayAdvisory} />
+          <AdvisoryCard {...dynamicAdvisory} />
 
           {/* 7-Day Forecast */}
           <section>
@@ -97,7 +112,12 @@ export default function Dashboard() {
               </div>
               <div className="space-y-3">
                 {unreadAlerts.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} />
+                  <AlertCard
+                    key={alert.id}
+                    alert={alert}
+                    onMarkRead={() => markRead(alert.id)}
+                    onDismiss={() => dismiss(alert.id)}
+                  />
                 ))}
               </div>
             </section>
@@ -106,4 +126,28 @@ export default function Dashboard() {
       </div>
     </div>
   );
+}
+
+function getDynamicAction(weather: any): string {
+  if (!weather) return "Check your crops today";
+  if (weather.rainProb > 60) return "Prepare drainage — rain expected";
+  if (weather.rainProb > 30) return "Good time for planting — moisture coming";
+  if (weather.tempHigh > 35) return "Irrigate crops — high heat expected";
+  if (weather.humidity > 80) return "Monitor for fungal diseases";
+  return "Inspect fields and plan next activities";
+}
+
+function getDynamicDetail(weather: any, location: string): string {
+  if (!weather) return `Stay updated with real-time weather in ${location}.`;
+  if (weather.rainProb > 60) return `Heavy rain likely in ${location} (${weather.rainProb}% chance). Ensure drainage channels are clear to prevent waterlogging.`;
+  if (weather.rainProb > 30) return `Moderate rain expected in ${location}. Soil moisture will be ideal for planting or transplanting.`;
+  if (weather.tempHigh > 35) return `High temperatures of ${weather.tempHigh}°C expected in ${location}. Water crops early morning or late evening.`;
+  return `Current conditions in ${location}: ${weather.description}, ${weather.tempHigh}°C. Good conditions for field work.`;
+}
+
+function getDynamicUrgency(weather: any): "high" | "medium" | "low" {
+  if (!weather) return "low";
+  if (weather.rainProb > 70 || weather.tempHigh > 38) return "high";
+  if (weather.rainProb > 40 || weather.tempHigh > 35) return "medium";
+  return "low";
 }
