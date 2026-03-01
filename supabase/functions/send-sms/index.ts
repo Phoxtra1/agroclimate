@@ -6,7 +6,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const AT_SMS_URL = "https://api.africastalking.com/version1/messaging";
+// Use sandbox URL when username is "sandbox", otherwise production
+const AT_SANDBOX_URL = "https://api.sandbox.africastalking.com/version1/messaging";
+const AT_LIVE_URL = "https://api.africastalking.com/version1/messaging";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -29,7 +31,8 @@ serve(async (req) => {
     }
 
     // Default username for Africa's Talking (sandbox uses "sandbox")
-    const atUsername = username || "agroclimate";
+    const atUsername = username || "sandbox";
+    const smsUrl = atUsername === "sandbox" ? AT_SANDBOX_URL : AT_LIVE_URL;
 
     // Format phone number for Ghana if needed
     const formattedTo = to.startsWith("+") ? to : `+233${to.replace(/^0/, "")}`;
@@ -39,7 +42,7 @@ serve(async (req) => {
     params.append("to", formattedTo);
     params.append("message", message);
 
-    const response = await fetch(AT_SMS_URL, {
+    const response = await fetch(smsUrl, {
       method: "POST",
       headers: {
         "Accept": "application/json",
