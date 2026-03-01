@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -12,9 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get("OPENWEATHERMAP_API_KEY");
+    const apiKey = Deno.env.get("TOMORROW_IO_API_KEY");
     if (!apiKey) {
-      throw new Error("OPENWEATHERMAP_API_KEY is not configured");
+      throw new Error("TOMORROW_IO_API_KEY is not configured");
     }
 
     const { lat, lon } = await req.json();
@@ -22,19 +22,19 @@ serve(async (req) => {
       throw new Error("lat and lon are required");
     }
 
-    // Current weather
-    const currentRes = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+    // Tomorrow.io Realtime weather
+    const realtimeRes = await fetch(
+      `https://api.tomorrow.io/v4/weather/realtime?location=${lat},${lon}&units=metric&apikey=${apiKey}`
     );
-    const current = await currentRes.json();
+    const realtime = await realtimeRes.json();
 
-    // 7-day forecast
+    // Tomorrow.io 5-day forecast (daily)
     const forecastRes = await fetch(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}`
+      `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1d&units=metric&apikey=${apiKey}`
     );
     const forecast = await forecastRes.json();
 
-    return new Response(JSON.stringify({ current, forecast }), {
+    return new Response(JSON.stringify({ realtime, forecast }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

@@ -23,19 +23,36 @@ const GEO_CACHE_KEY = "agroclimate_geo_cache";
 
 export function useGeolocation() {
   const [position, setPosition] = useState<GeoPosition>(() => {
-    const cached = localStorage.getItem(GEO_CACHE_KEY);
-    return cached ? JSON.parse(cached) : DEFAULT_POSITION;
+    try {
+      const cached = localStorage.getItem(GEO_CACHE_KEY);
+      if (cached) return JSON.parse(cached);
+    } catch { /* ignore */ }
+    return DEFAULT_POSITION;
   });
+  const [hasResolved, setHasResolved] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setLoading(false);
-      return;
-    }
+    if (hasResolved) { setLoading(false); return; }
+    if (!navigator.geolocation) { setLoading(false); return; }
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        // If we have cached data near this location, keep using it for stability
+        const cached = localStorage.getItem(GEO_CACHE_KEY);
+        if (cached) {
+          try {
+            const prev: GeoPosition = JSON.parse(cached);
+            const sameArea = Math.abs(prev.lat - pos.coords.latitude) < 0.01 && Math.abs(prev.lon - pos.coords.longitude) < 0.01;
+            if (sameArea && prev.community) {
+              setPosition(prev);
+              setHasResolved(true);
+              setLoading(false);
+              return;
+            }
+          } catch { /* ignore */ }
+        }
+
         const geo: GeoPosition = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
@@ -65,15 +82,17 @@ export function useGeolocation() {
         }
 
         setPosition(geo);
+        setHasResolved(true);
         localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geo));
         setLoading(false);
       },
       () => {
+        setHasResolved(true);
         setLoading(false);
       },
-      { timeout: 10000, maximumAge: 300000 }
+      { timeout: 10000, maximumAge: 600000 }
     );
-  }, []);
+  }, [hasResolved]);
 
   return { position, loading };
 }

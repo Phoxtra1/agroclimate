@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useToast } from "@/hooks/use-toast";
-import { alerts as mockAlerts, Alert as MockAlert } from "@/data/mock-data";
+import { useUserAlerts } from "@/hooks/useUserAlerts";
 import { Bell, ChevronDown, ChevronUp, Check, Trash2, MessageSquarePlus, Send, Loader2 } from "lucide-react";
 import { AlertTriangle, CheckCircle, Info, AlertOctagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,18 +21,12 @@ const styleMap = {
 };
 const iconColorMap = { warning: "text-warning", danger: "text-destructive", info: "text-accent", success: "text-success" };
 
-interface LocalAlert extends MockAlert {
-  expanded?: boolean;
-  dismissed?: boolean;
-}
-
 export default function Alerts() {
   const { user } = useAuth();
   const { position } = useGeolocation();
   const { toast } = useToast();
-  const [localAlerts, setLocalAlerts] = useState<LocalAlert[]>(() =>
-    mockAlerts.map(a => ({ ...a, expanded: false, dismissed: false }))
-  );
+  const { alerts: visibleAlerts, unreadAlerts: unread, markRead, dismiss } = useUserAlerts();
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [dbAlerts, setDbAlerts] = useState<any[]>([]);
   const [showTicketForm, setShowTicketForm] = useState(false);
   const [ticketLoading, setTicketLoading] = useState(false);
@@ -44,16 +38,14 @@ export default function Alerts() {
   }, []);
 
   const toggleExpand = (id: string) => {
-    setLocalAlerts(prev => prev.map(a => a.id === id ? { ...a, expanded: !a.expanded } : a));
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
-  const markRead = (id: string) => {
-    setLocalAlerts(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
-  };
-
-  const dismiss = (id: string) => {
-    setLocalAlerts(prev => prev.map(a => a.id === id ? { ...a, dismissed: true } : a));
-  };
+  const readAlerts = visibleAlerts.filter(a => a.isRead);
 
   const submitTicket = async () => {
     if (!ticket.subject.trim() || !ticket.description.trim()) {
@@ -78,10 +70,6 @@ export default function Alerts() {
     setTicketLoading(false);
   };
 
-  const visibleAlerts = localAlerts.filter(a => !a.dismissed);
-  const unread = visibleAlerts.filter(a => !a.read);
-  const read = visibleAlerts.filter(a => a.read);
-
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -102,11 +90,7 @@ export default function Alerts() {
       {showTicketForm && (
         <div className="bg-card border border-border rounded-xl p-4 mb-6 space-y-3">
           <h3 className="font-semibold text-sm">Submit a Support Ticket</h3>
-          <Input
-            placeholder="Subject"
-            value={ticket.subject}
-            onChange={(e) => setTicket({ ...ticket, subject: e.target.value })}
-          />
+          <Input placeholder="Subject" value={ticket.subject} onChange={(e) => setTicket({ ...ticket, subject: e.target.value })} />
           <Select value={ticket.category} onValueChange={(v) => setTicket({ ...ticket, category: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -118,12 +102,7 @@ export default function Alerts() {
               <SelectItem value="complaint">Complaint</SelectItem>
             </SelectContent>
           </Select>
-          <Textarea
-            placeholder="Describe your issue or report..."
-            value={ticket.description}
-            onChange={(e) => setTicket({ ...ticket, description: e.target.value })}
-            rows={4}
-          />
+          <Textarea placeholder="Describe your issue..." value={ticket.description} onChange={(e) => setTicket({ ...ticket, description: e.target.value })} rows={4} />
           <div className="flex gap-2">
             <Button onClick={submitTicket} disabled={ticketLoading} size="sm">
               {ticketLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-1" /> Submit</>}
@@ -168,6 +147,7 @@ export default function Alerts() {
               <div className="space-y-3">
                 {unread.map((a) => {
                   const Icon = iconMap[a.type];
+                  const expanded = expandedIds.has(a.id);
                   return (
                     <div key={a.id} className={`rounded-lg border-l-4 p-4 ${styleMap[a.type]} transition-all`}>
                       <div className="flex gap-3">
@@ -179,10 +159,10 @@ export default function Alerts() {
                               <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
                             </div>
                             <button onClick={() => toggleExpand(a.id)} className="text-muted-foreground hover:text-foreground">
-                              {a.expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                             </button>
                           </div>
-                          <p className={`text-sm text-muted-foreground mt-1 ${!a.expanded ? "line-clamp-2" : ""}`}>{a.message}</p>
+                          <p className={`text-sm text-muted-foreground mt-1 ${!expanded ? "line-clamp-2" : ""}`}>{a.message}</p>
                           <div className="flex items-center gap-3 mt-2">
                             <p className="text-xs text-muted-foreground">{a.time}</p>
                             <button onClick={() => markRead(a.id)} className="text-xs text-primary hover:underline flex items-center gap-1">
@@ -201,12 +181,13 @@ export default function Alerts() {
             </section>
           )}
 
-          {read.length > 0 && (
+          {readAlerts.length > 0 && (
             <section>
               <h2 className="font-semibold text-sm text-muted-foreground mb-3">EARLIER</h2>
               <div className="space-y-3">
-                {read.map((a) => {
+                {readAlerts.map((a) => {
                   const Icon = iconMap[a.type];
+                  const expanded = expandedIds.has(a.id);
                   return (
                     <div key={a.id} className={`rounded-lg border-l-4 p-4 ${styleMap[a.type]} opacity-70 transition-all`}>
                       <div className="flex gap-3">
@@ -215,10 +196,10 @@ export default function Alerts() {
                           <div className="flex items-center justify-between">
                             <h4 className="font-semibold text-sm">{a.title}</h4>
                             <button onClick={() => toggleExpand(a.id)} className="text-muted-foreground hover:text-foreground">
-                              {a.expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                             </button>
                           </div>
-                          <p className={`text-sm text-muted-foreground mt-1 ${!a.expanded ? "line-clamp-2" : ""}`}>{a.message}</p>
+                          <p className={`text-sm text-muted-foreground mt-1 ${!expanded ? "line-clamp-2" : ""}`}>{a.message}</p>
                           <div className="flex items-center gap-3 mt-2">
                             <p className="text-xs text-muted-foreground">{a.time}</p>
                             <button onClick={() => dismiss(a.id)} className="text-xs text-destructive hover:underline flex items-center gap-1">
