@@ -176,6 +176,228 @@ export type Database = {
         }
         Relationships: []
       }
+      harvest_losses: {
+        Row: {
+          created_at: string
+          crop_name: string
+          farm_plot: string | null
+          id: string
+          loss_reason: string
+          notes: string | null
+          quantity_lost: number
+          season: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crop_name: string
+          farm_plot?: string | null
+          id?: string
+          loss_reason?: string
+          notes?: string | null
+          quantity_lost?: number
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crop_name?: string
+          farm_plot?: string | null
+          id?: string
+          loss_reason?: string
+          notes?: string | null
+          quantity_lost?: number
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      harvest_records: {
+        Row: {
+          created_at: string
+          crop_name: string
+          farm_plot: string | null
+          harvest_date: string | null
+          id: string
+          notes: string | null
+          quality_grade: string | null
+          quantity: number
+          season: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crop_name: string
+          farm_plot?: string | null
+          harvest_date?: string | null
+          id?: string
+          notes?: string | null
+          quality_grade?: string | null
+          quantity?: number
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crop_name?: string
+          farm_plot?: string | null
+          harvest_date?: string | null
+          id?: string
+          notes?: string | null
+          quality_grade?: string | null
+          quantity?: number
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      inventory_items: {
+        Row: {
+          created_at: string
+          crop_name: string | null
+          farm_plot: string | null
+          id: string
+          item_name: string
+          item_type: string
+          notes: string | null
+          price_per_unit: number
+          quantity: number
+          season: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crop_name?: string | null
+          farm_plot?: string | null
+          id?: string
+          item_name: string
+          item_type: string
+          notes?: string | null
+          price_per_unit?: number
+          quantity?: number
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crop_name?: string | null
+          farm_plot?: string | null
+          id?: string
+          item_name?: string
+          item_type?: string
+          notes?: string | null
+          price_per_unit?: number
+          quantity?: number
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      labor_records: {
+        Row: {
+          cost_per_day: number
+          created_at: string
+          crop_name: string | null
+          days_worked: number
+          farm_plot: string | null
+          id: string
+          notes: string | null
+          season: string | null
+          task_description: string
+          updated_at: string
+          user_id: string
+          worker_count: number | null
+        }
+        Insert: {
+          cost_per_day?: number
+          created_at?: string
+          crop_name?: string | null
+          days_worked?: number
+          farm_plot?: string | null
+          id?: string
+          notes?: string | null
+          season?: string | null
+          task_description: string
+          updated_at?: string
+          user_id: string
+          worker_count?: number | null
+        }
+        Update: {
+          cost_per_day?: number
+          created_at?: string
+          crop_name?: string | null
+          days_worked?: number
+          farm_plot?: string | null
+          id?: string
+          notes?: string | null
+          season?: string | null
+          task_description?: string
+          updated_at?: string
+          user_id?: string
+          worker_count?: number | null
+        }
+        Relationships: []
+      }
+      land_costs: {
+        Row: {
+          cost_amount: number
+          cost_type: string
+          created_at: string
+          farm_plot: string | null
+          id: string
+          land_description: string
+          notes: string | null
+          season: string | null
+          size_acres: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cost_amount?: number
+          cost_type?: string
+          created_at?: string
+          farm_plot?: string | null
+          id?: string
+          land_description: string
+          notes?: string | null
+          season?: string | null
+          size_acres?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cost_amount?: number
+          cost_type?: string
+          created_at?: string
+          farm_plot?: string | null
+          id?: string
+          land_description?: string
+          notes?: string | null
+          season?: string | null
+          size_acres?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           community: string | null
@@ -225,6 +447,54 @@ export type Database = {
           phone?: string | null
           preferred_language?: string | null
           region?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sales_records: {
+        Row: {
+          buyer_name: string | null
+          created_at: string
+          crop_name: string
+          farm_plot: string | null
+          id: string
+          notes: string | null
+          price_per_unit: number
+          quantity_sold: number
+          sale_date: string | null
+          season: string | null
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          buyer_name?: string | null
+          created_at?: string
+          crop_name: string
+          farm_plot?: string | null
+          id?: string
+          notes?: string | null
+          price_per_unit?: number
+          quantity_sold?: number
+          sale_date?: string | null
+          season?: string | null
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          buyer_name?: string | null
+          created_at?: string
+          crop_name?: string
+          farm_plot?: string | null
+          id?: string
+          notes?: string | null
+          price_per_unit?: number
+          quantity_sold?: number
+          sale_date?: string | null
+          season?: string | null
+          unit?: string
           updated_at?: string
           user_id?: string
         }

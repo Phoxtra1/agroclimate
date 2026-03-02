@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import { useUserAlerts } from "@/hooks/useUserAlerts";
 import { Bell, ChevronDown, ChevronUp, Check, Trash2, MessageSquarePlus, Send, Loader2 } from "lucide-react";
@@ -24,8 +25,9 @@ const iconColorMap = { warning: "text-warning", danger: "text-destructive", info
 export default function Alerts() {
   const { user } = useAuth();
   const { position } = useGeolocation();
+  const { forecast } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
-  const { alerts: visibleAlerts, unreadAlerts: unread, markRead, dismiss } = useUserAlerts();
+  const { alerts: visibleAlerts, unreadAlerts: unread, markRead, dismiss } = useUserAlerts(forecast, position.locationName);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [dbAlerts, setDbAlerts] = useState<any[]>([]);
   const [showTicketForm, setShowTicketForm] = useState(false);

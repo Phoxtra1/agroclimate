@@ -16,6 +16,7 @@ import Profile from "./pages/Profile";
 import Aquaculture from "./pages/Aquaculture";
 import OdenehoAI from "./pages/OdenehoAI";
 import DroneAdvisory from "./pages/DroneAdvisory";
+import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
 import AdminDashboard from "./pages/AdminDashboard";
 import AgroLearning from "./pages/AgroLearning";
@@ -55,7 +56,10 @@ function AppRoutes() {
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/odeneho" element={<ProtectedRoute><OdenehoAI /></ProtectedRoute>} />
-      <Route path="/drone" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
+      <Route path="/flight-advisory" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
+      <Route path="/inventory" element={<ProtectedRoute><AgroInventory /></ProtectedRoute>} />
+      {/* Keep old route for backwards compat */}
+      <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
       {/* Agro Learning is public */}
