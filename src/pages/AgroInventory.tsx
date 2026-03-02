@@ -12,7 +12,16 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot } from "lucide-react";
 
 function formatCurrency(amount: number) {
-  return `GH₵ ${amount.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const isGhana = Intl.DateTimeFormat().resolvedOptions().timeZone.includes("Accra");
+
+  const currency = isGhana ? "GHS" : "USD";
+  const locale = isGhana ? "en-GH" : "en-US";
+
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+  }).format(amount);
 }
 
 // Generic Add/Edit Dialog
