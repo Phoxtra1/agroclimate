@@ -154,29 +154,74 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   };
 
   // CRUD helpers
-  const addRecord = async (table: string, data: any) => {
-    if (!user) return;
-    const { error } = await supabase.from(table as any).insert({ ...data, user_id: user.id });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Added successfully" });
-    fetchAll();
+const addRecord = async (table: string, data: any) => {
+  if (!user) return;
+
+  const payload = {
+    ...data,
+    user_id: user.id,
   };
 
-  const updateRecord = async (table: string, id: string, data: any) => {
-    if (!user) return;
-    const { error } = await supabase.from(table as any).update(data).eq("id", id).eq("user_id", user.id);
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Updated successfully" });
-    fetchAll();
-  };
+  const { error } = await supabase
+    .from(table as any)
+    .insert(payload);
+
+  if (error) {
+    toast({
+      title: "Error adding record",
+      description: error.message,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  toast({ title: "Added successfully" });
+  fetchAll();
+};
+
+const updateRecord = async (table: string, id: string, data: any) => {
+  if (!user) return;
+
+  const { error } = await supabase
+    .from(table as any)
+    .update(data)
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    toast({
+      title: "Error updating record",
+      description: error.message,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  toast({ title: "Updated successfully" });
+  fetchAll();
+};
 
   const deleteRecord = async (table: string, id: string) => {
-    if (!user) return;
-    const { error } = await supabase.from(table as any).delete().eq("id", id).eq("user_id", user.id);
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Deleted successfully" });
-    fetchAll();
-  };
+  if (!user || !id) return;
+
+  const { error } = await supabase
+    .from(table as any)
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (error) {
+    toast({
+      title: "Error deleting record",
+      description: error.message,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  toast({ title: "Deleted successfully" });
+  fetchAll();
+};
 
   // Get unique values for filters
   const seasons = [...new Set([
