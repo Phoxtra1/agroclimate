@@ -65,8 +65,8 @@ export default function DroneAdvisory() {
       <div className="flex items-center gap-3 mb-6">
         <Plane className="h-6 w-6 text-primary" />
         <div>
-          <h1 className="text-xl font-bold">Drone Flight Advisory</h1>
-          <p className="text-sm text-muted-foreground">Weather-based flight safety evaluation</p>
+          <h1 className="text-xl font-bold">Flight Advisory</h1>
+          <p className="text-sm text-muted-foreground">Weather-based flight safety evaluation for drones, helicopters & light aircraft</p>
         </div>
       </div>
 
@@ -87,6 +87,8 @@ export default function DroneAdvisory() {
                   <SelectItem value="surveying">Land Surveying</SelectItem>
                   <SelectItem value="mapping">Aerial Mapping</SelectItem>
                   <SelectItem value="forestry">Forestry Patrol</SelectItem>
+                  <SelectItem value="helicopter">Helicopter Flight</SelectItem>
+                  <SelectItem value="light_aircraft">Light Aircraft</SelectItem>
                 </SelectContent>
               </Select>
             </div>

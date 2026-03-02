@@ -19,7 +19,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
-  const { unreadAlerts, markRead, dismiss } = useUserAlerts();
+  const { unreadAlerts, markRead, dismiss } = useUserAlerts(forecast, position.locationName);
 
   // Dynamic advisory based on weather & location
   const dynamicAdvisory = {
