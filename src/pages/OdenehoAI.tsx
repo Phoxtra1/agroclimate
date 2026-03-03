@@ -103,53 +103,66 @@ export default function OdenehoAI() {
   };
 
   const toggleVoice = () => {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      toast({ title: "Voice not supported", description: "Your browser does not support voice input.", variant: "destructive" });
-      return;
-    }
+  if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+    toast({
+      title: "Voice not supported",
+      description: "Your browser does not support voice input.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
+  if (isListening) {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    return;
+  }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-GH";
+  const SpeechRecognition =
+    (window as any).SpeechRecognition ||
+    (window as any).webkitSpeechRecognition;
 
-    let finalTranscript = "";
+  const recognition: SpeechRecognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-GH";
 
-    recognition.onresult = (event: any) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript + " ";
-        } else {
-          interim = transcript;
-        }
+  let finalTranscript = "";
+
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript + " ";
+      } else {
+        interim = transcript;
       }
-      setInput(finalTranscript + interim);
-    };
-
-    recognition.onerror = () => {
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      if (finalTranscript.trim()) {
-        send(finalTranscript.trim());
-      }
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
+    }
+    setInput(finalTranscript + interim);
   };
+
+  recognition.onerror = () => {
+    // Only stop listening on real errors
+    setIsListening(false);
+  };
+
+  recognition.onend = () => {
+    // ⚠️ Prevent auto-shutdown while user still intends to record
+    if (isListening) {
+      recognition.start(); // restart automatically
+      return;
+    }
+
+    if (finalTranscript.trim()) {
+      send(finalTranscript.trim());
+    }
+  };
+
+  recognitionRef.current = recognition;
+  recognition.start();
+  setIsListening(true);
+};
 
   const selectVoice = (): SpeechSynthesisVoice | null => {
     const voices = speechSynthesis.getVoices();
