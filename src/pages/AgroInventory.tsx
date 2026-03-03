@@ -9,19 +9,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare } from "lucide-react";
+import { Link } from "react-router-dom";
 
 function formatCurrency(amount: number) {
   const isGhana = Intl.DateTimeFormat().resolvedOptions().timeZone.includes("Accra");
-
   const currency = isGhana ? "GHS" : "USD";
   const locale = isGhana ? "en-GH" : "en-US";
-
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount);
+  return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2 }).format(amount);
 }
 
 // Generic Add/Edit Dialog
@@ -35,14 +30,20 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(initialData || {});
 
+  const handleOpen = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen && initialData) setForm({ ...initialData });
+    if (!isOpen) setForm(initialData || {});
+  };
+
   const handleSave = () => {
     onSave(form);
-    setForm({});
+    setForm(initialData || {});
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[80vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
@@ -53,7 +54,7 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
               <Input
                 type={f.type || "text"}
                 placeholder={f.placeholder || f.label}
-                value={form[f.name] || ""}
+                value={form[f.name] ?? ""}
                 onChange={(e) => setForm({ ...form, [f.name]: f.type === "number" ? Number(e.target.value) : e.target.value })}
               />
             </div>
@@ -72,7 +73,7 @@ export default function AgroInventory() {
 
   const {
     inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords,
-    metrics, loading, addRecord, deleteRecord, seasons, crops, plots,
+    metrics, loading, addRecord, updateRecord, deleteRecord, seasons, crops, plots,
   } = useInventory(filterSeason, filterCrop, filterPlot);
 
   const inputFields = [
@@ -80,7 +81,7 @@ export default function AgroInventory() {
     { name: "item_type", label: "Type", required: true, placeholder: "e.g. Fertilizer, Seeds, Chemical" },
     { name: "quantity", label: "Quantity", type: "number", required: true },
     { name: "unit", label: "Unit", placeholder: "kg, liters, bags, bottles" },
-    { name: "price_per_unit", label: "Price per Unit (GH₵)", type: "number", required: true },
+    { name: "price_per_unit", label: "Price per Unit", type: "number", required: true },
     { name: "crop_name", label: "Crop/Linked To", placeholder: "e.g. Maize" },
     { name: "season", label: "Season", placeholder: "e.g. 2026 Major" },
     { name: "farm_plot", label: "Farm Plot", placeholder: "e.g. Plot A" },
@@ -91,7 +92,7 @@ export default function AgroInventory() {
     { name: "task_description", label: "Task", required: true, placeholder: "e.g. Weeding" },
     { name: "worker_count", label: "Workers", type: "number", required: true },
     { name: "days_worked", label: "Days Worked", type: "number", required: true },
-    { name: "cost_per_day", label: "Cost per Day (GH₵)", type: "number", required: true },
+    { name: "cost_per_day", label: "Cost per Day", type: "number", required: true },
     { name: "crop_name", label: "Crop", placeholder: "e.g. Maize" },
     { name: "season", label: "Season" },
     { name: "farm_plot", label: "Farm Plot" },
@@ -102,7 +103,7 @@ export default function AgroInventory() {
     { name: "land_description", label: "Description", required: true, placeholder: "e.g. Farmland at Kumasi" },
     { name: "size_acres", label: "Size (Acres)", type: "number", required: true },
     { name: "cost_type", label: "Cost Type", placeholder: "rent or purchase" },
-    { name: "cost_amount", label: "Cost (GH₵)", type: "number", required: true },
+    { name: "cost_amount", label: "Cost", type: "number", required: true },
     { name: "season", label: "Season" },
     { name: "farm_plot", label: "Farm Plot" },
     { name: "notes", label: "Notes" },
@@ -133,7 +134,7 @@ export default function AgroInventory() {
     { name: "crop_name", label: "Crop", required: true },
     { name: "quantity_sold", label: "Quantity Sold", type: "number", required: true },
     { name: "unit", label: "Unit", placeholder: "kg, bags" },
-    { name: "price_per_unit", label: "Price per Unit (GH₵)", type: "number", required: true },
+    { name: "price_per_unit", label: "Price per Unit", type: "number", required: true },
     { name: "buyer_name", label: "Buyer Name" },
     { name: "season", label: "Season" },
     { name: "farm_plot", label: "Farm Plot" },
@@ -194,14 +195,19 @@ export default function AgroInventory() {
         <MetricCard icon={TrendingUp} label="Net Profit" value={formatCurrency(metrics.netProfit)} color={metrics.netProfit >= 0 ? "text-amber-600" : "text-destructive"} bg={metrics.netProfit >= 0 ? "bg-amber-50 dark:bg-amber-950/30" : "bg-destructive/10"} />
       </div>
 
-      {/* AI Placeholder */}
+      {/* AI Strategic Advice with Odeneho CTA */}
       <Card className="border-dashed border-primary/40">
         <CardContent className="pt-4 flex items-center gap-3">
           <Bot className="h-5 w-5 text-primary shrink-0" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium">AI Strategic Advice</p>
-            <p className="text-xs text-muted-foreground">Coming soon — fertilizer usage optimization, crop rotation suggestions, and labor cost analysis powered by Odeneho AI.</p>
+            <p className="text-xs text-muted-foreground">Get fertilizer usage optimization, crop rotation suggestions, and labor cost analysis from Odeneho AI.</p>
           </div>
+          <Link to="/odeneho">
+            <Button size="sm" variant="default" className="shrink-0">
+              <MessageSquare className="h-4 w-4 mr-1" /> Ask Odeneho
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 
@@ -218,28 +224,13 @@ export default function AgroInventory() {
 
         {/* INPUTS */}
         <TabsContent value="inputs">
-          <SectionCard
-            title="Production Inputs"
-            badge={`${inventoryItems.length} records`}
-            addDialog={
-              <RecordDialog
-                title="Add Input"
-                fields={inputFields}
-                onSave={(data) => addRecord("inventory_items", data)}
-                trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Input</Button>}
-              />
-            }
+          <SectionCard title="Production Inputs" badge={`${inventoryItems.length} records`}
+            addDialog={<RecordDialog title="Add Input" fields={inputFields} onSave={(data) => addRecord("inventory_items", data)} trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Input</Button>} />}
           >
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Qty</TableHead>
-                  <TableHead>Unit Price</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Crop</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead>Item</TableHead><TableHead>Type</TableHead><TableHead>Qty</TableHead><TableHead>Unit Price</TableHead><TableHead>Total</TableHead><TableHead>Crop</TableHead><TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -251,10 +242,11 @@ export default function AgroInventory() {
                     <TableCell>{formatCurrency(item.price_per_unit)}</TableCell>
                     <TableCell className="font-medium">{formatCurrency(item.quantity * item.price_per_unit)}</TableCell>
                     <TableCell>{item.crop_name || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("inventory_items", item.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="flex gap-1">
+                      <RecordDialog title="Edit Input" fields={inputFields} initialData={item}
+                        onSave={(data) => updateRecord("inventory_items", item.id, data)}
+                        trigger={<Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>} />
+                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("inventory_items", item.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -266,30 +258,11 @@ export default function AgroInventory() {
 
         {/* LABOR */}
         <TabsContent value="labor">
-          <SectionCard
-            title="Labor Records"
-            badge={`${laborRecords.length} records`}
-            addDialog={
-              <RecordDialog
-                title="Add Labor Record"
-                fields={laborFields}
-                onSave={(data) => addRecord("labor_records", data)}
-                trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Labor</Button>}
-              />
-            }
+          <SectionCard title="Labor Records" badge={`${laborRecords.length} records`}
+            addDialog={<RecordDialog title="Add Labor Record" fields={laborFields} onSave={(data) => addRecord("labor_records", data)} trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Labor</Button>} />}
           >
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Task</TableHead>
-                  <TableHead>Workers</TableHead>
-                  <TableHead>Days</TableHead>
-                  <TableHead>Rate/Day</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Crop</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Task</TableHead><TableHead>Workers</TableHead><TableHead>Days</TableHead><TableHead>Rate/Day</TableHead><TableHead>Total</TableHead><TableHead>Crop</TableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {laborRecords.map((rec) => (
                   <TableRow key={rec.id}>
@@ -299,10 +272,11 @@ export default function AgroInventory() {
                     <TableCell>{formatCurrency(rec.cost_per_day)}</TableCell>
                     <TableCell className="font-medium">{formatCurrency(rec.worker_count * rec.days_worked * rec.cost_per_day)}</TableCell>
                     <TableCell>{rec.crop_name || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("labor_records", rec.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="flex gap-1">
+                      <RecordDialog title="Edit Labor" fields={laborFields} initialData={rec}
+                        onSave={(data) => updateRecord("labor_records", rec.id, data)}
+                        trigger={<Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>} />
+                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("labor_records", rec.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -314,29 +288,11 @@ export default function AgroInventory() {
 
         {/* LAND */}
         <TabsContent value="land">
-          <SectionCard
-            title="Land Costs"
-            badge={`${landCosts.length} records`}
-            addDialog={
-              <RecordDialog
-                title="Add Land Cost"
-                fields={landFields}
-                onSave={(data) => addRecord("land_costs", data)}
-                trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Land</Button>}
-              />
-            }
+          <SectionCard title="Land Costs" badge={`${landCosts.length} records`}
+            addDialog={<RecordDialog title="Add Land Cost" fields={landFields} onSave={(data) => addRecord("land_costs", data)} trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Land</Button>} />}
           >
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Size (Acres)</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Cost</TableHead>
-                  <TableHead>Season</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Description</TableHead><TableHead>Size (Acres)</TableHead><TableHead>Type</TableHead><TableHead>Cost</TableHead><TableHead>Season</TableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {landCosts.map((rec) => (
                   <TableRow key={rec.id}>
@@ -345,10 +301,11 @@ export default function AgroInventory() {
                     <TableCell><Badge variant="outline">{rec.cost_type}</Badge></TableCell>
                     <TableCell className="font-medium">{formatCurrency(rec.cost_amount)}</TableCell>
                     <TableCell>{rec.season || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("land_costs", rec.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="flex gap-1">
+                      <RecordDialog title="Edit Land Cost" fields={landFields} initialData={rec}
+                        onSave={(data) => updateRecord("land_costs", rec.id, data)}
+                        trigger={<Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>} />
+                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("land_costs", rec.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -360,29 +317,11 @@ export default function AgroInventory() {
 
         {/* HARVEST */}
         <TabsContent value="harvest">
-          <SectionCard
-            title="Harvest Records"
-            badge={`${harvestRecords.length} records`}
-            addDialog={
-              <RecordDialog
-                title="Add Harvest"
-                fields={harvestFields}
-                onSave={(data) => addRecord("harvest_records", data)}
-                trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Harvest</Button>}
-              />
-            }
+          <SectionCard title="Harvest Records" badge={`${harvestRecords.length} records`}
+            addDialog={<RecordDialog title="Add Harvest" fields={harvestFields} onSave={(data) => addRecord("harvest_records", data)} trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Harvest</Button>} />}
           >
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Crop</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Plot</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Crop</TableHead><TableHead>Quantity</TableHead><TableHead>Grade</TableHead><TableHead>Date</TableHead><TableHead>Plot</TableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {harvestRecords.map((rec) => (
                   <TableRow key={rec.id}>
@@ -391,10 +330,11 @@ export default function AgroInventory() {
                     <TableCell>{rec.quality_grade || "—"}</TableCell>
                     <TableCell>{rec.harvest_date || "—"}</TableCell>
                     <TableCell>{rec.farm_plot || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("harvest_records", rec.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="flex gap-1">
+                      <RecordDialog title="Edit Harvest" fields={harvestFields} initialData={rec}
+                        onSave={(data) => updateRecord("harvest_records", rec.id, data)}
+                        trigger={<Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>} />
+                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("harvest_records", rec.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -406,29 +346,11 @@ export default function AgroInventory() {
 
         {/* LOSSES */}
         <TabsContent value="losses">
-          <SectionCard
-            title="Harvest Losses"
-            badge={`${harvestLosses.length} records`}
-            addDialog={
-              <RecordDialog
-                title="Add Loss Record"
-                fields={lossFields}
-                onSave={(data) => addRecord("harvest_losses", data)}
-                trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Loss</Button>}
-              />
-            }
+          <SectionCard title="Harvest Losses" badge={`${harvestLosses.length} records`}
+            addDialog={<RecordDialog title="Add Loss Record" fields={lossFields} onSave={(data) => addRecord("harvest_losses", data)} trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Loss</Button>} />}
           >
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Crop</TableHead>
-                  <TableHead>Qty Lost</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>Season</TableHead>
-                  <TableHead>Plot</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Crop</TableHead><TableHead>Qty Lost</TableHead><TableHead>Reason</TableHead><TableHead>Season</TableHead><TableHead>Plot</TableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {harvestLosses.map((rec) => (
                   <TableRow key={rec.id}>
@@ -437,10 +359,11 @@ export default function AgroInventory() {
                     <TableCell><Badge variant="destructive" className="text-xs">{rec.loss_reason}</Badge></TableCell>
                     <TableCell>{rec.season || "—"}</TableCell>
                     <TableCell>{rec.farm_plot || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("harvest_losses", rec.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="flex gap-1">
+                      <RecordDialog title="Edit Loss" fields={lossFields} initialData={rec}
+                        onSave={(data) => updateRecord("harvest_losses", rec.id, data)}
+                        trigger={<Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>} />
+                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("harvest_losses", rec.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -452,30 +375,11 @@ export default function AgroInventory() {
 
         {/* SALES */}
         <TabsContent value="sales">
-          <SectionCard
-            title="Sales / Revenue"
-            badge={`${salesRecords.length} records`}
-            addDialog={
-              <RecordDialog
-                title="Add Sale"
-                fields={salesFields}
-                onSave={(data) => addRecord("sales_records", data)}
-                trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Sale</Button>}
-              />
-            }
+          <SectionCard title="Sales / Revenue" badge={`${salesRecords.length} records`}
+            addDialog={<RecordDialog title="Add Sale" fields={salesFields} onSave={(data) => addRecord("sales_records", data)} trigger={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Sale</Button>} />}
           >
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Crop</TableHead>
-                  <TableHead>Qty Sold</TableHead>
-                  <TableHead>Price/Unit</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Buyer</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Crop</TableHead><TableHead>Qty Sold</TableHead><TableHead>Price/Unit</TableHead><TableHead>Total</TableHead><TableHead>Buyer</TableHead><TableHead>Date</TableHead><TableHead></TableHead></TableRow></TableHeader>
               <TableBody>
                 {salesRecords.map((rec) => (
                   <TableRow key={rec.id}>
@@ -485,10 +389,11 @@ export default function AgroInventory() {
                     <TableCell className="font-medium text-amber-600">{formatCurrency(rec.quantity_sold * rec.price_per_unit)}</TableCell>
                     <TableCell>{rec.buyer_name || "—"}</TableCell>
                     <TableCell>{rec.sale_date || "—"}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("sales_records", rec.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                    <TableCell className="flex gap-1">
+                      <RecordDialog title="Edit Sale" fields={salesFields} initialData={rec}
+                        onSave={(data) => updateRecord("sales_records", rec.id, data)}
+                        trigger={<Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>} />
+                      <Button variant="ghost" size="icon" onClick={() => deleteRecord("sales_records", rec.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </TableCell>
                   </TableRow>
                 ))}

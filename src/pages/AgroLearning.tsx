@@ -1,16 +1,48 @@
 import { useState } from "react";
-import { BookOpen, Sprout, Bug, Droplets, Leaf, ShieldCheck, Wheat, ChevronRight } from "lucide-react";
+import { BookOpen, Sprout, Bug, Droplets, Leaf, ShieldCheck, Wheat, ChevronRight, PlayCircle, Lightbulb, Bot } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Link } from "react-router-dom";
 
 interface LearningTopic {
   id: string;
   icon: React.ElementType;
   title: string;
-  sections: { title: string; content: string }[];
+  isNew?: boolean;
+  sections: { title: string; content: string; image?: string }[];
 }
 
 const topics: LearningTopic[] = [
+  {
+    id: "explainer",
+    icon: PlayCircle,
+    title: "Explainer",
+    isNew: true,
+    sections: [
+      {
+        title: "Getting Started with AgroClimate",
+        content: "Welcome to AgroClimate — your intelligent farming companion.\n\nAgroClimate helps you make better farming decisions using real-time weather data, AI-powered crop advisories, and environmental monitoring.\n\n🔑 Key Features:\n\n1️⃣ **Dashboard** — Your personalized farming hub with real-time weather, alerts, and crop recommendations based on your exact location.\n\n2️⃣ **Odeneho AI** — Your intelligent assistant. Ask anything about farming, weather, livestock, aquaculture, or food safety. Voice-enabled with West African accent support.\n\n3️⃣ **Weather & Forecast** — Live weather from Tomorrow.io with 7-day forecasts, irrigation advisories, and seasonal crop planning.\n\n4️⃣ **Alerts** — Smart notifications triggered by real weather conditions — heavy rain, extreme heat, high winds, disease risk. Mark as read or dismiss permanently.\n\n5️⃣ **Agro Inventory** — Track all farm inputs, labor, land costs, harvest, losses, and sales with real-time profit calculations.",
+      },
+      {
+        title: "Using Odeneho AI Assistant",
+        content: "Odeneho is your personal agricultural intelligence assistant.\n\n**How to use Odeneho:**\n\n📝 **Text**: Type your question in the chat box and press Send.\n\n🎙️ **Voice**: Press the microphone button, speak your question clearly, then press the mic again to stop and send. Odeneho understands English and common West African expressions.\n\n🔊 **Listen**: Press 'Listen' on any response to hear Odeneho read it aloud in a natural voice.\n\n**What you can ask:**\n• \"What crops should I plant this season?\"\n• \"Is it safe to spray pesticides today?\"\n• \"How do I manage my fish pond in this weather?\"\n• \"When should I vaccinate my poultry?\"\n• \"What's the best fertilizer for my maize?\"\n\n**Tips for best results:**\n• Be specific about your crop, location, or concern\n• Odeneho uses your real-time weather and location data\n• If unsure about advice, Odeneho will redirect you to expert support",
+      },
+      {
+        title: "Understanding Alerts & Advisories",
+        content: "AgroClimate alerts are powered by a two-layer intelligence system:\n\n**Layer 1: Weather Signals**\nWeather data provides early warning signals. Alerts trigger when conditions cross agriculturally meaningful thresholds:\n• Rainfall > 60% → Flood/waterlogging risk\n• Temperature > 36°C → Heat stress for crops and livestock\n• Wind > 25 km/h → Flight advisory restriction\n• Extended dry spell → Drought preparedness\n\n**Layer 2: Environmental Validation**\nEnvironmental data confirms ground impact:\n• Soil moisture + heavy rain = High flood risk\n• Heat + low humidity = Fire risk\n• High humidity + moderate temp = Disease risk\n\n**Alert Actions:**\n• ✅ Mark as Read — stays in your history\n• ❌ Dismiss — removed permanently\n• 📱 SMS Alerts — critical alerts sent via SMS to your registered phone number\n\nAlerts are never repeated unless conditions escalate.",
+      },
+      {
+        title: "Flight Advisory & Air Monitoring",
+        content: "The Flight Advisory module supports drones, helicopters, and light aircraft.\n\n**How to use:**\n1. Select your mission type (monitoring, spraying, surveying, etc.)\n2. Your location is automatically detected\n3. Enter aircraft type and planned altitude\n4. Click 'Evaluate Flight Safety'\n\n**Results:**\n🟢 Safe to Fly — conditions are favorable\n🟡 Caution — some risks, follow precautions\n🔴 Do Not Fly — unsafe conditions\n\n**Air Monitoring (New!):**\n• Upload aerial images, survey videos, or NDVI files\n• Odeneho AI interprets patterns and provides advisories\n• API ingestion for environmental sensors coming soon\n\n**No-Fly Zone Rules:**\n• Wind > 30 km/h → No drone flights\n• Active thunderstorm → All flights grounded\n• Visibility < 1 km → Caution/No-fly",
+      },
+      {
+        title: "Agro Inventory Management",
+        content: "Track every aspect of your farm's finances.\n\n**Sections:**\n📦 **Inputs** — Seeds, fertilizers, chemicals, feed. Record quantity, unit price, and link to crop/season.\n\n👥 **Labor** — Task description, number of workers, days worked, daily rate.\n\n🗺️ **Land** — Land description, size in acres, rent or purchase cost.\n\n🌾 **Harvest** — Crop, quantity, quality grade, harvest date.\n\n📉 **Losses** — Spoilage, pests, storage, theft — tracked by crop and reason.\n\n💰 **Sales** — Quantity sold, price per unit, buyer name.\n\n**Metrics Dashboard:**\nAll calculations update in real-time:\n• Total Inputs Cost\n• Total Labor & Land Costs\n• Total Harvest Quantity\n• Total Losses\n• Total Revenue\n• Net Profit = Revenue − All Costs\n\n**Filters:** View by season, crop, or farm plot.\n**Edit:** Click the pencil icon to update any record.\n**Delete:** Click the trash icon to remove records.",
+      },
+    ],
+  },
   {
     id: "smart-farming",
     icon: Sprout,
@@ -26,7 +58,7 @@ const topics: LearningTopic[] = [
       },
       {
         title: "Record Keeping",
-        content: "Good farmers keep records. Track:\n• Date of planting\n• Type and amount of seed used\n• Fertilizer application dates and amounts\n• Pest problems and treatments\n• Harvest date and yield\n• Money spent and earned\n\nThis helps you improve each season and access loans or insurance when needed.",
+        content: "Good farmers keep records. Track:\n• Date of planting\n• Type and amount of seed used\n• Fertilizer application dates and amounts\n• Pest problems and treatments\n• Harvest date and yield\n• Money spent and earned\n\nUse the Agro Inventory module to track all inputs, costs, harvest, and sales digitally.",
       },
     ],
   },
@@ -153,7 +185,8 @@ export default function AgroLearning() {
                 }`}
               >
                 <t.icon className="h-4 w-4 flex-shrink-0" />
-                <span>{t.title}</span>
+                <span className="flex-1">{t.title}</span>
+                {t.isNew && <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>}
               </button>
             ))}
           </nav>
@@ -175,6 +208,7 @@ export default function AgroLearning() {
             >
               <t.icon className="h-3 w-3" />
               {t.title}
+              {t.isNew && <span className="bg-destructive text-destructive-foreground text-[8px] px-1 rounded">New</span>}
             </button>
           ))}
         </div>
@@ -188,7 +222,10 @@ export default function AgroLearning() {
               <topic.icon className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">{topic.title}</h1>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                {topic.title}
+                {topic.isNew && <Badge variant="default" className="text-xs">New</Badge>}
+              </h1>
               <p className="text-xs text-muted-foreground">{topic.sections.length} sections</p>
             </div>
           </div>
@@ -218,14 +255,25 @@ export default function AgroLearning() {
             </div>
           </div>
 
+          {/* Ask Odeneho CTA */}
+          {selectedTopic === "explainer" && (
+            <Card className="mt-4 border-dashed border-primary/40">
+              <CardContent className="pt-4 flex items-center gap-3">
+                <Bot className="h-5 w-5 text-primary shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Need help understanding a feature?</p>
+                  <p className="text-xs text-muted-foreground">Ask Odeneho AI for a personalized walkthrough.</p>
+                </div>
+                <Link to="/odeneho">
+                  <Button size="sm">Ask Odeneho</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Navigation */}
           <div className="flex justify-between mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelectedSection(Math.max(0, selectedSection - 1))}
-              disabled={selectedSection === 0}
-            >
+            <Button variant="outline" size="sm" onClick={() => setSelectedSection(Math.max(0, selectedSection - 1))} disabled={selectedSection === 0}>
               Previous
             </Button>
             <Button

@@ -40,11 +40,7 @@ export default function OdenehoAI() {
       },
       body: JSON.stringify({
         messages: allMessages,
-        location: {
-          community: position.community,
-          district: position.district,
-          region: position.region,
-        },
+        location: { community: position.community, district: position.district, region: position.region },
         weatherContext,
       }),
     });
@@ -53,7 +49,6 @@ export default function OdenehoAI() {
       const err = await resp.json().catch(() => ({ error: "Connection failed" }));
       throw new Error(err.error || `Error ${resp.status}`);
     }
-
     if (!resp.body) throw new Error("No response stream");
 
     const reader = resp.body.getReader();
@@ -98,7 +93,6 @@ export default function OdenehoAI() {
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
-
     try {
       await streamChat([...messages, userMsg]);
     } catch (e: any) {
@@ -122,23 +116,54 @@ export default function OdenehoAI() {
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = "en-GH";
 
+    let finalTranscript = "";
+
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(transcript);
-      setIsListening(false);
-      send(transcript);
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + " ";
+        } else {
+          interim = transcript;
+        }
+      }
+      setInput(finalTranscript + interim);
     };
 
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      if (finalTranscript.trim()) {
+        send(finalTranscript.trim());
+      }
+    };
 
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
+  };
+
+  const selectVoice = (): SpeechSynthesisVoice | null => {
+    const voices = speechSynthesis.getVoices();
+    // Prefer a deep male English voice — prioritize en-GH, en-NG, en-GB male
+    const preferred = [
+      voices.find(v => v.lang.includes("en-GH") && v.name.toLowerCase().includes("male")),
+      voices.find(v => v.lang.includes("en-GH")),
+      voices.find(v => v.lang.includes("en-NG")),
+      voices.find(v => v.lang.includes("en-GB") && v.name.toLowerCase().includes("male")),
+      voices.find(v => v.lang.includes("en-GB")),
+      voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male")),
+      voices.find(v => v.lang.startsWith("en")),
+    ];
+    return preferred.find(Boolean) || null;
   };
 
   const speak = (text: string) => {
@@ -152,6 +177,9 @@ export default function OdenehoAI() {
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.lang = "en-GH";
       utterance.rate = 0.85;
+      utterance.pitch = 0.9;
+      const voice = selectVoice();
+      if (voice) utterance.voice = voice;
       utterance.onend = () => setIsSpeaking(false);
       setIsSpeaking(true);
       speechSynthesis.speak(utterance);
@@ -195,11 +223,7 @@ export default function OdenehoAI() {
                 "How do I manage my fish pond in this weather?",
                 "When should I vaccinate my poultry?",
               ].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => send(q)}
-                  className="text-left text-xs p-3 rounded-lg bg-card border border-border hover:bg-muted transition-colors"
-                >
+                <button key={q} onClick={() => send(q)} className="text-left text-xs p-3 rounded-lg bg-card border border-border hover:bg-muted transition-colors">
                   {q}
                 </button>
               ))}
@@ -214,25 +238,14 @@ export default function OdenehoAI() {
                 <Bot className="h-4 w-4 text-primary" />
               </div>
             )}
-            <div
-              className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card border border-border"
-              }`}
-            >
+            <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}>
               {msg.role === "assistant" ? (
                 <div className="prose prose-sm max-w-none dark:prose-invert">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
-              ) : (
-                msg.content
-              )}
+              ) : msg.content}
               {msg.role === "assistant" && (
-                <button
-                  onClick={() => speak(msg.content)}
-                  className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                >
+                <button onClick={() => speak(msg.content)} className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
                   <Volume2 className="h-3 w-3" /> Listen
                 </button>
               )}
@@ -260,10 +273,7 @@ export default function OdenehoAI() {
 
       {/* Input */}
       <div className="border-t border-border bg-card p-3">
-        <form
-          onSubmit={(e) => { e.preventDefault(); send(input); }}
-          className="flex gap-2"
-        >
+        <form onSubmit={(e) => { e.preventDefault(); if (!isListening) send(input); }} className="flex gap-2">
           <Button
             type="button"
             variant={isListening ? "destructive" : "outline"}
@@ -276,16 +286,16 @@ export default function OdenehoAI() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Odeneho anything..."
+            placeholder={isListening ? "🎙️ Listening… tap mic to stop & send" : "Ask Odeneho anything..."}
             disabled={isLoading}
             className="flex-1"
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+          <Button type="submit" size="icon" disabled={isLoading || !input.trim() || isListening}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
         {isListening && (
-          <p className="text-xs text-center text-destructive mt-2 animate-pulse">🎙️ Listening... speak now</p>
+          <p className="text-xs text-center text-destructive mt-2 animate-pulse">🎙️ Recording... tap the mic button when done speaking</p>
         )}
       </div>
     </div>
