@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Sprout, Bug, Droplets, Leaf, ShieldCheck, Wheat, ChevronRight, PlayCircle, Lightbulb, Bot } from "lucide-react";
+import { BookOpen, Sprout, Bug, Droplets, Leaf, ShieldCheck, Wheat, ChevronRight, PlayCircle, Bot } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,23 +23,23 @@ const topics: LearningTopic[] = [
     sections: [
       {
         title: "Getting Started with AgroClimate",
-        content: "Welcome to AgroClimate — your intelligent farming companion.\n\nAgroClimate helps you make better farming decisions using real-time weather data, AI-powered crop advisories, and environmental monitoring.\n\n🔑 Key Features:\n\n1️⃣ **Dashboard** — Your personalized farming hub with real-time weather, alerts, and crop recommendations based on your exact location.\n\n2️⃣ **Odeneho AI** — Your intelligent assistant. Ask anything about farming, weather, livestock, aquaculture, or food safety. Voice-enabled with West African accent support.\n\n3️⃣ **Weather & Forecast** — Live weather from Tomorrow.io with 7-day forecasts, irrigation advisories, and seasonal crop planning.\n\n4️⃣ **Alerts** — Smart notifications triggered by real weather conditions — heavy rain, extreme heat, high winds, disease risk. Mark as read or dismiss permanently.\n\n5️⃣ **Agro Inventory** — Track all farm inputs, labor, land costs, harvest, losses, and sales with real-time profit calculations.",
+        content: "Welcome to AgroClimate, your intelligent farming companion.\n\nAgroClimate helps you make better farming decisions using real-time weather data, AI-powered crop advisories, and environmental monitoring.\n\nKey Features:\n\n1) Dashboard: Your personalized farming hub with real-time weather, alerts, and crop recommendations based on your exact location.\n\n2) Odeneho AI: Your intelligent assistant. Ask anything about farming, weather, livestock, aquaculture, or food safety. Voice-enabled with West African accent support.\n\n3) Weather and Forecast: Live weather from Tomorrow.io with 7-day forecasts, irrigation advisories, and seasonal crop planning.\n\n4) Alerts: Smart notifications triggered by real weather conditions, heavy rain, extreme heat, high winds, disease risk. Mark as read or dismiss permanently.\n\n5) Agro Inventory: Track all farm inputs, labor, land costs, harvest, losses, and sales with real-time profit calculations.",
       },
       {
         title: "Using Odeneho AI Assistant",
-        content: "Odeneho is your personal agricultural intelligence assistant.\n\n**How to use Odeneho:**\n\n📝 **Text**: Type your question in the chat box and press Send.\n\n🎙️ **Voice**: Press the microphone button, speak your question clearly, then press the mic again to stop and send. Odeneho understands English and common West African expressions.\n\n🔊 **Listen**: Press 'Listen' on any response to hear Odeneho read it aloud in a natural voice.\n\n**What you can ask:**\n• \"What crops should I plant this season?\"\n• \"Is it safe to spray pesticides today?\"\n• \"How do I manage my fish pond in this weather?\"\n• \"When should I vaccinate my poultry?\"\n• \"What's the best fertilizer for my maize?\"\n\n**Tips for best results:**\n• Be specific about your crop, location, or concern\n• Odeneho uses your real-time weather and location data\n• If unsure about advice, Odeneho will redirect you to expert support",
+        content: "Odeneho is your personal agricultural intelligence assistant.\n\nHow to use Odeneho:\n\nText: Type your question in the chat box and press Send.\n\nVoice: Press the microphone button, speak your question clearly, then press the mic again to stop and send. Odeneho understands English and common West African expressions.\n\nListen: Press 'Listen' on any response to hear Odeneho read it aloud in a natural voice.\n\nWhat you can ask:\nWhat crops should I plant this season?\nIs it safe to spray pesticides today?\nHow do I manage my fish pond in this weather?\nWhen should I vaccinate my poultry?\nWhat's the best fertilizer for my maize?\n\nTips for best results:\nBe specific about your crop, location, or concern\nOdeneho uses your real-time weather and location data\nIf unsure about advice, Odeneho will redirect you to expert support",
       },
       {
         title: "Understanding Alerts & Advisories",
-        content: "AgroClimate alerts are powered by a two-layer intelligence system:\n\n**Layer 1: Weather Signals**\nWeather data provides early warning signals. Alerts trigger when conditions cross agriculturally meaningful thresholds:\n• Rainfall > 60% → Flood/waterlogging risk\n• Temperature > 36°C → Heat stress for crops and livestock\n• Wind > 25 km/h → Flight advisory restriction\n• Extended dry spell → Drought preparedness\n\n**Layer 2: Environmental Validation**\nEnvironmental data confirms ground impact:\n• Soil moisture + heavy rain = High flood risk\n• Heat + low humidity = Fire risk\n• High humidity + moderate temp = Disease risk\n\n**Alert Actions:**\n• ✅ Mark as Read — stays in your history\n• ❌ Dismiss — removed permanently\n• 📱 SMS Alerts — critical alerts sent via SMS to your registered phone number\n\nAlerts are never repeated unless conditions escalate.",
+        content: "AgroClimate alerts are powered by a two-layer intelligence system.\n\nLayer 1: Weather Signals\nWeather data provides early warning signals. Alerts trigger when conditions cross agriculturally meaningful thresholds:\nRainfall above 60% means flood or waterlogging risk\nTemperature above 36°C means heat stress for crops and livestock\nWind above 25 km/h means flight advisory restriction\nExtended dry spell means drought preparedness\n\nLayer 2: Environmental Validation\nEnvironmental data confirms ground impact:\nSoil moisture plus heavy rain means high flood risk\nHeat plus low humidity means fire risk\nHigh humidity plus moderate temperature means disease risk\n\nAlert Actions:\nMark as Read stays in your history\nDismiss removes permanently\nSMS Alerts send critical alerts to your registered phone number\n\nAlerts are never repeated unless conditions escalate.",
       },
       {
         title: "Flight Advisory & Air Monitoring",
-        content: "The Flight Advisory module supports drones, helicopters, and light aircraft.\n\n**How to use:**\n1. Select your mission type (monitoring, spraying, surveying, etc.)\n2. Your location is automatically detected\n3. Enter aircraft type and planned altitude\n4. Click 'Evaluate Flight Safety'\n\n**Results:**\n🟢 Safe to Fly — conditions are favorable\n🟡 Caution — some risks, follow precautions\n🔴 Do Not Fly — unsafe conditions\n\n**Air Monitoring (New!):**\n• Upload aerial images, survey videos, or NDVI files\n• Odeneho AI interprets patterns and provides advisories\n• API ingestion for environmental sensors coming soon\n\n**No-Fly Zone Rules:**\n• Wind > 30 km/h → No drone flights\n• Active thunderstorm → All flights grounded\n• Visibility < 1 km → Caution/No-fly",
+        content: "The Flight Advisory module supports drones, helicopters, and light aircraft.\n\nHow to use:\n1. Select your mission type (monitoring, spraying, surveying, and more)\n2. Your location is automatically detected\n3. Enter aircraft type and planned altitude\n4. Click Evaluate Flight Safety\n\nResults:\nSafe to Fly means conditions are favorable\nCaution means some risks, follow precautions\nDo Not Fly means unsafe conditions\n\nAir Monitoring (New):\nUpload aerial images, survey videos, or NDVI files\nOdeneho AI interprets patterns and provides advisories\nAPI ingestion for environmental sensors is coming soon\n\nNo-Fly Zone Rules:\nWind above 30 km/h means no drone flights\nActive thunderstorm means all flights grounded\nVisibility below 1 km means caution or no-fly",
       },
       {
         title: "Agro Inventory Management",
-        content: "Track every aspect of your farm's finances.\n\n**Sections:**\n📦 **Inputs** — Seeds, fertilizers, chemicals, feed. Record quantity, unit price, and link to crop/season.\n\n👥 **Labor** — Task description, number of workers, days worked, daily rate.\n\n🗺️ **Land** — Land description, size in acres, rent or purchase cost.\n\n🌾 **Harvest** — Crop, quantity, quality grade, harvest date.\n\n📉 **Losses** — Spoilage, pests, storage, theft — tracked by crop and reason.\n\n💰 **Sales** — Quantity sold, price per unit, buyer name.\n\n**Metrics Dashboard:**\nAll calculations update in real-time:\n• Total Inputs Cost\n• Total Labor & Land Costs\n• Total Harvest Quantity\n• Total Losses\n• Total Revenue\n• Net Profit = Revenue − All Costs\n\n**Filters:** View by season, crop, or farm plot.\n**Edit:** Click the pencil icon to update any record.\n**Delete:** Click the trash icon to remove records.",
+        content: "Track every aspect of your farm finances.\n\nSections:\nInputs: Seeds, fertilizers, chemicals, feed. Record quantity, unit price, and link to crop or season.\nLabor: Task description, number of workers, days worked, daily rate.\nLand: Land description, size in acres, rent or purchase cost.\nHarvest: Crop, quantity, quality grade, harvest date.\nLosses: Spoilage, pests, storage, theft tracked by crop and reason.\nSales: Quantity sold, price per unit, buyer name.\n\nMetrics Dashboard:\nAll calculations update in real-time:\nTotal Inputs Cost\nTotal Labor and Land Costs\nTotal Harvest Quantity\nTotal Losses\nTotal Revenue\nNet Profit equals Revenue minus All Costs\n\nFilters: View by season, crop, or farm plot.\nEdit: Click the pencil icon to update any record.\nDelete: Click the trash icon to remove records.",
       },
     ],
   },
@@ -158,6 +158,24 @@ const topics: LearningTopic[] = [
 export default function AgroLearning() {
   const [selectedTopic, setSelectedTopic] = useState<string>(topics[0].id);
   const [selectedSection, setSelectedSection] = useState<number>(0);
+  const [dismissedNewTopics, setDismissedNewTopics] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = window.localStorage.getItem("agro-learning-dismissed-new");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const hideNewTag = (topicId: string) => {
+    if (dismissedNewTopics.includes(topicId)) return;
+    const updated = [...dismissedNewTopics, topicId];
+    setDismissedNewTopics(updated);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("agro-learning-dismissed-new", JSON.stringify(updated));
+    }
+  };
 
   const topic = topics.find((t) => t.id === selectedTopic)!;
 
@@ -177,7 +195,7 @@ export default function AgroLearning() {
             {topics.map((t) => (
               <button
                 key={t.id}
-                onClick={() => { setSelectedTopic(t.id); setSelectedSection(0); }}
+                onClick={() => { hideNewTag(t.id); setSelectedTopic(t.id); setSelectedSection(0); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
                   selectedTopic === t.id
                     ? "bg-primary/10 text-primary font-medium"
@@ -186,7 +204,7 @@ export default function AgroLearning() {
               >
                 <t.icon className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1">{t.title}</span>
-                {t.isNew && <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>}
+                {t.isNew && !dismissedNewTopics.includes(t.id) && <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>}
               </button>
             ))}
           </nav>
@@ -199,7 +217,7 @@ export default function AgroLearning() {
           {topics.map((t) => (
             <button
               key={t.id}
-              onClick={() => { setSelectedTopic(t.id); setSelectedSection(0); }}
+              onClick={() => { hideNewTag(t.id); setSelectedTopic(t.id); setSelectedSection(0); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
                 selectedTopic === t.id
                   ? "bg-primary text-primary-foreground"
@@ -208,7 +226,7 @@ export default function AgroLearning() {
             >
               <t.icon className="h-3 w-3" />
               {t.title}
-              {t.isNew && <span className="bg-destructive text-destructive-foreground text-[8px] px-1 rounded">New</span>}
+              {t.isNew && !dismissedNewTopics.includes(t.id) && <span className="bg-destructive text-destructive-foreground text-[8px] px-1 rounded">New</span>}
             </button>
           ))}
         </div>
@@ -224,7 +242,7 @@ export default function AgroLearning() {
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 {topic.title}
-                {topic.isNew && <Badge variant="default" className="text-xs">New</Badge>}
+                {topic.isNew && !dismissedNewTopics.includes(topic.id) && <Badge variant="default" className="text-xs">New</Badge>}
               </h1>
               <p className="text-xs text-muted-foreground">{topic.sections.length} sections</p>
             </div>

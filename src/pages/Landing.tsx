@@ -52,7 +52,7 @@ export default function Landing() {
     { icon: Cloud, title: "Climate Intelligence", desc: "Hyperlocal weather, rainfall prediction, disaster alerts" },
     { icon: Sprout, title: "Crop Advisory", desc: "AI-powered planting windows, irrigation, pest risk" },
     { icon: Fish, title: "Aquaculture", desc: "Fish pond monitoring with water quality tracking" },
-    { icon: Plane, title: "Drone Advisory", desc: "Flight safety evaluation and mission planning" },
+    { icon: Plane, title: "Flight Advisory", desc: "Flight safety evaluation and mission planning" },
     { icon: Leaf, title: "Environmental Monitor", desc: "Air quality, heat stress, turbulence modeling" },
     { icon: Bell, title: "Smart Alerts", desc: "Real-time disaster warnings and crop risk alerts" },
     { icon: Shield, title: "Multi-Sector", desc: "Agriculture, forestry, surveying, and agribusiness" },
