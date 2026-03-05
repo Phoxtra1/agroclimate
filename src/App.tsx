@@ -79,9 +79,6 @@ function AppRoutes() {
       <Route path="/odeneho" element={<ProtectedRoute><OdenehoAI /></ProtectedRoute>} />
       <Route path="/flight-advisory" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><AgroInventory /></ProtectedRoute>} />
-
-      {/* --- Admin Routes --- */}
-      <Route path="/admin" element={<AdminDashboard />} />
       
       {/* Keep old route for backwards compat */}
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
