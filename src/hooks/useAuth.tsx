@@ -35,12 +35,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, displayName: string) => {
+    const configuredAuthRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
+    const currentOrigin = window.location.origin;
+    const isPreviewHost =
+      window.location.hostname.includes("preview--") ||
+      window.location.hostname.endsWith(".lovableproject.com");
+
+    const redirectBase =
+      isPreviewHost && configuredAuthRedirectUrl
+        ? configuredAuthRedirectUrl.replace(/\/$/, "")
+        : currentOrigin;
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: { display_name: displayName },
-        emailRedirectTo: `${window.location.origin}/verify-email`,
+        emailRedirectTo: `${redirectBase}/verify-email`,
       },
     });
     return { error: error as Error | null };

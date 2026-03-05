@@ -24,9 +24,20 @@ import VerifyEmail from "./pages/VerifyEmail";
 
 const queryClient = new QueryClient();
 
+const isPreviewEnvironment = () => {
+  if (typeof window === "undefined") return false;
+
+  const hostname = window.location.hostname;
+  return (
+    hostname.includes("preview--") ||
+    hostname.endsWith(".lovableproject.com") ||
+    window.location.search.includes("__lovable_token=")
+  );
+};
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+  const isPreviewHost = isPreviewEnvironment();
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
   if (!user && !isPreviewHost) return <Navigate to="/" replace />;
@@ -37,7 +48,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Public route wrapped in AppLayout for authenticated users, or standalone for visitors
 function PublicOrProtectedRoute({ children, publicFallback }: { children: React.ReactNode; publicFallback: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+  const isPreviewHost = isPreviewEnvironment();
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
   if (user || isPreviewHost) return <AppLayout>{children}</AppLayout>;
@@ -47,7 +58,7 @@ function PublicOrProtectedRoute({ children, publicFallback }: { children: React.
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+  const isPreviewHost = isPreviewEnvironment();
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
 

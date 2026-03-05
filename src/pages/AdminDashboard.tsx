@@ -36,7 +36,11 @@ export default function AdminDashboard() {
     affected_regions: "",
   });
 
-  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+  const isPreviewHost = typeof window !== "undefined" && (
+    window.location.hostname.includes("preview--") ||
+    window.location.hostname.endsWith(".lovableproject.com") ||
+    window.location.search.includes("__lovable_token=")
+  );
 
   useEffect(() => {
     checkAdmin();
