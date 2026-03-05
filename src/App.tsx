@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import Landing from "./pages/Landing";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import Weather from "./pages/Weather";
 import CropCalendar from "./pages/CropCalendar";
@@ -77,6 +78,10 @@ function AppRoutes() {
       <Route path="/odeneho" element={<ProtectedRoute><OdenehoAI /></ProtectedRoute>} />
       <Route path="/flight-advisory" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><AgroInventory /></ProtectedRoute>} />
+
+      {/* --- Admin Routes --- */}
+      <Route path="/admin" element={<AdminDashboard />} />
+      
       {/* Keep old route for backwards compat */}
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
