@@ -1,154 +1,143 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { UploadCloud, Play, PauseCircle, RefreshCw, Trash2 } from "lucide-react";
 
-interface DatasetItem {
+interface Dataset {
   id: string;
-  question: string;
-  answer: string;
-  created_at: string;
+  name: string;
+  records: number;
+  uploadedAt: string;
+}
+
+interface TrainingJob {
+  id: string;
+  model: string;
+  dataset: string;
+  status: "idle" | "running" | "paused" | "completed" | "failed";
+  progress: number;
+  startedAt?: string;
 }
 
 export default function AIEngine() {
-  const [dataset, setDataset] = useState<DatasetItem[]>([]);
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [isTrainingEnabled, setIsTrainingEnabled] = useState(false);
-  const [aiStatus, setAiStatus] = useState<"Online" | "Offline">("Offline");
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [jobs, setJobs] = useState<TrainingJob[]>([]);
+  const [newDataset, setNewDataset] = useState({ name: "", records: 0 });
 
+  // Mock initial data
   useEffect(() => {
-    fetchDataset();
-    checkAIStatus();
+    setDatasets([
+      { id: "d1", name: "FarmerBehavior_v1.csv", records: 1200, uploadedAt: "2026-02-28" },
+      { id: "d2", name: "CropHealth_v2.csv", records: 5000, uploadedAt: "2026-03-01" },
+    ]);
+    setJobs([
+      { id: "j1", model: "Odeneho-Core-v1", dataset: "FarmerBehavior_v1.csv", status: "running", progress: 45, startedAt: "2026-03-02" },
+      { id: "j2", model: "Odeneho-Predictor-v1", dataset: "CropHealth_v2.csv", status: "completed", progress: 100, startedAt: "2026-03-01" },
+    ]);
   }, []);
 
-  const fetchDataset = async () => {
-    const { data } = await supabase
-      .from("ai_dataset")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (data) setDataset(data);
-  };
-
-  const checkAIStatus = async () => {
-    const { data } = await supabase
-      .from("system_settings")
-      .select("ai_enabled")
-      .single();
-
-    if (data?.ai_enabled) {
-      setAiStatus("Online");
-      setIsTrainingEnabled(true);
-    } else {
-      setAiStatus("Offline");
-      setIsTrainingEnabled(false);
-    }
-  };
-
-  const toggleTraining = async () => {
-    const newState = !isTrainingEnabled;
-
-    await supabase
-      .from("system_settings")
-      .update({ ai_enabled: newState })
-      .eq("id", 1);
-
-    setIsTrainingEnabled(newState);
-    setAiStatus(newState ? "Online" : "Offline");
-  };
-
-  const addDataset = async () => {
-    if (!question || !answer) return;
-
-    await supabase.from("ai_dataset").insert([
-      {
-        question,
-        answer,
-      },
+  const uploadDataset = () => {
+    if (!newDataset.name || newDataset.records <= 0) return;
+    const newId = `d${datasets.length + 1}`;
+    setDatasets([
+      ...datasets,
+      { id: newId, name: newDataset.name, records: newDataset.records, uploadedAt: new Date().toISOString().slice(0, 10) },
     ]);
-
-    setQuestion("");
-    setAnswer("");
-    fetchDataset();
+    setNewDataset({ name: "", records: 0 });
   };
 
-  const deleteDataset = async (id: string) => {
-    await supabase.from("ai_dataset").delete().eq("id", id);
-    fetchDataset();
+  const startJob = (jobId: string) => {
+    setJobs((prev) => prev.map((job) => job.id === jobId ? { ...job, status: "running" } : job));
+  };
+  const pauseJob = (jobId: string) => {
+    setJobs((prev) => prev.map((job) => job.id === jobId ? { ...job, status: "paused" } : job));
+  };
+  const removeJob = (jobId: string) => {
+    setJobs((prev) => prev.filter((job) => job.id !== jobId));
   };
 
   return (
-    <div>
-      <h2 className="text-xl font-bold mb-6">Odeneho AI Engine</h2>
-
-      {/* Status Panel */}
-      <div className="border rounded p-4 mb-6">
-        <p className="font-semibold">System Status: 
-          <span className={`ml-2 ${aiStatus === "Online" ? "text-green-600" : "text-red-600"}`}>
-            {aiStatus}
-          </span>
-        </p>
-
-        <button
-          onClick={toggleTraining}
-          className="mt-3 px-4 py-2 bg-primary text-white rounded"
-        >
-          {isTrainingEnabled ? "Disable AI Engine" : "Enable AI Engine"}
-        </button>
-      </div>
+    <div className="space-y-6 p-6">
 
       {/* Dataset Management */}
-      <div className="border rounded p-4 mb-6">
-        <h3 className="font-semibold mb-3">Dataset Management</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Dataset Management</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Dataset name"
+              value={newDataset.name}
+              onChange={(e) => setNewDataset({ ...newDataset, name: e.target.value })}
+            />
+            <Input
+              type="number"
+              placeholder="Records count"
+              value={newDataset.records || ""}
+              onChange={(e) => setNewDataset({ ...newDataset, records: parseInt(e.target.value) })}
+            />
+            <Button onClick={uploadDataset}>
+              <UploadCloud className="mr-2 h-4 w-4" /> Upload
+            </Button>
+          </div>
 
-        <input
-          className="border p-2 w-full mb-2"
-          placeholder="Question"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-        />
+          <div className="space-y-2">
+            {datasets.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No datasets uploaded yet.</p>
+            ) : (
+              datasets.map((ds) => (
+                <div key={ds.id} className="flex justify-between p-2 border rounded">
+                  <div>
+                    <p className="font-medium">{ds.name}</p>
+                    <p className="text-xs text-muted-foreground">{ds.records} records • Uploaded on {ds.uploadedAt}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-        <textarea
-          className="border p-2 w-full mb-2"
-          placeholder="Answer"
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-        />
-
-        <button
-          onClick={addDataset}
-          className="px-4 py-2 bg-green-600 text-white rounded"
-        >
-          Add Dataset Entry
-        </button>
-      </div>
-
-      {/* Dataset Table */}
-      <div>
-        <h3 className="font-semibold mb-3">Existing Dataset</h3>
-
-        <div className="space-y-3">
-          {dataset.map((item) => (
-            <div
-              key={item.id}
-              className="border rounded p-3 flex justify-between"
-            >
-              <div>
-                <p className="font-semibold">{item.question}</p>
-                <p className="text-sm text-muted-foreground">
-                  {item.answer}
-                </p>
+      {/* Training Jobs */}
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Training Jobs</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {jobs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active training jobs.</p>
+          ) : (
+            jobs.map((job) => (
+              <div key={job.id} className="p-4 border rounded space-y-2">
+                <div className="flex justify-between items-center">
+                  <p className="font-medium">{job.model}</p>
+                  <Badge variant={job.status === "running" ? "success" : job.status === "paused" ? "secondary" : "default"}>
+                    {job.status.toUpperCase()}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">Dataset: {job.dataset}</p>
+                <Progress value={job.progress} />
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" onClick={() => startJob(job.id)}>
+                    <Play className="mr-1 h-4 w-4" /> Start
+                  </Button>
+                  <Button size="sm" onClick={() => pauseJob(job.id)}>
+                    <PauseCircle className="mr-1 h-4 w-4" /> Pause
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => removeJob(job.id)}>
+                    <Trash2 className="mr-1 h-4 w-4" /> Remove
+                  </Button>
+                </div>
               </div>
-
-              <button
-                onClick={() => deleteDataset(item.id)}
-                className="text-red-600 text-sm"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
