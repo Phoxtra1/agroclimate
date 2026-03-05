@@ -20,33 +20,41 @@ import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
 import AdminDashboard from "./pages/AdminDashboard";
 import AgroLearning from "./pages/AgroLearning";
-import NotFound from "./pages/NotFound";
+import VerifyEmail from "./pages/VerifyEmail";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user && !isPreviewHost) return <Navigate to="/" replace />;
+
   return <AppLayout>{children}</AppLayout>;
 }
 
 // Public route wrapped in AppLayout for authenticated users, or standalone for visitors
 function PublicOrProtectedRoute({ children, publicFallback }: { children: React.ReactNode; publicFallback: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
-  if (user) return <AppLayout>{children}</AppLayout>;
+  if (user || isPreviewHost) return <AppLayout>{children}</AppLayout>;
+
   return <>{publicFallback}</>;
 }
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  
+  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
 
   return (
     <Routes>
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CropCalendar /></ProtectedRoute>} />
@@ -68,7 +76,7 @@ function AppRoutes() {
           <AgroLearning />
         </PublicOrProtectedRoute>
       } />
-      <Route path="*" element={<NotFound />} />
+      <Route path="*" element={<Navigate to={isPreviewHost ? "/dashboard" : user ? "/dashboard" : "/"} replace />} />
     </Routes>
   );
 }

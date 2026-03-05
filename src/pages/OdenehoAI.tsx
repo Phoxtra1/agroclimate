@@ -18,6 +18,7 @@ export default function OdenehoAI() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const shouldKeepListeningRef = useRef(false);
   const { position } = useGeolocation();
   const { forecast } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
@@ -103,66 +104,75 @@ export default function OdenehoAI() {
   };
 
   const toggleVoice = () => {
-  if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-    toast({
-      title: "Voice not supported",
-      description: "Your browser does not support voice input.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  if (isListening) {
-    recognitionRef.current?.stop();
-    setIsListening(false);
-    return;
-  }
-
-  const SpeechRecognition =
-    (window as any).SpeechRecognition ||
-    (window as any).webkitSpeechRecognition;
-
-  const recognition: SpeechRecognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = "en-GH";
-
-  let finalTranscript = "";
-
-  recognition.onresult = (event: SpeechRecognitionEvent) => {
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalTranscript += transcript + " ";
-      } else {
-        interim = transcript;
-      }
-    }
-    setInput(finalTranscript + interim);
-  };
-
-  recognition.onerror = () => {
-    // Only stop listening on real errors
-    setIsListening(false);
-  };
-
-  recognition.onend = () => {
-    // ⚠️ Prevent auto-shutdown while user still intends to record
-    if (isListening) {
-      recognition.start(); // restart automatically
+    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      toast({
+        title: "Voice not supported",
+        description: "Your browser does not support voice input.",
+        variant: "destructive",
+      });
       return;
     }
 
-    if (finalTranscript.trim()) {
-      send(finalTranscript.trim());
+    if (isListening) {
+      shouldKeepListeningRef.current = false;
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
     }
-  };
 
-  recognitionRef.current = recognition;
-  recognition.start();
-  setIsListening(true);
-};
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-GH";
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += `${transcript} `;
+        } else {
+          interim = transcript;
+        }
+      }
+      setInput((finalTranscript + interim).trimStart());
+    };
+
+    recognition.onerror = (event: any) => {
+      if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event?.error)) {
+        shouldKeepListeningRef.current = false;
+        setIsListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      if (shouldKeepListeningRef.current) {
+        try {
+          recognition.start();
+        } catch {
+          setTimeout(() => {
+            if (shouldKeepListeningRef.current) recognition.start();
+          }, 150);
+        }
+        return;
+      }
+
+      setIsListening(false);
+      const transcript = finalTranscript.trim();
+      if (transcript) send(transcript);
+    };
+
+    recognitionRef.current = recognition;
+    shouldKeepListeningRef.current = true;
+    setIsListening(true);
+    recognition.start();
+  };
 
   const selectVoice = (): SpeechSynthesisVoice | null => {
     const voices = speechSynthesis.getVoices();

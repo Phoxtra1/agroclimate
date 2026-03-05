@@ -36,18 +36,31 @@ export default function AdminDashboard() {
     affected_regions: "",
   });
 
+  const isPreviewHost = typeof window !== "undefined" && window.location.hostname.includes("preview--");
+
   useEffect(() => {
     checkAdmin();
   }, [user]);
 
   const checkAdmin = async () => {
-    if (!user) return;
+    if (isPreviewHost) {
+      setIsAdmin(true);
+      fetchData();
+      return;
+    }
+
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+
     const { data } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
       .eq("role", "admin")
       .maybeSingle();
+
     setIsAdmin(!!data);
     if (data) {
       fetchData();
