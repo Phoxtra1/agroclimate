@@ -83,7 +83,7 @@ function AppRoutes() {
           <AgroLearning />
         </PublicOrProtectedRoute>
       } />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
