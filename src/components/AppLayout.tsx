@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
 const navItems = [
-  { to: "/dashboard", icon: Home, label: "Dashboard" },
+  { to: "/dashboard", icon: Home, label: "Overview" },
   { to: "/odeneho", icon: Bot, label: "Odeneho" },
   { to: "/weather", icon: Cloud, label: "Weather" },
   { to: "/environment", icon: Leaf, label: "Environment" },
@@ -73,7 +73,7 @@ function NavItems({ onClick, isAdmin }: { onClick?: () => void; isAdmin?: boolea
   );
 }
 
-export function AppLayout({ children }: { children: ReactNode }) {
+export function AppLayout({ children, hideSidebar }: { children: ReactNode; hideSidebar?: boolean }) {
   const { signOut, user } = useAuth();
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -141,22 +141,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
-        <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
-          <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
-          <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          <NavItems isAdmin={isAdmin} />
-        </nav>
-        <div className="px-3 py-4 border-t border-sidebar-border">
-          <p className="text-xs text-sidebar-foreground/50 mb-2 px-3 truncate">{user?.email}</p>
-          <Button variant="ghost" onClick={signOut} className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-foreground">
-            <LogOut className="h-4 w-4 mr-2" /> Sign Out
-          </Button>
-        </div>
-      </aside>
-      <main className="flex-1 ml-64">{children}</main>
+      {!hideSidebar && (
+        <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
+          <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
+            <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
+            <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
+          </div>
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <NavItems isAdmin={isAdmin} />
+          </nav>
+          <div className="px-3 py-4 border-t border-sidebar-border">
+            <p className="text-xs text-sidebar-foreground/50 mb-2 px-3 truncate">{user?.email}</p>
+            <Button variant="ghost" onClick={signOut} className="w-full justify-start text-sidebar-foreground/70 hover:text-sidebar-foreground">
+              <LogOut className="h-4 w-4 mr-2" /> Sign Out
+            </Button>
+          </div>
+        </aside>
+      )}
+      <main className={`flex-1 ${!hideSidebar ? "ml-64" : ""}`}>{children}</main>
     </div>
   );
 }
