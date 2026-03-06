@@ -65,7 +65,7 @@ function AppRoutes() {
       <Route path="/" element={user || isPreview ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute hideSidebar><AdminDashboard /></ProtectedRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CropCalendar /></ProtectedRoute>} />
       <Route path="/crops" element={<ProtectedRoute><CropProduction /></ProtectedRoute>} />
