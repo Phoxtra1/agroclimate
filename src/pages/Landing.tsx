@@ -70,7 +70,7 @@ export default function Landing() {
               </div>
               <p className="text-xs font-medium text-primary mb-2">Powered by Amineva</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
-                Agricultural & Environmental <span className="text-gradient-primary">Intelligence</span>
+                Smart Insights for <span className="text-gradient-primary">Agriculture and Climate</span>
               </h2>
               <p className="text-muted-foreground text-lg mb-8 max-w-lg">
                 Climate-first, prediction-driven, AI-powered platform for farmers, extension officers, surveyors, and forestry agents across Africa.
