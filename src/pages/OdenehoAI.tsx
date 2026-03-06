@@ -18,7 +18,6 @@ export default function OdenehoAI() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const shouldKeepListeningRef = useRef(false);
   const { position } = useGeolocation();
   const { forecast } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
@@ -104,30 +103,28 @@ export default function OdenehoAI() {
   };
 
   const toggleVoice = () => {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      toast({
-        title: "Voice not supported",
-        description: "Your browser does not support voice input.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (isListening) {
-      shouldKeepListeningRef.current = false;
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
     const SpeechRecognitionCtor =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      toast({ title: "Voice not supported", description: "Your browser does not support voice input.", variant: "destructive" });
+      return;
+    }
+
+    // If currently listening, stop and keep text in input for editing
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setIsListening(false);
+      // Text stays in input field for user to review/edit before sending
+      return;
+    }
 
     const recognition = new SpeechRecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-GH";
+    recognition.maxAlternatives = 1;
 
     let finalTranscript = "";
 
@@ -136,7 +133,7 @@ export default function OdenehoAI() {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += `${transcript} `;
+          finalTranscript += transcript + " ";
         } else {
           interim = transcript;
         }
@@ -145,38 +142,36 @@ export default function OdenehoAI() {
     };
 
     recognition.onerror = (event: any) => {
-      if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event?.error)) {
-        shouldKeepListeningRef.current = false;
+      console.error("Speech recognition error:", event.error);
+      // On non-fatal errors, don't stop — just log
+      if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event.error)) {
         setIsListening(false);
+        recognitionRef.current = null;
+        toast({ title: "Microphone access denied", description: "Please allow microphone access in your browser settings.", variant: "destructive" });
       }
+      // "no-speech" and "aborted" are non-fatal, recognition continues
     };
 
     recognition.onend = () => {
-      if (shouldKeepListeningRef.current) {
+      // Only restart if we're still supposed to be listening
+      if (isListening && recognitionRef.current === recognition) {
         try {
           recognition.start();
         } catch {
-          setTimeout(() => {
-            if (shouldKeepListeningRef.current) recognition.start();
-          }, 150);
+          // If start fails, just stop
+          setIsListening(false);
+          recognitionRef.current = null;
         }
-        return;
       }
-
-      setIsListening(false);
-      const transcript = finalTranscript.trim();
-      if (transcript) send(transcript);
     };
 
     recognitionRef.current = recognition;
-    shouldKeepListeningRef.current = true;
     setIsListening(true);
     recognition.start();
   };
 
   const selectVoice = (): SpeechSynthesisVoice | null => {
     const voices = speechSynthesis.getVoices();
-    // Prefer a deep male English voice — prioritize en-GH, en-NG, en-GB male
     const preferred = [
       voices.find(v => v.lang.includes("en-GH") && v.name.toLowerCase().includes("male")),
       voices.find(v => v.lang.includes("en-GH")),
@@ -191,11 +186,7 @@ export default function OdenehoAI() {
 
   const speak = (text: string) => {
     if ("speechSynthesis" in window) {
-      if (isSpeaking) {
-        speechSynthesis.cancel();
-        setIsSpeaking(false);
-        return;
-      }
+      if (isSpeaking) { speechSynthesis.cancel(); setIsSpeaking(false); return; }
       const clean = text.replace(/[#*_`>\-]/g, "").replace(/\n+/g, ". ");
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.lang = "en-GH";
@@ -209,9 +200,18 @@ export default function OdenehoAI() {
     }
   };
 
-  const stopSpeaking = () => {
-    speechSynthesis.cancel();
-    setIsSpeaking(false);
+  const stopSpeaking = () => { speechSynthesis.cancel(); setIsSpeaking(false); };
+
+  // Send from input (button or enter)
+  const handleSend = () => {
+    if (isListening) {
+      // Stop recording first, let user review
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
+      setIsListening(false);
+      return;
+    }
+    send(input);
   };
 
   return (
@@ -237,7 +237,7 @@ export default function OdenehoAI() {
             <img src={aminevaLogo} alt="Odeneho" className="h-16 w-16 rounded-full mx-auto mb-4 opacity-60" />
             <h2 className="font-bold text-lg mb-2">Welcome to Odeneho</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-              Ask me anything about weather, farming, livestock, fish farming, food safety, or drone operations. I use your real-time location and current season to give you the best advice.
+              Ask me anything about weather, farming, livestock, fish farming, food safety, or drone operations.
             </p>
             <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
               {[
@@ -296,7 +296,7 @@ export default function OdenehoAI() {
 
       {/* Input */}
       <div className="border-t border-border bg-card p-3">
-        <form onSubmit={(e) => { e.preventDefault(); if (!isListening) send(input); }} className="flex gap-2">
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
           <Button
             type="button"
             variant={isListening ? "destructive" : "outline"}
@@ -309,16 +309,16 @@ export default function OdenehoAI() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? "🎙️ Listening… tap mic to stop & send" : "Ask Odeneho anything..."}
+            placeholder={isListening ? "🎙️ Listening... tap mic to stop" : "Ask Odeneho anything..."}
             disabled={isLoading}
             className="flex-1"
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim() || isListening}>
+          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
         {isListening && (
-          <p className="text-xs text-center text-destructive mt-2 animate-pulse">🎙️ Recording... tap the mic button when done speaking</p>
+          <p className="text-xs text-center text-destructive mt-2 animate-pulse">🎙️ Recording... tap mic when done, then review and send</p>
         )}
       </div>
     </div>

@@ -19,7 +19,6 @@ import OdenehoAI from "./pages/OdenehoAI";
 import DroneAdvisory from "./pages/DroneAdvisory";
 import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
-import AdminDashboard from "./pages/AdminDashboard";
 import AgroLearning from "./pages/AgroLearning";
 import VerifyEmail from "./pages/VerifyEmail";
 
@@ -27,7 +26,6 @@ const queryClient = new QueryClient();
 
 const isPreviewEnvironment = () => {
   if (typeof window === "undefined") return false;
-
   const hostname = window.location.hostname;
   return (
     hostname.includes("preview--") ||
@@ -38,34 +36,33 @@ const isPreviewEnvironment = () => {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const isPreviewHost = isPreviewEnvironment();
+  const isPreview = isPreviewEnvironment();
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
-  if (!user && !isPreviewHost) return <Navigate to="/" replace />;
+  if (!user && !isPreview) return <Navigate to="/" replace />;
 
   return <AppLayout>{children}</AppLayout>;
 }
 
-// Public route wrapped in AppLayout for authenticated users, or standalone for visitors
 function PublicOrProtectedRoute({ children, publicFallback }: { children: React.ReactNode; publicFallback: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const isPreviewHost = isPreviewEnvironment();
+  const isPreview = isPreviewEnvironment();
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
-  if (user || isPreviewHost) return <AppLayout>{children}</AppLayout>;
+  if (user || isPreview) return <AppLayout>{children}</AppLayout>;
 
   return <>{publicFallback}</>;
 }
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  const isPreviewHost = isPreviewEnvironment();
+  const isPreview = isPreviewEnvironment();
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Loading...</div>;
 
   return (
     <Routes>
-      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
+      <Route path="/" element={user || isPreview ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
@@ -79,18 +76,14 @@ function AppRoutes() {
       <Route path="/odeneho" element={<ProtectedRoute><OdenehoAI /></ProtectedRoute>} />
       <Route path="/flight-advisory" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><AgroInventory /></ProtectedRoute>} />
-      
-      {/* Keep old route for backwards compat */}
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
-      <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-      {/* Agro Learning is public */}
       <Route path="/learning" element={
         <PublicOrProtectedRoute publicFallback={<AgroLearning />}>
           <AgroLearning />
         </PublicOrProtectedRoute>
       } />
-      <Route path="*" element={<Navigate to={isPreviewHost ? "/dashboard" : user ? "/dashboard" : "/"} replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
