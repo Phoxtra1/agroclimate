@@ -12,6 +12,7 @@ import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2, Bot, Plane, Leaf, Shiel
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import aminevaLogo from "@/assets/amineva-logo.png";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Landing() {
   const { signIn, signUp } = useAuth();
@@ -30,15 +31,54 @@ export default function Landing() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signIn(loginEmail, loginPassword);
-    if (error) toast({ title: "Login failed", description: error.message, variant: "destructive" });
+    // Security Refinement: Trim whitespace from email
+    const { error } = await signIn(loginEmail.trim(), loginPassword);
+    if (error) {
+      toast({ 
+        title: "Login failed", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    }
     setLoading(false);
+  };
+
+  const handleForgotPassword = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!loginEmail) {
+      toast({ 
+        title: "Email required", 
+        description: "Please enter your email address first so we know where to send the link.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(loginEmail.trim(), {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      });
+      if (error) throw error;
+      toast({ 
+        title: "Reset link sent", 
+        description: "Check your email for the password reset instructions." 
+      });
+    } catch (error: any) {
+      toast({ 
+        title: "Error", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signUp(regEmail, regPassword, regName);
+    const { error } = await signUp(regEmail.trim(), regPassword, regName);
     if (error) {
       toast({ title: "Registration failed", description: error.message, variant: "destructive" });
     } else {
@@ -108,6 +148,17 @@ export default function Landing() {
                       <form onSubmit={handleLogin} className="space-y-3">
                         <Input placeholder="Email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required />
                         <Input placeholder="Password" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+                        
+                        <div className="flex justify-end px-1 py-1">
+                          <button 
+                            type="button" 
+                            onClick={handleForgotPassword}
+                            className="text-[10px] text-primary hover:underline font-medium focus:outline-none"
+                          >
+                            Forgot Password?
+                          </button>
+                        </div>
+
                         <Button type="submit" className="w-full" disabled={loading}>
                           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
                         </Button>
@@ -166,7 +217,6 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* 24hr Weather Preview */}
       <section className="container mx-auto px-4 py-12">
         <div className="text-center mb-8">
           <h3 className="text-2xl font-bold mb-2">Live Weather Updates</h3>
@@ -195,7 +245,6 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* Agro Learning CTA */}
             <div className="bg-primary/10 rounded-xl p-5 text-center">
               <BookOpen className="h-8 w-8 mx-auto text-primary mb-3" />
               <h4 className="font-bold text-sm mb-1">Agro Learning</h4>
