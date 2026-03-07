@@ -21,8 +21,7 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         name: "AgroClimate - Smart Farming Weather",
         short_name: "AgroClimate",
-        description:
-          "Localized weather forecasts, crop advisory, and aquaculture monitoring for farmers",
+        description: "Localized weather forecasts, crop advisory, and aquaculture monitoring for farmers",
         theme_color: "#2d7a4a",
         background_color: "#f7f4ef",
         display: "standalone",
@@ -31,12 +30,7 @@ export default defineConfig(({ mode }) => ({
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-          {
-            src: "/icons/icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "maskable",
-          },
+          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {
@@ -49,10 +43,7 @@ export default defineConfig(({ mode }) => ({
             handler: "NetworkFirst",
             options: {
               cacheName: "weather-api",
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 1800,
-              },
+              expiration: { maxEntries: 10, maxAgeSeconds: 1800 },
             },
           },
           {
@@ -60,10 +51,7 @@ export default defineConfig(({ mode }) => ({
             handler: "NetworkFirst",
             options: {
               cacheName: "edge-functions",
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 1800,
-              },
+              expiration: { maxEntries: 20, maxAgeSeconds: 1800 },
             },
           },
           {
@@ -71,10 +59,7 @@ export default defineConfig(({ mode }) => ({
             handler: "CacheFirst",
             options: {
               cacheName: "google-fonts",
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 31536000,
-              },
+              expiration: { maxEntries: 10, maxAgeSeconds: 31536000 },
             },
           },
         ],
@@ -88,4 +73,3 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
-```
