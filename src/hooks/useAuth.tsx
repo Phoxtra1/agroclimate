@@ -1,14 +1,15 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
+import type { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ error: Error | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ error: any }>;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,56 +19,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+  // Memoized session updater to prevent unnecessary re-renders
+  const updateAuthState = useCallback((newSession: Session | null) => {
+    setSession(newSession);
+    setUser(newSession?.user ?? null);
+    setLoading(false);
   }, []);
 
-  const signUp = async (email: string, password: string, displayName: string) => {
-    const configuredAuthRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim();
-    const currentOrigin = window.location.origin;
-    const isPreviewHost =
-      window.location.hostname.includes("preview--") ||
-      window.location.hostname.endsWith(".lovableproject.com");
+  const refreshSession = useCallback(async () => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    updateAuthState(currentSession);
+  }, [updateAuthState]);
 
-    const redirectBase =
-      isPreviewHost && configuredAuthRedirectUrl
-        ? configuredAuthRedirectUrl.replace(/\/$/, "")
-        : currentOrigin;
+  useEffect(() => {
+    // 1. Initial Load: Check session once
+    refreshSession();
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { display_name: displayName },
-        emailRedirectTo: `${redirectBase}/verify-email`,
-      },
-    });
-    return { error: error as Error | null };
-  };
+    // 2. Event Listener: Handle all auth changes (Sign In, Token Refresh, Sign Out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event: AuthChangeEvent, currentSession) => {
+        console.log(`[Auth Event]: ${event}`);
+        
+        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+          updateAuthState(currentSession);
+        } else if (event === 'SIGNED_OUT') {
+          updateAuthState(null);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [updateAuthState, refreshSession]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+    try {
+      // Security refine: Clean input to prevent "Invalid Credentials" from hidden spaces/casing
+      const cleanEmail = email.trim().toLowerCase();
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password,
+      });
+
+      if (error) throw error;
+
+      updateAuthState(data.session);
+      return { error: null };
+    } catch (error: any) {
+      console.error("Login Error:", error.message);
+      return { error };
+    }
+  };
+
+  const signUp = async (email: string, password: string, displayName: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: {
+          data: { display_name: displayName },
+          // Ensure correct redirect after verification
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      return { error: null };
+    } catch (error: any) {
+      return { error };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setLoading(true);
+    try {
+      await supabase.auth.signOut();
+      // Force clear local storage just in case security update caused orphans
+      localStorage.removeItem('supabase.auth.token'); 
+    } finally {
+      updateAuthState(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
