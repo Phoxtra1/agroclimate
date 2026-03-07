@@ -6,7 +6,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import odenehoLogo from "@/assets/odeneho.png"; // Imported your new Professional AI Logo
 
 type Msg = { role: "user" | "assistant"; content: string };
 
