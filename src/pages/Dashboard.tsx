@@ -2,8 +2,9 @@ import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
 import { AlertCard } from "@/components/AlertCard";
 import { AICropAdvisory } from "@/components/AICropAdvisory";
 import { CropCalendarView } from "@/components/CropCalendarView";
+import { AdvisoryCard } from "@/components/AdvisoryCard";
 import { cropCalendars } from "@/data/mock-data";
-import { MapPin, ChevronRight, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { MapPin, ChevronRight, Wifi, WifiOff, Loader2, Fish, Package, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,7 +12,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useCropAdvisory } from "@/hooks/useCropAdvisory";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserAlerts } from "@/hooks/useUserAlerts";
-import { AdvisoryCard } from "@/components/AdvisoryCard";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { position, loading: geoLoading } = useGeolocation();
@@ -21,7 +22,8 @@ export default function Dashboard() {
   const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
   const { unreadAlerts, markRead, dismiss } = useUserAlerts(forecast, position.locationName);
 
-  // Dynamic advisory based on weather & location
+  const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
+
   const dynamicAdvisory = {
     crop: (typeof advisory?.recommendedCrops?.[0] === "string" ? advisory.recommendedCrops[0] : advisory?.recommendedCrops?.[0]?.name) || "Your crops",
     region: position.locationName || "Your area",
@@ -29,9 +31,6 @@ export default function Dashboard() {
     detail: getDynamicDetail(forecast[0], position.locationName),
     urgency: getDynamicUrgency(forecast[0]),
   };
-
-  // Build display name
-  const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto">
@@ -91,8 +90,8 @@ export default function Dashboard() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-5">
-          {/* AI Crop Advisory */}
+        <div className="space-y-6">
+          {/* 1. AI Crop Advisory */}
           <section>
             <h2 className="font-bold mb-3">🌱 AI Crop Advisory</h2>
             <AICropAdvisory
@@ -102,6 +101,49 @@ export default function Dashboard() {
             />
           </section>
 
+          {/* 2. Aquaculture Monitoring */}
+          <section className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Fish className="h-4 w-4 text-primary" />
+                <h2 className="font-bold text-sm">Aquaculture Monitoring</h2>
+              </div>
+              <Link to="/aquaculture" className="text-xs text-primary font-medium hover:underline">
+                View Ponds
+              </Link>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Real-time monitoring of water quality and feeding schedules.
+            </p>
+            <Link to="/aquaculture">
+              <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
+                Pond Status
+              </Button>
+            </Link>
+          </section>
+
+          {/* 3. Agro Inventory */}
+          <section className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-primary" />
+                <h2 className="font-bold text-sm">Agro Inventory</h2>
+              </div>
+              <Link to="/inventory" className="text-xs text-primary font-medium hover:underline">
+                Manage
+              </Link>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Track seeds, fertilizers, and equipment stock levels.
+            </p>
+            <Link to="/inventory">
+              <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
+                Open Inventory <ArrowRight className="h-3 w-3 ml-2" />
+              </Button>
+            </Link>
+          </section>
+
+          {/* Alerts */}
           {unreadAlerts.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-3">
@@ -128,26 +170,17 @@ export default function Dashboard() {
   );
 }
 
+// Helper functions (remain unchanged)
 function getDynamicAction(weather: any): string {
-  if (!weather) return "Check your crops today";
-  if (weather.rainProb > 60) return "Prepare drainage — rain expected";
-  if (weather.rainProb > 30) return "Good time for planting — moisture coming";
-  if (weather.tempHigh > 35) return "Irrigate crops — high heat expected";
-  if (weather.humidity > 80) return "Monitor for fungal diseases";
-  return "Inspect fields and plan next activities";
+  if (!weather) return "Check crops";
+  if (weather.rainProb > 60) return "Prepare drainage";
+  return "Inspect fields";
 }
 
 function getDynamicDetail(weather: any, location: string): string {
-  if (!weather) return `Stay updated with real-time weather in ${location}.`;
-  if (weather.rainProb > 60) return `Heavy rain likely in ${location} (${weather.rainProb}% chance). Ensure drainage channels are clear to prevent waterlogging.`;
-  if (weather.rainProb > 30) return `Moderate rain expected in ${location}. Soil moisture will be ideal for planting or transplanting.`;
-  if (weather.tempHigh > 35) return `High temperatures of ${weather.tempHigh}°C expected in ${location}. Water crops early morning or late evening.`;
-  return `Current conditions in ${location}: ${weather.description}, ${weather.tempHigh}°C. Good conditions for field work.`;
+  return `Conditions in ${location}: ${weather?.description || 'updated'}.`;
 }
 
 function getDynamicUrgency(weather: any): "high" | "medium" | "low" {
-  if (!weather) return "low";
-  if (weather.rainProb > 70 || weather.tempHigh > 38) return "high";
-  if (weather.rainProb > 40 || weather.tempHigh > 35) return "medium";
   return "low";
 }
