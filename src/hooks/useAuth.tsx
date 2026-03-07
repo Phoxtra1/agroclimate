@@ -61,6 +61,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
+      // AUTO-LOGOUT LOGIC (15 Minutes)
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    const TIMEOUT_IN_MS = 15 * 60 * 1000; // 15 minutes
+
+    const handleAutoLogout = () => {
+      console.log("Auto-logout: User inactive for 15 minutes.");
+      signOut();
+    };
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      // Only set timer if a user is actually logged in
+      if (session) {
+        timeoutId = setTimeout(handleAutoLogout, TIMEOUT_IN_MS);
+      }
+    };
+
+    // Events to watch for user activity
+    const activityEvents = [
+      'mousedown', 'mousemove', 'keydown', 
+      'scroll', 'touchstart', 'click'
+    ];
+
+    if (session) {
+      // Initialize timer
+      resetTimer();
+      // Add listeners
+      activityEvents.forEach(event => 
+        window.addEventListener(event, resetTimer)
+      );
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      activityEvents.forEach(event => 
+        window.removeEventListener(event, resetTimer)
+      );
+    };
+  }, [session]); // Re-run when session state changes
+
     return () => subscription.unsubscribe();
   }, [updateAuthState, refreshSession]);
 
