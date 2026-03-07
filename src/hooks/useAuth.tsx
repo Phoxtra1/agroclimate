@@ -19,7 +19,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Memoized session updater to prevent unnecessary re-renders
   const updateAuthState = useCallback((newSession: Session | null) => {
     setSession(newSession);
     setUser(newSession?.user ?? null);
@@ -27,22 +26,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshSession = useCallback(async () => {
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    updateAuthState(currentSession);
+    try {
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      if (error) {
+        // UNIVERSAL FIX: If Chrome/Safari has a "ghost" session error, clear it
+        console.warn("Auth sync issue detected, clearing stale storage.");
+        localStorage.removeItem('supabase.auth.token');
+        updateAuthState(null);
+      } else {
+        updateAuthState(currentSession);
+      }
+    } catch (e) {
+      updateAuthState(null);
+    }
   }, [updateAuthState]);
 
   useEffect(() => {
-    // 1. Initial Load: Check session once
+    // 1. Initial Load: Sequential check to prevent race conditions
     refreshSession();
 
-    // 2. Event Listener: Handle all auth changes (Sign In, Token Refresh, Sign Out)
+    // 2. Event Listener: Handle all auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, currentSession) => {
-        console.log(`[Auth Event]: ${event}`);
+        console.log(`[Universal Auth Event]: ${event}`);
         
-        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           updateAuthState(currentSession);
         } else if (event === 'SIGNED_OUT') {
+          // Complete wipe to ensure non-default browsers don't hang
+          localStorage.clear();
+          sessionStorage.clear();
           updateAuthState(null);
         }
       }
@@ -53,9 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Security refine: Clean input to prevent "Invalid Credentials" from hidden spaces/casing
       const cleanEmail = email.trim().toLowerCase();
       
+      // UNIVERSAL FIX: Clear local storage immediately before sign-in to ensure a fresh session
+      localStorage.removeItem('supabase.auth.token');
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: password,
@@ -63,7 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      updateAuthState(data.session);
+      if (data.session) {
+        updateAuthState(data.session);
+      }
       return { error: null };
     } catch (error: any) {
       console.error("Login Error:", error.message);
@@ -73,12 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, displayName: string) => {
     try {
+      const cleanEmail = email.trim().toLowerCase();
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
         options: {
           data: { display_name: displayName },
-          // Ensure correct redirect after verification
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
@@ -93,9 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       await supabase.auth.signOut();
-      // Force clear local storage just in case security update caused orphans
-      localStorage.removeItem('supabase.auth.token'); 
     } finally {
+      localStorage.clear();
       updateAuthState(null);
     }
   };
