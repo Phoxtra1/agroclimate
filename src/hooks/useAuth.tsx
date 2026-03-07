@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 
@@ -18,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateAuthState = useCallback((newSession: Session | null) => {
     setSession(newSession);
@@ -29,58 +30,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: { session: currentSession }, error } = await supabase.auth.getSession();
       if (error) {
-        // UNIVERSAL FIX: If Chrome/Safari has a "ghost" session error, clear it
-        console.warn("Auth sync issue detected, clearing stale storage.");
-        localStorage.removeItem('supabase.auth.token');
+        console.warn("Auth session error, resetting state.", error.message);
         updateAuthState(null);
       } else {
         updateAuthState(currentSession);
       }
-    } catch (e) {
+    } catch {
       updateAuthState(null);
     }
   }, [updateAuthState]);
 
+  // ── Auth state listener ──
   useEffect(() => {
-    // 1. Initial Load: Sequential check to prevent race conditions
-    refreshSession();
-
-    // 2. Event Listener: Handle all auth changes
+    // 1. Set up the listener FIRST (per Supabase docs)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, currentSession) => {
-        console.log(`[Universal Auth Event]: ${event}`);
-        
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          updateAuthState(currentSession);
-        } else if (event === 'SIGNED_OUT') {
-          // Complete wipe to ensure non-default browsers don't hang
-          localStorage.clear();
-          sessionStorage.clear();
-          updateAuthState(null);
-        }
+      (_event: AuthChangeEvent, currentSession) => {
+        console.log(`[Auth Event]: ${_event}`);
+        updateAuthState(currentSession);
       }
     );
+
+    // 2. Then check for existing session
+    refreshSession();
 
     return () => subscription.unsubscribe();
   }, [updateAuthState, refreshSession]);
 
+  // ── Auto-logout after 15 min idle (separate, top-level useEffect) ──
+  useEffect(() => {
+    const TIMEOUT_MS = 15 * 60 * 1000;
+
+    const handleAutoLogout = async () => {
+      console.log("Auto-logout: idle for 15 minutes.");
+      await supabase.auth.signOut();
+    };
+
+    const resetTimer = () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (session) {
+        timeoutRef.current = setTimeout(handleAutoLogout, TIMEOUT_MS);
+      }
+    };
+
+    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
+
+    if (session) {
+      resetTimer();
+      events.forEach((e) => window.addEventListener(e, resetTimer));
+    }
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      events.forEach((e) => window.removeEventListener(e, resetTimer));
+    };
+  }, [session]);
+
   const signIn = async (email: string, password: string) => {
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      
-      // UNIVERSAL FIX: Clear local storage immediately before sign-in to ensure a fresh session
-      localStorage.removeItem('supabase.auth.token');
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: password,
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
       });
-
       if (error) throw error;
-
-      if (data.session) {
-        updateAuthState(data.session);
-      }
+      // No manual state update needed — onAuthStateChange handles it
       return { error: null };
     } catch (error: any) {
       console.error("Login Error:", error.message);
@@ -90,9 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, displayName: string) => {
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      const { data, error } = await supabase.auth.signUp({
-        email: cleanEmail,
+      const { error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
         password,
         options: {
           data: { display_name: displayName },
@@ -107,11 +118,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    setLoading(true);
     try {
       await supabase.auth.signOut();
-    } finally {
-      localStorage.clear();
+      // onAuthStateChange will set state to null
+    } catch (e) {
+      console.error("Sign out error", e);
       updateAuthState(null);
     }
   };
