@@ -28,15 +28,25 @@ export default function Landing() {
   const [droneType, setDroneType] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Security Refinement: Trim whitespace from email
-    const { error } = await signIn(loginEmail.trim(), loginPassword);
+    
+    // 1. Clean the input
+    const email = loginEmail.trim().toLowerCase();
+
+    // 2. Attempt Sign In
+    const { error } = await signIn(email, loginPassword);
+
     if (error) {
+      // 3. AUTO-FIX for non-tech users: 
+      // If login fails, clear old session data that might be causing the "Inconsistency"
+      localStorage.removeItem('supabase.auth.token');
+      sessionStorage.clear();
+      
       toast({ 
         title: "Login failed", 
-        description: error.message, 
+        description: "Invalid credentials. Please try again or use 'Forgot Password'.", 
         variant: "destructive" 
       });
     }
@@ -46,35 +56,26 @@ export default function Landing() {
   const handleForgotPassword = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!loginEmail) {
-      toast({ 
-        title: "Email required", 
-        description: "Please enter your email address first so we know where to send the link.", 
-        variant: "destructive" 
-      });
+      toast({ title: "Email required", description: "Type your email first.", variant: "destructive" });
       return;
     }
 
     setLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(loginEmail.trim(), {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      });
-      if (error) throw error;
-      toast({ 
-        title: "Reset link sent", 
-        description: "Check your email for the password reset instructions." 
-      });
-    } catch (error: any) {
-      toast({ 
-        title: "Error", 
-        description: error.message, 
-        variant: "destructive" 
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Force a clean state before requesting reset
+    localStorage.removeItem('supabase.auth.token');
 
+    const { error } = await supabase.auth.resetPasswordForEmail(loginEmail.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Check your email", description: "A login link has been sent to your inbox." });
+    }
+    setLoading(false);
+  };
+  
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
