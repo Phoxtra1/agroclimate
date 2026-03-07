@@ -132,7 +132,10 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+    <Route
+       path="/"
+       element={user || isPreview ? <Navigate to="/dashboard" replace /> : <Landing />}
+      />
       <Route path="/verify-email" element={<VerifyEmail />} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
