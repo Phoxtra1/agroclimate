@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, Mic, MicOff, Loader2, Bot, User, Volume2, VolumeX } from "lucide-react";
+import { Send, Mic, MicOff, Loader2, User, Volume2, VolumeX } from "lucide-react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import aminevaLogo from "@/assets/amineva-logo.png";
-import odenehoLogo from "@/assets/odeneho.png"; // Imported your new Professional AI Logo
+import odenehoLogo from "@/assets/odeneho.png"; 
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -33,60 +33,66 @@ export default function OdenehoAI() {
       ? `Temp ${forecast[0].tempHigh}°C, Humidity ${forecast[0].humidity}%, Rain ${forecast[0].rainProb}%, Wind ${forecast[0].wind} km/h, ${forecast[0].description}`
       : undefined;
 
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-      },
-      body: JSON.stringify({
-        messages: allMessages,
-        location: { community: position.community, district: position.district, region: position.region },
-        weatherContext,
-      }),
-    });
+    try {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: allMessages,
+          location: { community: position.community, district: position.district, region: position.region },
+          weatherContext,
+        }),
+      });
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: "Connection failed" }));
-      throw new Error(err.error || `Error ${resp.status}`);
-    }
-    if (!resp.body) throw new Error("No response stream");
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let assistantText = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      let idx: number;
-      while ((idx = buffer.indexOf("\n")) !== -1) {
-        let line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (!line.startsWith("data: ")) continue;
-        const json = line.slice(6).trim();
-        if (json === "[DONE]") break;
-        try {
-          const parsed = JSON.parse(json);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            assistantText += content;
-            setMessages(prev => {
-              const last = prev[prev.length - 1];
-              if (last?.role === "assistant") {
-                return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantText } : m);
-              }
-              return [...prev, { role: "assistant", content: assistantText }];
-            });
-          }
-        } catch { /* partial chunk */ }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Connection failed" }));
+        throw new Error(err.error || `Error ${resp.status}`);
       }
+      if (!resp.body) throw new Error("No response stream");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assistantText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let idx: number;
+        while ((idx = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const json = line.slice(6).trim();
+          if (json === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(json);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantText += content;
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last?.role === "assistant") {
+                  return prev.map((m, i) => i === prev.length - 1 ? { ...m, content: assistantText } : m);
+                }
+                return [...prev, { role: "assistant", content: assistantText }];
+              });
+            }
+          } catch { /* partial chunk */ }
+        }
+      }
+    } catch (e: any) {
+      toast({ title: "Odeneho Error", description: e.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
-  }, [forecast, position]);
+  }, [forecast, position, toast]);
 
   const send = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -94,13 +100,7 @@ export default function OdenehoAI() {
     setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
-    try {
-      await streamChat([...messages, userMsg]);
-    } catch (e: any) {
-      toast({ title: "Odeneho Error", description: e.message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    await streamChat([...messages, userMsg]);
   };
 
   const toggleVoice = () => {
@@ -112,12 +112,10 @@ export default function OdenehoAI() {
       return;
     }
 
-    // If currently listening, stop and keep text in input for editing
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
       setIsListening(false);
-      // Text stays in input field for user to review/edit before sending
       return;
     }
 
@@ -143,23 +141,18 @@ export default function OdenehoAI() {
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
-      // On non-fatal errors, don't stop — just log
       if (["not-allowed", "service-not-allowed", "audio-capture"].includes(event.error)) {
         setIsListening(false);
         recognitionRef.current = null;
-        toast({ title: "Microphone access denied", description: "Please allow microphone access in your browser settings.", variant: "destructive" });
+        toast({ title: "Microphone access denied", description: "Please allow microphone access.", variant: "destructive" });
       }
-      // "no-speech" and "aborted" are non-fatal, recognition continues
     };
 
     recognition.onend = () => {
-      // Only restart if we're still supposed to be listening
       if (isListening && recognitionRef.current === recognition) {
         try {
           recognition.start();
         } catch {
-          // If start fails, just stop
           setIsListening(false);
           recognitionRef.current = null;
         }
@@ -173,16 +166,7 @@ export default function OdenehoAI() {
 
   const selectVoice = (): SpeechSynthesisVoice | null => {
     const voices = speechSynthesis.getVoices();
-    const preferred = [
-      voices.find(v => v.lang.includes("en-GH") && v.name.toLowerCase().includes("male")),
-      voices.find(v => v.lang.includes("en-GH")),
-      voices.find(v => v.lang.includes("en-NG")),
-      voices.find(v => v.lang.includes("en-GB") && v.name.toLowerCase().includes("male")),
-      voices.find(v => v.lang.includes("en-GB")),
-      voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male")),
-      voices.find(v => v.lang.startsWith("en")),
-    ];
-    return preferred.find(Boolean) || null;
+    return voices.find(v => v.lang.includes("en-GH")) || voices.find(v => v.lang.startsWith("en")) || null;
   };
 
   const speak = (text: string) => {
@@ -203,10 +187,8 @@ export default function OdenehoAI() {
 
   const stopSpeaking = () => { speechSynthesis.cancel(); setIsSpeaking(false); };
 
-  // Send from input (button or enter)
   const handleSend = () => {
     if (isListening) {
-      // Stop recording first, let user review
       recognitionRef.current?.stop();
       recognitionRef.current = null;
       setIsListening(false);
@@ -219,10 +201,10 @@ export default function OdenehoAI() {
     <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">
       {/* Header */}
       <div className="bg-card border-b border-border px-4 py-3 flex items-center gap-3">
-        <img src={aminevaLogo} alt="Odeneho" className="h-8 w-8 rounded-full" />
+        <img src={odenehoLogo} alt="Odeneho AI" className="h-8 w-8 rounded-full border border-primary/20 shadow-sm" />
         <div>
-          <h1 className="font-bold text-sm">Odeneho</h1>
-          <p className="text-xs text-muted-foreground">Your Agricultural Intelligence Assistant</p>
+          <h1 className="font-bold text-sm tracking-tight">Odeneho AI</h1>
+          <p className="text-[10px] text-muted-foreground uppercase">Expert Agricultural Intelligence</p>
         </div>
         {isSpeaking && (
           <Button variant="ghost" size="sm" onClick={stopSpeaking} className="ml-auto text-xs text-destructive">
@@ -232,22 +214,22 @@ export default function OdenehoAI() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/30">
         {messages.length === 0 && (
           <div className="text-center py-12">
-            <img src={aminevaLogo} alt="Odeneho" className="h-16 w-16 rounded-full mx-auto mb-4 opacity-60" />
-            <h2 className="font-bold text-lg mb-2">Welcome to Odeneho</h2>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
-              Ask me anything about weather, farming, livestock, fish farming, food safety, or drone operations.
+            <img src={odenehoLogo} alt="Odeneho AI" className="h-20 w-20 rounded-full mx-auto mb-4 border border-primary/20 shadow-md" />
+            <h2 className="font-bold text-lg mb-2">Welcome to your AI Partner</h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6 px-4">
+              I can help with crop advisory, fish farm management, and climate predictions.
             </p>
-            <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
+            <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto px-4">
               {[
-                "What crops should I plant this season?",
-                "Is it safe to spray pesticides today?",
-                "How do I manage my fish pond in this weather?",
-                "When should I vaccinate my poultry?",
+                "Analyze my crop window",
+                "Check rain probability",
+                "Fish pond maintenance",
+                "Livestock vaccination",
               ].map((q) => (
-                <button key={q} onClick={() => send(q)} className="text-left text-xs p-3 rounded-lg bg-card border border-border hover:bg-muted transition-colors">
+                <button key={q} onClick={() => send(q)} className="text-left text-[11px] p-3 rounded-xl bg-card border border-border hover:bg-muted transition-colors font-medium">
                   {q}
                 </button>
               ))}
@@ -258,24 +240,24 @@ export default function OdenehoAI() {
         {messages.map((msg, i) => (
           <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}>
             {msg.role === "assistant" && (
-              <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="h-4 w-4 text-primary" />
+              <div className="h-8 w-8 rounded-full flex-shrink-0 mt-1 border border-primary/10 overflow-hidden shadow-sm">
+                <img src={odenehoLogo} alt="AI" className="h-full w-full object-cover" />
               </div>
             )}
-            <div className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}>
+            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${msg.role === "user" ? "bg-primary text-primary-foreground border-transparent" : "bg-card border border-border"}`}>
               {msg.role === "assistant" ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
+                <div className="prose prose-sm max-w-none dark:prose-invert leading-relaxed">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
               ) : msg.content}
               {msg.role === "assistant" && (
-                <button onClick={() => speak(msg.content)} className="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                  <Volume2 className="h-3 w-3" /> Listen
+                <button onClick={() => speak(msg.content)} className="mt-3 pt-2 border-t border-border/50 text-[10px] text-primary hover:text-primary/70 flex items-center gap-1 font-bold uppercase tracking-tighter">
+                  <Volume2 className="h-3 w-3" /> Voice Advisory
                 </button>
               )}
             </div>
             {msg.role === "user" && (
-              <div className="h-7 w-7 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-1">
+              <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-1 shadow-sm border border-border">
                 <User className="h-4 w-4 text-secondary-foreground" />
               </div>
             )}
@@ -284,11 +266,11 @@ export default function OdenehoAI() {
 
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex gap-3">
-            <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Bot className="h-4 w-4 text-primary" />
+            <div className="h-8 w-8 rounded-full flex-shrink-0 mt-1 border border-primary/10 overflow-hidden animate-pulse">
+                <img src={odenehoLogo} alt="AI Thinking" className="h-full w-full object-cover grayscale opacity-50" />
             </div>
-            <div className="bg-card border border-border rounded-xl px-4 py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
             </div>
           </div>
         )}
@@ -296,31 +278,28 @@ export default function OdenehoAI() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-border bg-card p-3">
-        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2">
+      <div className="border-t border-border bg-card p-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-2 max-w-4xl mx-auto">
           <Button
             type="button"
-            variant={isListening ? "destructive" : "outline"}
+            variant={isListening ? "destructive" : "secondary"}
             size="icon"
             onClick={toggleVoice}
-            className="flex-shrink-0"
+            className={`flex-shrink-0 rounded-full h-10 w-10 ${isListening ? "animate-pulse" : ""}`}
           >
             {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? "🎙️ Listening... tap mic to stop" : "Ask Odeneho anything..."}
+            placeholder={isListening ? "Listening..." : "Message Odeneho AI..."}
             disabled={isLoading}
-            className="flex-1"
+            className="flex-1 rounded-full bg-muted border-none ring-offset-background focus-visible:ring-1"
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+          <Button type="submit" size="icon" className="rounded-full h-10 w-10 flex-shrink-0" disabled={isLoading || !input.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </form>
-        {isListening && (
-          <p className="text-xs text-center text-destructive mt-2 animate-pulse">🎙️ Recording... tap mic when done, then review and send</p>
-        )}
       </div>
     </div>
   );
