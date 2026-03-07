@@ -37,23 +37,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshSession = useCallback(async () => {
-    try {
-      const {
-        data: { session: currentSession },
-        error,
-      } = await supabase.auth.getSession();
+  try {
+    const {
+      data: { session: currentSession },
+      error,
+    } = await supabase.auth.getSession();
 
-      if (error) {
-        console.warn("Auth sync issue detected, clearing stale storage.");
-        localStorage.removeItem("supabase.auth.token");
-        updateAuthState(null);
-      } else {
-        updateAuthState(currentSession);
-      }
-    } catch {
+    if (error) {
+      console.warn("Auth session corrupted. Resetting.");
+
+      // Remove all Supabase auth keys safely
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("sb-")) {
+          localStorage.removeItem(key);
+        }
+      });
+
       updateAuthState(null);
+    } else {
+      updateAuthState(currentSession);
     }
-  }, [updateAuthState]);
+  } catch {
+    updateAuthState(null);
+  }
+}, [updateAuthState]);
 
   // INITIAL AUTH LOAD + AUTH LISTENER
   useEffect(() => {
@@ -131,28 +138,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const signIn = async (email: string, password: string) => {
-    try {
-      const cleanEmail = email.trim().toLowerCase();
+  try {
+    const cleanEmail = email.trim().toLowerCase();
 
-      localStorage.removeItem("supabase.auth.token");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
+    if (error) throw error;
 
-      if (error) throw error;
-
-      if (data.session) {
-        updateAuthState(data.session);
-      }
-
-      return { error: null };
-    } catch (error: any) {
-      console.error("Login Error:", error.message);
-      return { error };
+    if (data.session) {
+      updateAuthState(data.session);
     }
-  };
+
+    return { error: null };
+  } catch (error: any) {
+    console.error("Login Error:", error.message);
+    return { error };
+  }
+};
 
   const signUp = async (
     email: string,
