@@ -105,7 +105,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (!user && !isPreview) return <Navigate to="/" replace />;
   if (!isAdmin && !isPreview) return <Navigate to="/dashboard" replace />;
 
-  return <AppLayout>{children}</AppLayout>;
+  return <AppLayout hideSidebar>{children}</AppLayout>;
 }
 
 function PublicOrProtectedRoute({

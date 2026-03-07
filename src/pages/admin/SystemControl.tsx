@@ -1,75 +1,99 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, UserPlus } from "lucide-react";
+import { Trash2, Ban, CheckCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-interface UserItem {
+interface ProfileRow {
   id: string;
-  name: string;
-  email: string;
-  isActive: boolean;
-  subscriptionStatus: "active" | "inactive" | "trial";
-  createdAt: string;
+  user_id: string;
+  display_name: string | null;
+  region: string | null;
+  country: string | null;
+  farmer_type: string | null;
+  created_at: string;
 }
 
 export default function SystemControl() {
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [newUser, setNewUser] = useState({ name: "", email: "" });
+  const [users, setUsers] = useState<ProfileRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    setUsers([
-      { id: "u1", name: "Alice Johnson", email: "alice@example.com", isActive: true, subscriptionStatus: "active", createdAt: "2026-03-01" },
-      { id: "u2", name: "Bob Smith", email: "bob@example.com", isActive: false, subscriptionStatus: "trial", createdAt: "2026-03-02" },
-    ]);
+    fetchUsers();
   }, []);
 
-  const addUser = () => {
-    if (!newUser.name || !newUser.email) return;
-    setUsers([...users, { id: `u${Date.now()}`, ...newUser, isActive: true, subscriptionStatus: "trial", createdAt: new Date().toISOString().slice(0, 10) }]);
-    setNewUser({ name: "", email: "" });
+  const fetchUsers = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, user_id, display_name, region, country, farmer_type, created_at")
+      .order("created_at", { ascending: false });
+    if (data) setUsers(data);
+    setLoading(false);
   };
 
-  const toggleActive = (id: string) => setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u));
-  const removeUser = (id: string) => setUsers(prev => prev.filter(u => u.id !== id));
-
-  const activeVariant = (active: boolean): "default" | "destructive" => active ? "default" : "destructive";
-  const subVariant = (s: string): "default" | "secondary" | "outline" => {
-    if (s === "active") return "default";
-    if (s === "trial") return "secondary";
-    return "outline";
+  const removeUser = async (id: string) => {
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "User profile removed" });
+      fetchUsers();
+    }
   };
 
   return (
-    <div className="space-y-6 p-6">
-      <Card>
-        <CardHeader><CardTitle>Add New User</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <Input placeholder="Name" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
-          <Input placeholder="Email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
-          <Button onClick={addUser}><UserPlus className="mr-2 h-4 w-4" /> Add User</Button>
-        </CardContent>
-      </Card>
+    <div className="space-y-6">
+      <h2 className="text-xl font-bold">System Control — User Management</h2>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold">{users.length}</p>
+            <p className="text-xs text-muted-foreground">Total Users</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold">
+              {users.filter((u) => {
+                const d = new Date(u.created_at);
+                return Date.now() - d.getTime() < 7 * 24 * 60 * 60 * 1000;
+              }).length}
+            </p>
+            <p className="text-xs text-muted-foreground">New This Week</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader><CardTitle>All Users</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          {users.length === 0 ? <p className="text-sm text-muted-foreground">No users found.</p> : users.map(user => (
-            <div key={user.id} className="p-3 border rounded flex justify-between items-start">
-              <div className="flex-1">
-                <p className="font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-                <Badge variant={activeVariant(user.isActive)} className="mt-1">{user.isActive ? "ACTIVE" : "INACTIVE"}</Badge>
-                <Badge variant={subVariant(user.subscriptionStatus)} className="ml-2 mt-1">{user.subscriptionStatus.toUpperCase()}</Badge>
-                <p className="text-xs text-muted-foreground mt-1">Created: {user.createdAt}</p>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : users.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No users found.</p>
+          ) : (
+            users.map((user) => (
+              <div key={user.id} className="p-3 border rounded flex justify-between items-start">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{user.display_name || "Unnamed User"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {user.region || user.country || "No location"} · {user.farmer_type || "N/A"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Joined: {new Date(user.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <Button size="sm" variant="destructive" onClick={() => removeUser(user.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => toggleActive(user.id)}>{user.isActive ? "Deactivate" : "Activate"}</Button>
-                <Button size="sm" variant="destructive" onClick={() => removeUser(user.id)}><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
     </div>
