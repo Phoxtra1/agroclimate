@@ -2,6 +2,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { WeatherDay, weeklyForecast as mockForecast } from "@/data/mock-data";
 
+const CACHE_KEY = "agroclimate_weather_cache";
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes for freshness
+
+interface CachedWeather {
+  data: WeatherDay[];
+  timestamp: number;
+  lat: number;
+  lon: number;
+}
+
 // Tomorrow.io weather code to emoji mapping
 const weatherCodeMap: Record<number, string> = {
   1000: "☀️", 1100: "⛅", 1101: "⛅", 1102: "☁️",
@@ -70,6 +80,20 @@ export function useWeather(lat?: number, lon?: number) {
   useEffect(() => {
     if (lat === undefined || lon === undefined) return;
 
+    // Try cache first
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed: CachedWeather = JSON.parse(cached);
+        const sameArea = Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
+        if (sameArea && Date.now() - parsed.timestamp < CACHE_DURATION) {
+          setForecast(parsed.data);
+          setIsLive(true);
+          return;
+        }
+      } catch { /* ignore bad cache */ }
+    }
+
     const fetchWeather = async () => {
       setLoading(true);
       try {
@@ -79,12 +103,15 @@ export function useWeather(lat?: number, lon?: number) {
 
         if (error || data?.error) throw new Error(data?.error || "Fetch failed");
 
+        // Parse Tomorrow.io response
         const dailyTimelines = data.forecast?.timelines?.daily || [];
         const forecastDays = dailyTimelines.slice(0, 7).map(mapTomorrowToWeatherDay);
 
+        // Replace first day with realtime data for accuracy
         if (data.realtime?.data?.values) {
           const realtimeDay = mapRealtimeToWeatherDay(data.realtime);
           if (forecastDays.length > 0) {
+            // Keep forecast high/low but use realtime current temp
             realtimeDay.tempLow = forecastDays[0].tempLow;
             forecastDays[0] = realtimeDay;
           } else {
@@ -95,10 +122,10 @@ export function useWeather(lat?: number, lon?: number) {
         if (forecastDays.length > 0) {
           setForecast(forecastDays);
           setIsLive(true);
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp: Date.now(), lat, lon }));
         }
       } catch (err) {
-        console.warn("Weather API unavailable, using fallback:", err);
-        setIsLive(false);
+        console.warn("Weather API unavailable, using cached/mock data:", err);
       } finally {
         setLoading(false);
       }
