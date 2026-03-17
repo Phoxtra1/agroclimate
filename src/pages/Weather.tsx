@@ -51,7 +51,7 @@ import { Badge } from "@/components/ui/badge";
 // CONFIG — Replace with your own key or inject via env
 // ────────────────────────────────────────────────────────────
 const TOMORROW_API_KEY =
-  import.meta.env.VITE_TOMORROW_API_KEY || "YOUR_API_KEY_HERE";
+  import.meta.env.VITE_TOMORROW_API_KEY || "zgfWrUPZrTNAAU55g8HQyszNueud5H5J";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
