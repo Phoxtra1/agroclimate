@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react"; // Added hooks
+import { useState, useMemo, useCallback } from "react";
 import { useInventory } from "@/hooks/useInventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,23 +9,51 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// Optimization: Move locale constants outside the component to prevent recalculation on every render
-const IS_GHANA = typeof window !== "undefined" && Intl.DateTimeFormat().resolvedOptions().timeZone.includes("Accra");
-const CURRENCY = IS_GHANA ? "GHS" : "USD";
-const LOCALE = IS_GHANA ? "en-GH" : "en-US";
+// Detect user locale and currency from timezone/browser
+const USER_TZ = typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
+const LOCALE_CURRENCY_MAP: Record<string, { locale: string; currency: string }> = {
+  "Africa/Accra": { locale: "en-GH", currency: "GHS" },
+  "Africa/Lagos": { locale: "en-NG", currency: "NGN" },
+  "Africa/Nairobi": { locale: "en-KE", currency: "KES" },
+  "Africa/Johannesburg": { locale: "en-ZA", currency: "ZAR" },
+  "Africa/Kampala": { locale: "en-UG", currency: "UGX" },
+  "Africa/Dar_es_Salaam": { locale: "sw-TZ", currency: "TZS" },
+  "Africa/Lusaka": { locale: "en-ZM", currency: "ZMW" },
+  "Africa/Harare": { locale: "en-ZW", currency: "USD" },
+  "Africa/Abidjan": { locale: "fr-CI", currency: "XOF" },
+  "Africa/Dakar": { locale: "fr-SN", currency: "XOF" },
+  "Africa/Bamako": { locale: "fr-ML", currency: "XOF" },
+  "Africa/Ouagadougou": { locale: "fr-BF", currency: "XOF" },
+  "Africa/Douala": { locale: "fr-CM", currency: "XAF" },
+  "Europe/London": { locale: "en-GB", currency: "GBP" },
+  "Asia/Kolkata": { locale: "en-IN", currency: "INR" },
+};
+
+function getLocaleCurrency() {
+  if (LOCALE_CURRENCY_MAP[USER_TZ]) return LOCALE_CURRENCY_MAP[USER_TZ];
+  // Fallback: try matching region from timezone
+  for (const [tz, cfg] of Object.entries(LOCALE_CURRENCY_MAP)) {
+    if (USER_TZ.startsWith(tz.split("/")[0])) return cfg;
+  }
+  // Final fallback: use browser locale
+  const browserLocale = typeof navigator !== "undefined" ? navigator.language : "en-US";
+  return { locale: browserLocale, currency: "USD" };
+}
+
+const { locale: LOCALE, currency: CURRENCY } = getLocaleCurrency();
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat(LOCALE, { 
-    style: "currency", 
-    currency: CURRENCY, 
-    minimumFractionDigits: 2 
+  return new Intl.NumberFormat(LOCALE, {
+    style: "currency",
+    currency: CURRENCY,
+    minimumFractionDigits: 2,
   }).format(amount);
 }
 
-// Optimized Dialog to prevent laggy input
+// Reusable Dialog for adding/editing records
 function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   title: string;
   fields: { name: string; label: string; type?: string; required?: boolean; placeholder?: string }[];
@@ -39,11 +67,13 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   const handleOpen = useCallback((isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen && initialData) setForm({ ...initialData });
+    if (isOpen && !initialData) setForm({});
   }, [initialData]);
 
   const handleSave = () => {
     onSave(form);
     setOpen(false);
+    setForm({});
   };
 
   return (
@@ -82,23 +112,93 @@ export default function AgroInventory() {
     metrics, loading, addRecord, updateRecord, deleteRecord, seasons, crops, plots,
   } = useInventory(filterSeason, filterCrop, filterPlot);
 
-  // Memoize fields to prevent re-renders of the dialog triggers
+  // Field configurations for each section
   const fieldConfigs = useMemo(() => ({
     inputs: [
       { name: "item_name", label: "Item Name", required: true, placeholder: "e.g. NPK Fertilizer" },
       { name: "item_type", label: "Type", required: true, placeholder: "e.g. Fertilizer, Seeds, Chemical" },
       { name: "quantity", label: "Quantity", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, liters, bags" },
-      { name: "price_per_unit", label: "Price per Unit", type: "number", required: true },
+      { name: "price_per_unit", label: `Price per Unit (${CURRENCY})`, type: "number", required: true },
       { name: "crop_name", label: "Crop/Linked To" },
       { name: "season", label: "Season" },
       { name: "farm_plot", label: "Farm Plot" },
       { name: "notes", label: "Notes" },
     ],
-    // ... logic for other fields remains the same ...
+    labor: [
+      { name: "worker_name", label: "Worker/Team Name", required: true, placeholder: "e.g. Kwame, Day Laborers" },
+      { name: "task_description", label: "Task", required: true, placeholder: "e.g. Weeding, Planting, Spraying" },
+      { name: "hours_worked", label: "Hours Worked", type: "number", required: true },
+      { name: "rate_per_hour", label: `Rate per Hour (${CURRENCY})`, type: "number", required: true },
+      { name: "date_worked", label: "Date", type: "date" },
+      { name: "crop_name", label: "Crop/Linked To" },
+      { name: "season", label: "Season" },
+      { name: "farm_plot", label: "Farm Plot" },
+      { name: "notes", label: "Notes" },
+    ],
+    harvest: [
+      { name: "crop_name", label: "Crop Name", required: true, placeholder: "e.g. Maize, Cassava, Tomatoes" },
+      { name: "quantity_harvested", label: "Quantity Harvested", type: "number", required: true },
+      { name: "unit", label: "Unit", placeholder: "kg, bags, crates" },
+      { name: "harvest_date", label: "Harvest Date", type: "date" },
+      { name: "quality_grade", label: "Quality Grade", placeholder: "A, B, C or Premium, Standard" },
+      { name: "season", label: "Season" },
+      { name: "farm_plot", label: "Farm Plot" },
+      { name: "notes", label: "Notes" },
+    ],
+    loss: [
+      { name: "description", label: "Loss Description", required: true, placeholder: "e.g. Pest damage on maize, Dead chickens" },
+      { name: "loss_type", label: "Loss Type", required: true, placeholder: "e.g. Crop Damage, Livestock Death, Spoilage" },
+      { name: "quantity_lost", label: "Quantity Lost", type: "number", required: true },
+      { name: "unit", label: "Unit", placeholder: "kg, heads, bags" },
+      { name: "estimated_value", label: `Estimated Value (${CURRENCY})`, type: "number", required: true },
+      { name: "loss_date", label: "Date of Loss", type: "date" },
+      { name: "crop_name", label: "Crop/Livestock" },
+      { name: "season", label: "Season" },
+      { name: "farm_plot", label: "Farm Plot" },
+      { name: "notes", label: "Notes / Cause" },
+    ],
+    sales: [
+      { name: "product_name", label: "Product Sold", required: true, placeholder: "e.g. Maize, Eggs, Tomatoes" },
+      { name: "quantity_sold", label: "Quantity Sold", type: "number", required: true },
+      { name: "unit", label: "Unit", placeholder: "kg, bags, crates" },
+      { name: "price_per_unit", label: `Price per Unit (${CURRENCY})`, type: "number", required: true },
+      { name: "buyer_name", label: "Buyer Name", placeholder: "e.g. Market Trader, Cooperative" },
+      { name: "sale_date", label: "Sale Date", type: "date" },
+      { name: "crop_name", label: "Crop/Linked To" },
+      { name: "season", label: "Season" },
+      { name: "farm_plot", label: "Farm Plot" },
+      { name: "notes", label: "Notes" },
+    ],
   }), []);
 
-  // Performance Fix: Show skeleton instead of blocking the whole UI
+  // Dynamic cost/profit calculations
+  const totals = useMemo(() => {
+    const totalInputsCost = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0) * (item.price_per_unit || 0), 0);
+    const totalLaborCost = laborRecords.reduce((sum, r) => sum + (r.hours_worked || 0) * (r.rate_per_hour || 0), 0);
+    const totalLandCost = landCosts?.reduce((sum: number, r: any) => sum + (r.cost || 0), 0) ?? 0;
+    const totalHarvestQty = harvestRecords.reduce((sum, r) => sum + (r.quantity_harvested || 0), 0);
+    const totalLossValue = harvestLosses.reduce((sum, r) => sum + (r.estimated_value || 0), 0);
+    const totalLossQty = harvestLosses.reduce((sum, r) => sum + (r.quantity_lost || 0), 0);
+    const totalRevenue = salesRecords.reduce((sum, r) => sum + (r.quantity_sold || 0) * (r.price_per_unit || 0), 0);
+    const totalExpenses = totalInputsCost + totalLaborCost + totalLandCost;
+    const netProfit = totalRevenue - totalExpenses - totalLossValue;
+
+    return { totalInputsCost, totalLaborCost, totalLandCost, totalHarvestQty, totalLossValue, totalLossQty, totalRevenue, totalExpenses, netProfit };
+  }, [inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords]);
+
+  // Use local totals if metrics from hook are empty/zero, otherwise prefer hook metrics
+  const displayMetrics = {
+    totalInputsCost: metrics.totalInputsCost || totals.totalInputsCost,
+    totalLaborCost: metrics.totalLaborCost || totals.totalLaborCost,
+    totalLandCost: metrics.totalLandCost || totals.totalLandCost,
+    totalHarvestQty: metrics.totalHarvestQty || totals.totalHarvestQty,
+    totalLosses: totals.totalLossValue,
+    totalRevenue: metrics.totalRevenue || totals.totalRevenue,
+    netProfit: totals.netProfit,
+    totalExpenses: totals.totalExpenses,
+  };
+
   if (loading && inventoryItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
@@ -113,53 +213,59 @@ export default function AgroInventory() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">📦 Agro Inventory</h1>
-          <p className="text-sm text-muted-foreground">Comprehensive farm input and revenue management</p>
+          <p className="text-sm text-muted-foreground">Comprehensive farm input, labor, harvest, loss &amp; sales tracking</p>
         </div>
       </div>
 
-      {/* Overview Metrics - Grid optimized for mobile speed */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <MetricCard icon={Package} label="Inputs" value={formatCurrency(metrics.totalInputsCost)} color="text-blue-600" bg="bg-blue-50/50" />
-        <MetricCard icon={Users} label="Labor" value={formatCurrency(metrics.totalLaborCost)} color="text-blue-600" bg="bg-blue-50/50" />
-        <MetricCard icon={MapPin} label="Land" value={formatCurrency(metrics.totalLandCost)} color="text-blue-600" bg="bg-blue-50/50" />
-        <MetricCard icon={Wheat} label="Harvest" value={`${metrics.totalHarvestQty.toLocaleString()}`} color="text-primary" bg="bg-primary/10" />
-        <MetricCard icon={TrendingDown} label="Losses" value={`${metrics.totalLosses.toLocaleString()}`} color="text-destructive" bg="bg-destructive/10" />
-        <MetricCard icon={DollarSign} label="Revenue" value={formatCurrency(metrics.totalRevenue)} color="text-emerald-600" bg="bg-emerald-50/50" />
-        <MetricCard icon={TrendingUp} label="Net Profit" value={formatCurrency(metrics.netProfit)} color={metrics.netProfit >= 0 ? "text-emerald-700" : "text-destructive"} bg={metrics.netProfit >= 0 ? "bg-emerald-50" : "bg-destructive/10"} />
+      {/* Overview Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <MetricCard icon={Package} label="Inputs" value={formatCurrency(displayMetrics.totalInputsCost)} color="text-blue-600" bg="bg-blue-50/50" />
+        <MetricCard icon={Users} label="Labor" value={formatCurrency(displayMetrics.totalLaborCost)} color="text-indigo-600" bg="bg-indigo-50/50" />
+        <MetricCard icon={MapPin} label="Land" value={formatCurrency(displayMetrics.totalLandCost)} color="text-violet-600" bg="bg-violet-50/50" />
+        <MetricCard icon={Wheat} label="Harvest" value={`${displayMetrics.totalHarvestQty.toLocaleString()}`} color="text-primary" bg="bg-primary/10" />
+        <MetricCard icon={AlertTriangle} label="Losses" value={formatCurrency(displayMetrics.totalLosses)} color="text-destructive" bg="bg-destructive/10" />
+        <MetricCard icon={ShoppingCart} label="Revenue" value={formatCurrency(displayMetrics.totalRevenue)} color="text-emerald-600" bg="bg-emerald-50/50" />
+        <MetricCard icon={DollarSign} label="Expenses" value={formatCurrency(displayMetrics.totalExpenses)} color="text-orange-600" bg="bg-orange-50/50" />
+        <MetricCard icon={TrendingUp} label="Net Profit" value={formatCurrency(displayMetrics.netProfit)} color={displayMetrics.netProfit >= 0 ? "text-emerald-700" : "text-destructive"} bg={displayMetrics.netProfit >= 0 ? "bg-emerald-50" : "bg-destructive/10"} />
       </div>
 
+      {/* Season Summary Card */}
       <Card className="border-dashed border-primary/30 bg-primary/5">
-        <CardContent className="pt-4 flex items-center gap-4">
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <Bot className="h-6 w-6 text-primary" />
+        <CardContent className="pt-4 pb-4">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Bot className="h-6 w-6 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Season Summary</p>
+              <p className="text-[11px] text-muted-foreground">
+                Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {formatCurrency(displayMetrics.totalLosses)} | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
+              </p>
+            </div>
+            <Link to="/odeneho">
+              <Button size="sm" className="shadow-sm">
+                <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Consult AI
+              </Button>
+            </Link>
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold">Odeneho AI Strategy</p>
-            <p className="text-[11px] text-muted-foreground">Your input costs are {metrics.totalInputsCost > 500 ? 'trending high' : 'stable'}. Ask me for optimization tips.</p>
-          </div>
-          <Link to="/odeneho">
-            <Button size="sm" className="shadow-sm">
-              <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Consult AI
-            </Button>
-          </Link>
         </CardContent>
       </Card>
 
-      {/* Tabs with simplified rendering */}
+      {/* Tabs */}
       <Tabs defaultValue="inputs" className="space-y-4">
-        <TabsList className="bg-muted/50 p-1">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
           <TabsTrigger value="inputs" className="text-xs px-4">Inputs</TabsTrigger>
           <TabsTrigger value="labor" className="text-xs px-4">Labor</TabsTrigger>
           <TabsTrigger value="harvest" className="text-xs px-4">Harvest</TabsTrigger>
+          <TabsTrigger value="loss" className="text-xs px-4">Losses</TabsTrigger>
           <TabsTrigger value="sales" className="text-xs px-4">Sales</TabsTrigger>
         </TabsList>
 
+        {/* ===== INPUTS TAB (unchanged logic) ===== */}
         <TabsContent value="inputs" className="space-y-4">
-           {/* SectionCard remains same, but uses memoized configs */}
-           <SectionCard title="Input Inventory" badge={`${inventoryItems.length}`}
+          <SectionCard title="Input Inventory" badge={`${inventoryItems.length}`}
             addDialog={<RecordDialog title="Add Input" fields={fieldConfigs.inputs} onSave={(data) => addRecord("inventory_items", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Input</Button>} />}
           >
-            {/* Table remains same logic but with optimized spacing */}
             <div className="rounded-md border">
               <Table>
                 <TableHeader className="bg-muted/30">
@@ -186,17 +292,222 @@ export default function AgroInventory() {
                       </TableCell>
                     </TableRow>
                   ))}
+                  {inventoryItems.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No input records yet</TableCell></TableRow>}
                 </TableBody>
               </Table>
+            </div>
+            <div className="px-4 py-3 border-t bg-muted/20 text-sm font-semibold flex justify-between">
+              <span>Total Input Cost</span>
+              <span>{formatCurrency(totals.totalInputsCost)}</span>
+            </div>
+          </SectionCard>
+        </TabsContent>
+
+        {/* ===== LABOR TAB ===== */}
+        <TabsContent value="labor" className="space-y-4">
+          <SectionCard title="Labor Records" badge={`${laborRecords.length}`}
+            addDialog={<RecordDialog title="Add Labor Record" fields={fieldConfigs.labor} onSave={(data) => addRecord("labor_records", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Labor</Button>} />}
+          >
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="w-[180px]">Worker / Task</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Rate</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {laborRecords.map((r: any) => (
+                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                      <TableCell className="font-medium p-3">
+                        <div>{r.worker_name}</div>
+                        <div className="text-[10px] text-muted-foreground">{r.task_description}</div>
+                      </TableCell>
+                      <TableCell className="p-3">{r.hours_worked}</TableCell>
+                      <TableCell className="p-3">{formatCurrency(r.rate_per_hour || 0)}</TableCell>
+                      <TableCell className="p-3 font-semibold">{formatCurrency((r.hours_worked || 0) * (r.rate_per_hour || 0))}</TableCell>
+                      <TableCell className="text-right p-3">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("labor_records", r.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive/70" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {laborRecords.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No labor records yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="px-4 py-3 border-t bg-muted/20 text-sm font-semibold flex justify-between">
+              <span>Total Labor Cost</span>
+              <span>{formatCurrency(totals.totalLaborCost)}</span>
+            </div>
+          </SectionCard>
+        </TabsContent>
+
+        {/* ===== HARVEST TAB ===== */}
+        <TabsContent value="harvest" className="space-y-4">
+          <SectionCard title="Harvest Records" badge={`${harvestRecords.length}`}
+            addDialog={<RecordDialog title="Add Harvest Record" fields={fieldConfigs.harvest} onSave={(data) => addRecord("harvest_records", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Harvest</Button>} />}
+          >
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="w-[180px]">Crop</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Grade</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {harvestRecords.map((r: any) => (
+                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                      <TableCell className="font-medium p-3">{r.crop_name}</TableCell>
+                      <TableCell className="p-3">{r.quantity_harvested} {r.unit}</TableCell>
+                      <TableCell className="p-3"><Badge variant="outline" className="text-[10px]">{r.quality_grade || "N/A"}</Badge></TableCell>
+                      <TableCell className="p-3 text-muted-foreground text-xs">{r.harvest_date || "—"}</TableCell>
+                      <TableCell className="text-right p-3">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("harvest_records", r.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive/70" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {harvestRecords.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No harvest records yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="px-4 py-3 border-t bg-muted/20 text-sm font-semibold flex justify-between">
+              <span>Total Harvest Quantity</span>
+              <span>{totals.totalHarvestQty.toLocaleString()} units</span>
+            </div>
+          </SectionCard>
+        </TabsContent>
+
+        {/* ===== LOSS TAB ===== */}
+        <TabsContent value="loss" className="space-y-4">
+          <SectionCard title="Loss / Damage Records" badge={`${harvestLosses.length}`}
+            addDialog={<RecordDialog title="Add Loss Record" fields={fieldConfigs.loss} onSave={(data) => addRecord("harvest_losses", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> Record Loss</Button>} />}
+          >
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="w-[200px]">Description</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Qty Lost</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {harvestLosses.map((r: any) => (
+                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                      <TableCell className="font-medium p-3">
+                        <div>{r.description}</div>
+                        <div className="text-[10px] text-muted-foreground">{r.crop_name || ""}</div>
+                      </TableCell>
+                      <TableCell className="p-3"><Badge variant="destructive" className="text-[10px]">{r.loss_type || "Loss"}</Badge></TableCell>
+                      <TableCell className="p-3">{r.quantity_lost} {r.unit}</TableCell>
+                      <TableCell className="p-3 font-semibold text-destructive">{formatCurrency(r.estimated_value || 0)}</TableCell>
+                      <TableCell className="text-right p-3">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("harvest_losses", r.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive/70" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {harvestLosses.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No loss records yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="px-4 py-3 border-t bg-destructive/10 text-sm font-semibold flex justify-between">
+              <span>Total Loss Value</span>
+              <span className="text-destructive">{formatCurrency(totals.totalLossValue)}</span>
+            </div>
+          </SectionCard>
+        </TabsContent>
+
+        {/* ===== SALES TAB ===== */}
+        <TabsContent value="sales" className="space-y-4">
+          <SectionCard title="Sales Records" badge={`${salesRecords.length}`}
+            addDialog={<RecordDialog title="Add Sale Record" fields={fieldConfigs.sales} onSave={(data) => addRecord("sales_records", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Sale</Button>} />}
+          >
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="w-[180px]">Product</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Unit Price</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Buyer</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {salesRecords.map((r: any) => (
+                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                      <TableCell className="font-medium p-3">{r.product_name}</TableCell>
+                      <TableCell className="p-3">{r.quantity_sold} {r.unit}</TableCell>
+                      <TableCell className="p-3">{formatCurrency(r.price_per_unit || 0)}</TableCell>
+                      <TableCell className="p-3 font-semibold text-emerald-600">{formatCurrency((r.quantity_sold || 0) * (r.price_per_unit || 0))}</TableCell>
+                      <TableCell className="p-3 text-muted-foreground text-xs">{r.buyer_name || "—"}</TableCell>
+                      <TableCell className="text-right p-3">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("sales_records", r.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive/70" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {salesRecords.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No sales records yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="px-4 py-3 border-t bg-emerald-50/50 text-sm font-semibold flex justify-between">
+              <span>Total Revenue</span>
+              <span className="text-emerald-600">{formatCurrency(totals.totalRevenue)}</span>
             </div>
           </SectionCard>
         </TabsContent>
       </Tabs>
+
+      {/* Season Profit/Loss Summary */}
+      <Card className={`border-2 ${displayMetrics.netProfit >= 0 ? "border-emerald-200 bg-emerald-50/30" : "border-destructive/30 bg-destructive/5"}`}>
+        <CardContent className="pt-5 pb-5">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Expenses</p>
+              <p className="text-lg font-bold mt-1">{formatCurrency(displayMetrics.totalExpenses)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Losses</p>
+              <p className="text-lg font-bold mt-1 text-destructive">{formatCurrency(displayMetrics.totalLosses)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Revenue</p>
+              <p className="text-lg font-bold mt-1 text-emerald-600">{formatCurrency(displayMetrics.totalRevenue)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Harvest Qty</p>
+              <p className="text-lg font-bold mt-1">{displayMetrics.totalHarvestQty.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wider font-semibold">{displayMetrics.netProfit >= 0 ? "🟢 Net Profit" : "🔴 Net Loss"}</p>
+              <p className={`text-xl font-black mt-1 ${displayMetrics.netProfit >= 0 ? "text-emerald-700" : "text-destructive"}`}>{formatCurrency(displayMetrics.netProfit)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// Sub-components kept but streamlined for speed
+// Sub-components
 function MetricCard({ icon: Icon, label, value, color, bg }: { icon: any; label: string; value: string; color: string; bg: string }) {
   return (
     <Card className={`${bg} border-0 shadow-none`}>
