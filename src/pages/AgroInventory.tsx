@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useInventory } from "@/hooks/useInventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,38 +9,129 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// Detect user locale and currency from timezone/browser
+// ─── Comprehensive timezone → currency map ───
 const USER_TZ = typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
-const LOCALE_CURRENCY_MAP: Record<string, { locale: string; currency: string }> = {
+
+const TIMEZONE_CURRENCY_MAP: Record<string, { locale: string; currency: string }> = {
+  // West Africa
   "Africa/Accra": { locale: "en-GH", currency: "GHS" },
   "Africa/Lagos": { locale: "en-NG", currency: "NGN" },
-  "Africa/Nairobi": { locale: "en-KE", currency: "KES" },
-  "Africa/Johannesburg": { locale: "en-ZA", currency: "ZAR" },
-  "Africa/Kampala": { locale: "en-UG", currency: "UGX" },
-  "Africa/Dar_es_Salaam": { locale: "sw-TZ", currency: "TZS" },
-  "Africa/Lusaka": { locale: "en-ZM", currency: "ZMW" },
-  "Africa/Harare": { locale: "en-ZW", currency: "USD" },
   "Africa/Abidjan": { locale: "fr-CI", currency: "XOF" },
   "Africa/Dakar": { locale: "fr-SN", currency: "XOF" },
   "Africa/Bamako": { locale: "fr-ML", currency: "XOF" },
   "Africa/Ouagadougou": { locale: "fr-BF", currency: "XOF" },
+  "Africa/Niamey": { locale: "fr-NE", currency: "XOF" },
+  "Africa/Lome": { locale: "fr-TG", currency: "XOF" },
+  "Africa/Porto-Novo": { locale: "fr-BJ", currency: "XOF" },
+  "Africa/Bissau": { locale: "pt-GW", currency: "XOF" },
+  "Africa/Conakry": { locale: "fr-GN", currency: "GNF" },
+  "Africa/Freetown": { locale: "en-SL", currency: "SLL" },
+  "Africa/Monrovia": { locale: "en-LR", currency: "LRD" },
+  "Africa/Banjul": { locale: "en-GM", currency: "GMD" },
+  "Africa/Nouakchott": { locale: "ar-MR", currency: "MRU" },
+  // Central Africa
   "Africa/Douala": { locale: "fr-CM", currency: "XAF" },
-  "Europe/London": { locale: "en-GB", currency: "GBP" },
+  "Africa/Libreville": { locale: "fr-GA", currency: "XAF" },
+  "Africa/Brazzaville": { locale: "fr-CG", currency: "XAF" },
+  "Africa/Kinshasa": { locale: "fr-CD", currency: "CDF" },
+  "Africa/Lubumbashi": { locale: "fr-CD", currency: "CDF" },
+  "Africa/Bangui": { locale: "fr-CF", currency: "XAF" },
+  "Africa/Ndjamena": { locale: "fr-TD", currency: "XAF" },
+  "Africa/Malabo": { locale: "es-GQ", currency: "XAF" },
+  // East Africa
+  "Africa/Nairobi": { locale: "en-KE", currency: "KES" },
+  "Africa/Kampala": { locale: "en-UG", currency: "UGX" },
+  "Africa/Dar_es_Salaam": { locale: "sw-TZ", currency: "TZS" },
+  "Africa/Addis_Ababa": { locale: "am-ET", currency: "ETB" },
+  "Africa/Kigali": { locale: "rw-RW", currency: "RWF" },
+  "Africa/Bujumbura": { locale: "fr-BI", currency: "BIF" },
+  "Africa/Mogadishu": { locale: "so-SO", currency: "SOS" },
+  "Africa/Asmara": { locale: "ti-ER", currency: "ERN" },
+  "Africa/Djibouti": { locale: "fr-DJ", currency: "DJF" },
+  "Indian/Antananarivo": { locale: "mg-MG", currency: "MGA" },
+  // Southern Africa
+  "Africa/Johannesburg": { locale: "en-ZA", currency: "ZAR" },
+  "Africa/Lusaka": { locale: "en-ZM", currency: "ZMW" },
+  "Africa/Harare": { locale: "en-ZW", currency: "ZWL" },
+  "Africa/Maputo": { locale: "pt-MZ", currency: "MZN" },
+  "Africa/Blantyre": { locale: "en-MW", currency: "MWK" },
+  "Africa/Gaborone": { locale: "en-BW", currency: "BWP" },
+  "Africa/Windhoek": { locale: "en-NA", currency: "NAD" },
+  "Africa/Maseru": { locale: "en-LS", currency: "LSL" },
+  "Africa/Mbabane": { locale: "en-SZ", currency: "SZL" },
+  "Indian/Mauritius": { locale: "en-MU", currency: "MUR" },
+  // North Africa
+  "Africa/Cairo": { locale: "ar-EG", currency: "EGP" },
+  "Africa/Tunis": { locale: "ar-TN", currency: "TND" },
+  "Africa/Algiers": { locale: "ar-DZ", currency: "DZD" },
+  "Africa/Casablanca": { locale: "ar-MA", currency: "MAD" },
+  "Africa/Tripoli": { locale: "ar-LY", currency: "LYD" },
+  "Africa/Khartoum": { locale: "ar-SD", currency: "SDG" },
+  // Asia
   "Asia/Kolkata": { locale: "en-IN", currency: "INR" },
+  "Asia/Dhaka": { locale: "bn-BD", currency: "BDT" },
+  "Asia/Karachi": { locale: "ur-PK", currency: "PKR" },
+  "Asia/Colombo": { locale: "si-LK", currency: "LKR" },
+  "Asia/Kathmandu": { locale: "ne-NP", currency: "NPR" },
+  "Asia/Yangon": { locale: "my-MM", currency: "MMK" },
+  "Asia/Bangkok": { locale: "th-TH", currency: "THB" },
+  "Asia/Jakarta": { locale: "id-ID", currency: "IDR" },
+  "Asia/Manila": { locale: "en-PH", currency: "PHP" },
+  "Asia/Ho_Chi_Minh": { locale: "vi-VN", currency: "VND" },
+  "Asia/Kuala_Lumpur": { locale: "ms-MY", currency: "MYR" },
+  "Asia/Shanghai": { locale: "zh-CN", currency: "CNY" },
+  "Asia/Tokyo": { locale: "ja-JP", currency: "JPY" },
+  "Asia/Seoul": { locale: "ko-KR", currency: "KRW" },
+  // Europe
+  "Europe/London": { locale: "en-GB", currency: "GBP" },
+  "Europe/Paris": { locale: "fr-FR", currency: "EUR" },
+  "Europe/Berlin": { locale: "de-DE", currency: "EUR" },
+  "Europe/Rome": { locale: "it-IT", currency: "EUR" },
+  "Europe/Madrid": { locale: "es-ES", currency: "EUR" },
+  // Americas
+  "America/Sao_Paulo": { locale: "pt-BR", currency: "BRL" },
+  "America/Mexico_City": { locale: "es-MX", currency: "MXN" },
+  "America/Bogota": { locale: "es-CO", currency: "COP" },
+  "America/Lima": { locale: "es-PE", currency: "PEN" },
+  "America/Buenos_Aires": { locale: "es-AR", currency: "ARS" },
 };
 
-function getLocaleCurrency() {
-  if (LOCALE_CURRENCY_MAP[USER_TZ]) return LOCALE_CURRENCY_MAP[USER_TZ];
-  // Fallback: try matching region from timezone
-  for (const [tz, cfg] of Object.entries(LOCALE_CURRENCY_MAP)) {
-    if (USER_TZ.startsWith(tz.split("/")[0])) return cfg;
+// Region-level fallback map (continent prefix → currency)
+const REGION_FALLBACK: Record<string, { locale: string; currency: string }> = {
+  "Africa": { locale: "en-US", currency: "USD" }, // only if no specific tz matches
+  "Asia": { locale: "en-US", currency: "USD" },
+  "Europe": { locale: "en-GB", currency: "EUR" },
+  "America": { locale: "en-US", currency: "USD" },
+  "Pacific": { locale: "en-AU", currency: "AUD" },
+  "Indian": { locale: "en-IN", currency: "INR" },
+};
+
+function getLocaleCurrency(): { locale: string; currency: string } {
+  // 1. Exact timezone match
+  if (TIMEZONE_CURRENCY_MAP[USER_TZ]) return TIMEZONE_CURRENCY_MAP[USER_TZ];
+
+  // 2. Region fallback from timezone continent
+  const region = USER_TZ.split("/")[0];
+  if (REGION_FALLBACK[region]) return REGION_FALLBACK[region];
+
+  // 3. Try browser language to infer country
+  const browserLang = typeof navigator !== "undefined" ? navigator.language : "en-US";
+  const countryCode = browserLang.split("-")[1]?.toUpperCase();
+  const COUNTRY_CURRENCY: Record<string, string> = {
+    GH: "GHS", NG: "NGN", KE: "KES", ZA: "ZAR", UG: "UGX", TZ: "TZS",
+    CM: "XAF", SN: "XOF", CI: "XOF", IN: "INR", GB: "GBP", BR: "BRL",
+    PH: "PHP", PK: "PKR", EG: "EGP", ET: "ETB", RW: "RWF", ZM: "ZMW",
+    MW: "MWK", MZ: "MZN", CD: "CDF", ZW: "ZWL", DE: "EUR", FR: "EUR",
+  };
+  if (countryCode && COUNTRY_CURRENCY[countryCode]) {
+    return { locale: browserLang, currency: COUNTRY_CURRENCY[countryCode] };
   }
-  // Final fallback: use browser locale
-  const browserLocale = typeof navigator !== "undefined" ? navigator.language : "en-US";
-  return { locale: browserLocale, currency: "USD" };
+
+  // 4. Absolute fallback
+  return { locale: browserLang, currency: "USD" };
 }
 
 const { locale: LOCALE, currency: CURRENCY } = getLocaleCurrency();
@@ -214,8 +305,52 @@ export default function AgroInventory() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">📦 Agro Inventory</h1>
           <p className="text-sm text-muted-foreground">Comprehensive farm input, labor, harvest, loss &amp; sales tracking</p>
+          <Badge variant="outline" className="mt-1 text-[10px]">Currency: {CURRENCY}</Badge>
         </div>
       </div>
+
+      {/* ─── Filter Bar ─── */}
+      <Card className="border-border/50 bg-muted/30 shadow-none">
+        <CardContent className="py-3 px-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <Filter className="h-3.5 w-3.5" /> Filters:
+            </div>
+            <Select value={filterSeason || ""} onValueChange={(v) => setFilterSeason(v === "__all__" ? undefined : v)}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="All Seasons" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Seasons</SelectItem>
+                {seasons.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterCrop || ""} onValueChange={(v) => setFilterCrop(v === "__all__" ? undefined : v)}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="All Crops" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Crops</SelectItem>
+                {crops.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterPlot || ""} onValueChange={(v) => setFilterPlot(v === "__all__" ? undefined : v)}>
+              <SelectTrigger className="h-8 w-[150px] text-xs">
+                <SelectValue placeholder="All Plots" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Plots</SelectItem>
+                {plots.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {(filterSeason || filterCrop || filterPlot) && (
+              <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => { setFilterSeason(undefined); setFilterCrop(undefined); setFilterPlot(undefined); }}>
+                <X className="h-3 w-3" /> Clear
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Overview Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
