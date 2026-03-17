@@ -20,24 +20,3 @@ bootstrapRedirect();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-// ✅ ADD THIS PART
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js").then((reg) => {
-      reg.onupdatefound = () => {
-        const newWorker = reg.installing;
-        if (!newWorker) return;
-
-        newWorker.onstatechange = () => {
-          if (
-            newWorker.state === "installed" &&
-            navigator.serviceWorker.controller
-          ) {
-            // 🔥 Force reload when new version is available
-            window.location.reload();
-          }
-        };
-      };
-    });
-  });
-}
