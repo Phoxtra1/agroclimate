@@ -22,7 +22,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
   "mousedown",
   "mousemove",
