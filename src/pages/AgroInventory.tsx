@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 
 // ─── Comprehensive timezone → currency map ───
@@ -134,14 +134,42 @@ function getLocaleCurrency(): { locale: string; currency: string } {
   return { locale: browserLang, currency: "USD" };
 }
 
-const { locale: LOCALE, currency: CURRENCY } = getLocaleCurrency();
+const { locale: DEFAULT_LOCALE, currency: DEFAULT_CURRENCY } = getLocaleCurrency();
 
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat(LOCALE, {
-    style: "currency",
-    currency: CURRENCY,
-    minimumFractionDigits: 2,
-  }).format(amount);
+// ─── Currency changer: supported currencies with exchange rates relative to USD ───
+const INVENTORY_CURRENCIES = [
+  { code: "GHS", symbol: "₵", name: "Ghana Cedi", rate: 15.5 },
+  { code: "KES", symbol: "KSh", name: "Kenyan Shilling", rate: 129.0 },
+  { code: "XOF", symbol: "CFA", name: "CFA Franc", rate: 605.0 },
+  { code: "NGN", symbol: "₦", name: "Nigerian Naira", rate: 1580.0 },
+  { code: "KRW", symbol: "₩", name: "Korean Won", rate: 1380.0 },
+  { code: "AED", symbol: "د.إ", name: "UAE Dirham", rate: 3.67 },
+  { code: "USD", symbol: "$", name: "US Dollar", rate: 1.0 },
+  { code: "EUR", symbol: "€", name: "Euro", rate: 0.92 },
+] as const;
+
+// Build a rate map for quick lookup; base currency is the auto-detected one
+function getConversionRate(fromCode: string, toCode: string): number {
+  const fromRate = INVENTORY_CURRENCIES.find(c => c.code === fromCode)?.rate ?? 1;
+  const toRate = INVENTORY_CURRENCIES.find(c => c.code === toCode)?.rate ?? 1;
+  // Convert: amount in "from" → USD → "to"
+  return toRate / fromRate;
+}
+
+// Dynamic currency formatter – used throughout the component
+function makeFormatCurrency(currencyCode: string, locale: string) {
+  return (amount: number) => {
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      const sym = INVENTORY_CURRENCIES.find(c => c.code === currencyCode)?.symbol ?? currencyCode;
+      return `${sym} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    }
+  };
 }
 
 // Reusable Dialog for adding/editing records
@@ -198,6 +226,16 @@ export default function AgroInventory() {
   const [filterCrop, setFilterCrop] = useState<string>();
   const [filterPlot, setFilterPlot] = useState<string>();
 
+  // ─── Currency changer state ───
+  const [selectedCurrency, setSelectedCurrency] = useState(
+    INVENTORY_CURRENCIES.find(c => c.code === DEFAULT_CURRENCY) ?? INVENTORY_CURRENCIES[0]
+  );
+  const conversionRate = getConversionRate(DEFAULT_CURRENCY, selectedCurrency.code);
+  const formatCurrency = useCallback(
+    (amount: number) => makeFormatCurrency(selectedCurrency.code, DEFAULT_LOCALE)(amount * conversionRate),
+    [selectedCurrency.code, conversionRate]
+  );
+
   const {
     inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords,
     metrics, loading, addRecord, updateRecord, deleteRecord, seasons, crops, plots,
@@ -210,7 +248,7 @@ export default function AgroInventory() {
       { name: "item_type", label: "Type", required: true, placeholder: "e.g. Fertilizer, Seeds, Chemical" },
       { name: "quantity", label: "Quantity", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, liters, bags" },
-      { name: "price_per_unit", label: `Price per Unit (${CURRENCY})`, type: "number", required: true },
+      { name: "price_per_unit", label: `Price per Unit (${selectedCurrency.code})`, type: "number", required: true },
       { name: "crop_name", label: "Crop/Linked To" },
       { name: "season", label: "Season" },
       { name: "farm_plot", label: "Farm Plot" },
@@ -220,7 +258,7 @@ export default function AgroInventory() {
       { name: "worker_name", label: "Worker/Team Name", required: true, placeholder: "e.g. Kwame, Day Laborers" },
       { name: "task_description", label: "Task", required: true, placeholder: "e.g. Weeding, Planting, Spraying" },
       { name: "hours_worked", label: "Hours Worked", type: "number", required: true },
-      { name: "rate_per_hour", label: `Rate per Hour (${CURRENCY})`, type: "number", required: true },
+      { name: "rate_per_hour", label: `Rate per Hour (${selectedCurrency.code})`, type: "number", required: true },
       { name: "date_worked", label: "Date", type: "date" },
       { name: "crop_name", label: "Crop/Linked To" },
       { name: "season", label: "Season" },
@@ -242,7 +280,7 @@ export default function AgroInventory() {
       { name: "loss_type", label: "Loss Type", required: true, placeholder: "e.g. Crop Damage, Livestock Death, Spoilage" },
       { name: "quantity_lost", label: "Quantity Lost", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, heads, bags" },
-      { name: "estimated_value", label: `Estimated Value (${CURRENCY})`, type: "number", required: true },
+      { name: "estimated_value", label: `Estimated Value (${selectedCurrency.code})`, type: "number", required: true },
       { name: "loss_date", label: "Date of Loss", type: "date" },
       { name: "crop_name", label: "Crop/Livestock" },
       { name: "season", label: "Season" },
@@ -253,7 +291,7 @@ export default function AgroInventory() {
       { name: "product_name", label: "Product Sold", required: true, placeholder: "e.g. Maize, Eggs, Tomatoes" },
       { name: "quantity_sold", label: "Quantity Sold", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, bags, crates" },
-      { name: "price_per_unit", label: `Price per Unit (${CURRENCY})`, type: "number", required: true },
+      { name: "price_per_unit", label: `Price per Unit (${selectedCurrency.code})`, type: "number", required: true },
       { name: "buyer_name", label: "Buyer Name", placeholder: "e.g. Market Trader, Cooperative" },
       { name: "sale_date", label: "Sale Date", type: "date" },
       { name: "crop_name", label: "Crop/Linked To" },
@@ -261,7 +299,7 @@ export default function AgroInventory() {
       { name: "farm_plot", label: "Farm Plot" },
       { name: "notes", label: "Notes" },
     ],
-  }), []);
+  }), [selectedCurrency.code]);
 
   // Dynamic cost/profit calculations
   const totals = useMemo(() => {
@@ -305,7 +343,7 @@ export default function AgroInventory() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">📦 Agro Inventory</h1>
           <p className="text-sm text-muted-foreground">Comprehensive farm input, labor, harvest, loss &amp; sales tracking</p>
-          <Badge variant="outline" className="mt-1 text-[10px]">Currency: {CURRENCY}</Badge>
+          <Badge variant="outline" className="mt-1 text-[10px]">Currency: {selectedCurrency.symbol} {selectedCurrency.code}</Badge>
         </div>
       </div>
 
@@ -343,6 +381,28 @@ export default function AgroInventory() {
                 {plots.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
+            {/* ─── Currency Changer Dropdown ─── */}
+            <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-border/50">
+              <Coins className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select
+                value={selectedCurrency.code}
+                onValueChange={(v) => {
+                  const found = INVENTORY_CURRENCIES.find(c => c.code === v);
+                  if (found) setSelectedCurrency(found);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[130px] text-xs font-medium">
+                  <SelectValue placeholder="Currency" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVENTORY_CURRENCIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code} className="text-xs">
+                      {c.symbol} {c.code} — {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {(filterSeason || filterCrop || filterPlot) && (
               <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => { setFilterSeason(undefined); setFilterCrop(undefined); setFilterPlot(undefined); }}>
                 <X className="h-3 w-3" /> Clear
