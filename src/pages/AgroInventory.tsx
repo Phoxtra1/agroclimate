@@ -255,11 +255,10 @@ export default function AgroInventory() {
       { name: "notes", label: "Notes" },
     ],
     labor: [
-      { name: "worker_name", label: "Worker/Team Name", required: true, placeholder: "e.g. Kwame, Day Laborers" },
       { name: "task_description", label: "Task", required: true, placeholder: "e.g. Weeding, Planting, Spraying" },
-      { name: "hours_worked", label: "Hours Worked", type: "number", required: true },
-      { name: "rate_per_hour", label: `Rate per Hour (${selectedCurrency.code})`, type: "number", required: true },
-      { name: "date_worked", label: "Date", type: "date" },
+      { name: "worker_count", label: "Number of Workers", type: "number", required: true },
+      { name: "days_worked", label: "Days Worked", type: "number", required: true },
+      { name: "cost_per_day", label: `Cost per Day (${selectedCurrency.code})`, type: "number", required: true },
       { name: "crop_name", label: "Crop/Linked To" },
       { name: "season", label: "Season" },
       { name: "farm_plot", label: "Farm Plot" },
@@ -267,7 +266,7 @@ export default function AgroInventory() {
     ],
     harvest: [
       { name: "crop_name", label: "Crop Name", required: true, placeholder: "e.g. Maize, Cassava, Tomatoes" },
-      { name: "quantity_harvested", label: "Quantity Harvested", type: "number", required: true },
+      { name: "quantity", label: "Quantity Harvested", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, bags, crates" },
       { name: "harvest_date", label: "Harvest Date", type: "date" },
       { name: "quality_grade", label: "Quality Grade", placeholder: "A, B, C or Premium, Standard" },
@@ -276,25 +275,21 @@ export default function AgroInventory() {
       { name: "notes", label: "Notes" },
     ],
     loss: [
-      { name: "description", label: "Loss Description", required: true, placeholder: "e.g. Pest damage on maize, Dead chickens" },
-      { name: "loss_type", label: "Loss Type", required: true, placeholder: "e.g. Crop Damage, Livestock Death, Spoilage" },
+      { name: "crop_name", label: "Crop/Livestock", required: true, placeholder: "e.g. Maize, Chickens" },
+      { name: "loss_reason", label: "Reason for Loss", required: true, placeholder: "e.g. Pest damage, Spoilage, Drought" },
       { name: "quantity_lost", label: "Quantity Lost", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, heads, bags" },
-      { name: "estimated_value", label: `Estimated Value (${selectedCurrency.code})`, type: "number", required: true },
-      { name: "loss_date", label: "Date of Loss", type: "date" },
-      { name: "crop_name", label: "Crop/Livestock" },
       { name: "season", label: "Season" },
       { name: "farm_plot", label: "Farm Plot" },
-      { name: "notes", label: "Notes / Cause" },
+      { name: "notes", label: "Notes" },
     ],
     sales: [
-      { name: "product_name", label: "Product Sold", required: true, placeholder: "e.g. Maize, Eggs, Tomatoes" },
+      { name: "crop_name", label: "Product Sold", required: true, placeholder: "e.g. Maize, Eggs, Tomatoes" },
       { name: "quantity_sold", label: "Quantity Sold", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, bags, crates" },
       { name: "price_per_unit", label: `Price per Unit (${selectedCurrency.code})`, type: "number", required: true },
       { name: "buyer_name", label: "Buyer Name", placeholder: "e.g. Market Trader, Cooperative" },
       { name: "sale_date", label: "Sale Date", type: "date" },
-      { name: "crop_name", label: "Crop/Linked To" },
       { name: "season", label: "Season" },
       { name: "farm_plot", label: "Farm Plot" },
       { name: "notes", label: "Notes" },
@@ -304,16 +299,15 @@ export default function AgroInventory() {
   // Dynamic cost/profit calculations
   const totals = useMemo(() => {
     const totalInputsCost = inventoryItems.reduce((sum, item) => sum + (item.quantity || 0) * (item.price_per_unit || 0), 0);
-    const totalLaborCost = laborRecords.reduce((sum, r) => sum + (r.hours_worked || 0) * (r.rate_per_hour || 0), 0);
-    const totalLandCost = landCosts?.reduce((sum: number, r: any) => sum + (r.cost || 0), 0) ?? 0;
-    const totalHarvestQty = harvestRecords.reduce((sum, r) => sum + (r.quantity_harvested || 0), 0);
-    const totalLossValue = harvestLosses.reduce((sum, r) => sum + (r.estimated_value || 0), 0);
-    const totalLossQty = harvestLosses.reduce((sum, r) => sum + (r.quantity_lost || 0), 0);
-    const totalRevenue = salesRecords.reduce((sum, r) => sum + (r.quantity_sold || 0) * (r.price_per_unit || 0), 0);
+    const totalLaborCost = laborRecords.reduce((sum, r: any) => sum + (r.worker_count || 0) * (r.days_worked || 0) * (r.cost_per_day || 0), 0);
+    const totalLandCost = landCosts?.reduce((sum: number, r: any) => sum + (r.cost_amount || 0), 0) ?? 0;
+    const totalHarvestQty = harvestRecords.reduce((sum, r: any) => sum + (r.quantity || 0), 0);
+    const totalLossQty = harvestLosses.reduce((sum, r: any) => sum + (r.quantity_lost || 0), 0);
+    const totalRevenue = salesRecords.reduce((sum, r: any) => sum + (r.quantity_sold || 0) * (r.price_per_unit || 0), 0);
     const totalExpenses = totalInputsCost + totalLaborCost + totalLandCost;
-    const netProfit = totalRevenue - totalExpenses - totalLossValue;
+    const netProfit = totalRevenue - totalExpenses;
 
-    return { totalInputsCost, totalLaborCost, totalLandCost, totalHarvestQty, totalLossValue, totalLossQty, totalRevenue, totalExpenses, netProfit };
+    return { totalInputsCost, totalLaborCost, totalLandCost, totalHarvestQty, totalLossQty, totalRevenue, totalExpenses, netProfit };
   }, [inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords]);
 
   // Use local totals if metrics from hook are empty/zero, otherwise prefer hook metrics
@@ -322,7 +316,7 @@ export default function AgroInventory() {
     totalLaborCost: metrics.totalLaborCost || totals.totalLaborCost,
     totalLandCost: metrics.totalLandCost || totals.totalLandCost,
     totalHarvestQty: metrics.totalHarvestQty || totals.totalHarvestQty,
-    totalLosses: totals.totalLossValue,
+    totalLosses: totals.totalLossQty,
     totalRevenue: metrics.totalRevenue || totals.totalRevenue,
     netProfit: totals.netProfit,
     totalExpenses: totals.totalExpenses,
@@ -418,7 +412,7 @@ export default function AgroInventory() {
         <MetricCard icon={Users} label="Labor" value={formatCurrency(displayMetrics.totalLaborCost)} color="text-indigo-600" bg="bg-indigo-50/50" />
         <MetricCard icon={MapPin} label="Land" value={formatCurrency(displayMetrics.totalLandCost)} color="text-violet-600" bg="bg-violet-50/50" />
         <MetricCard icon={Wheat} label="Harvest" value={`${displayMetrics.totalHarvestQty.toLocaleString()}`} color="text-primary" bg="bg-primary/10" />
-        <MetricCard icon={AlertTriangle} label="Losses" value={formatCurrency(displayMetrics.totalLosses)} color="text-destructive" bg="bg-destructive/10" />
+        <MetricCard icon={AlertTriangle} label="Losses" value={`${displayMetrics.totalLosses.toLocaleString()}`} color="text-destructive" bg="bg-destructive/10" />
         <MetricCard icon={ShoppingCart} label="Revenue" value={formatCurrency(displayMetrics.totalRevenue)} color="text-emerald-600" bg="bg-emerald-50/50" />
         <MetricCard icon={DollarSign} label="Expenses" value={formatCurrency(displayMetrics.totalExpenses)} color="text-orange-600" bg="bg-orange-50/50" />
         <MetricCard icon={TrendingUp} label="Net Profit" value={formatCurrency(displayMetrics.netProfit)} color={displayMetrics.netProfit >= 0 ? "text-emerald-700" : "text-destructive"} bg={displayMetrics.netProfit >= 0 ? "bg-emerald-50" : "bg-destructive/10"} />
@@ -434,7 +428,7 @@ export default function AgroInventory() {
             <div className="flex-1">
               <p className="text-sm font-semibold">Season Summary</p>
               <p className="text-[11px] text-muted-foreground">
-                Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {formatCurrency(displayMetrics.totalLosses)} | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
+                Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {displayMetrics.totalLosses.toLocaleString()} units | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
               </p>
             </div>
             <Link to="/odeneho">
@@ -506,24 +500,25 @@ export default function AgroInventory() {
             <div className="rounded-md border">
               <Table>
                 <TableHeader className="bg-muted/30">
-                  <TableRow>
-                    <TableHead className="w-[180px]">Worker / Task</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {laborRecords.map((r: any) => (
-                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <TableCell className="font-medium p-3">
-                        <div>{r.worker_name}</div>
-                        <div className="text-[10px] text-muted-foreground">{r.task_description}</div>
-                      </TableCell>
-                      <TableCell className="p-3">{r.hours_worked}</TableCell>
-                      <TableCell className="p-3">{formatCurrency(r.rate_per_hour || 0)}</TableCell>
-                      <TableCell className="p-3 font-semibold">{formatCurrency((r.hours_worked || 0) * (r.rate_per_hour || 0))}</TableCell>
+                   <TableRow>
+                     <TableHead className="w-[180px]">Task</TableHead>
+                     <TableHead>Workers</TableHead>
+                     <TableHead>Days</TableHead>
+                     <TableHead>Cost/Day</TableHead>
+                     <TableHead>Total</TableHead>
+                     <TableHead className="text-right">Action</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {laborRecords.map((r: any) => (
+                     <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                       <TableCell className="font-medium p-3">
+                         <div>{r.task_description}</div>
+                       </TableCell>
+                       <TableCell className="p-3">{r.worker_count}</TableCell>
+                       <TableCell className="p-3">{r.days_worked}</TableCell>
+                       <TableCell className="p-3">{formatCurrency(r.cost_per_day || 0)}</TableCell>
+                       <TableCell className="p-3 font-semibold">{formatCurrency((r.worker_count || 0) * (r.days_worked || 0) * (r.cost_per_day || 0))}</TableCell>
                       <TableCell className="text-right p-3">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("labor_records", r.id)}>
                           <Trash2 className="h-4 w-4 text-destructive/70" />
@@ -531,7 +526,7 @@ export default function AgroInventory() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {laborRecords.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No labor records yet</TableCell></TableRow>}
+                  {laborRecords.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No labor records yet</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -562,7 +557,7 @@ export default function AgroInventory() {
                   {harvestRecords.map((r: any) => (
                     <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
                       <TableCell className="font-medium p-3">{r.crop_name}</TableCell>
-                      <TableCell className="p-3">{r.quantity_harvested} {r.unit}</TableCell>
+                      <TableCell className="p-3">{r.quantity} {r.unit}</TableCell>
                       <TableCell className="p-3"><Badge variant="outline" className="text-[10px]">{r.quality_grade || "N/A"}</Badge></TableCell>
                       <TableCell className="p-3 text-muted-foreground text-xs">{r.harvest_date || "—"}</TableCell>
                       <TableCell className="text-right p-3">
@@ -592,23 +587,18 @@ export default function AgroInventory() {
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow>
-                    <TableHead className="w-[200px]">Description</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Qty Lost</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {harvestLosses.map((r: any) => (
-                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <TableCell className="font-medium p-3">
-                        <div>{r.description}</div>
-                        <div className="text-[10px] text-muted-foreground">{r.crop_name || ""}</div>
-                      </TableCell>
-                      <TableCell className="p-3"><Badge variant="destructive" className="text-[10px]">{r.loss_type || "Loss"}</Badge></TableCell>
-                      <TableCell className="p-3">{r.quantity_lost} {r.unit}</TableCell>
-                      <TableCell className="p-3 font-semibold text-destructive">{formatCurrency(r.estimated_value || 0)}</TableCell>
+                     <TableHead className="w-[200px]">Crop</TableHead>
+                     <TableHead>Reason</TableHead>
+                     <TableHead>Qty Lost</TableHead>
+                     <TableHead className="text-right">Action</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {harvestLosses.map((r: any) => (
+                     <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
+                       <TableCell className="font-medium p-3">{r.crop_name}</TableCell>
+                       <TableCell className="p-3"><Badge variant="destructive" className="text-[10px]">{r.loss_reason || "Unknown"}</Badge></TableCell>
+                       <TableCell className="p-3">{r.quantity_lost} {r.unit}</TableCell>
                       <TableCell className="text-right p-3">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("harvest_losses", r.id)}>
                           <Trash2 className="h-4 w-4 text-destructive/70" />
@@ -616,13 +606,13 @@ export default function AgroInventory() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {harvestLosses.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No loss records yet</TableCell></TableRow>}
+                  {harvestLosses.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No loss records yet</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
             <div className="px-4 py-3 border-t bg-destructive/10 text-sm font-semibold flex justify-between">
-              <span>Total Loss Value</span>
-              <span className="text-destructive">{formatCurrency(totals.totalLossValue)}</span>
+              <span>Total Quantity Lost</span>
+              <span className="text-destructive">{totals.totalLossQty.toLocaleString()} units</span>
             </div>
           </SectionCard>
         </TabsContent>
@@ -647,7 +637,7 @@ export default function AgroInventory() {
                 <TableBody>
                   {salesRecords.map((r: any) => (
                     <TableRow key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <TableCell className="font-medium p-3">{r.product_name}</TableCell>
+                      <TableCell className="font-medium p-3">{r.crop_name}</TableCell>
                       <TableCell className="p-3">{r.quantity_sold} {r.unit}</TableCell>
                       <TableCell className="p-3">{formatCurrency(r.price_per_unit || 0)}</TableCell>
                       <TableCell className="p-3 font-semibold text-emerald-600">{formatCurrency((r.quantity_sold || 0) * (r.price_per_unit || 0))}</TableCell>
@@ -681,7 +671,7 @@ export default function AgroInventory() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Losses</p>
-              <p className="text-lg font-bold mt-1 text-destructive">{formatCurrency(displayMetrics.totalLosses)}</p>
+              <p className="text-lg font-bold mt-1 text-destructive">{displayMetrics.totalLosses.toLocaleString()} units</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Revenue</p>
