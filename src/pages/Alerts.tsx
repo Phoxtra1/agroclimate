@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -7,18 +7,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserAlerts } from "@/hooks/useUserAlerts";
 import {
   Bell, ChevronDown, ChevronUp, Check, Trash2,
-  MessageSquarePlus, Send, Loader2,
+  MessageSquarePlus, Send, Loader2, RefreshCw,
   Wind, Droplets, Thermometer, CloudRain, CloudLightning,
-  Waves, Plane, Eye, Sprout, Fish
+  Waves, Plane, Eye, Sprout, Fish, Salad, AlertCircle,
 } from "lucide-react";
 import {
-  AlertTriangle, CheckCircle, Info, AlertOctagon
+  AlertTriangle, CheckCircle, Info, AlertOctagon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,105 +26,204 @@ import { Badge } from "@/components/ui/badge";
  * TYPES & INTERFACES
  * ============================================================ */
 
-/** Severity levels for alert classification */
 type Severity = "info" | "success" | "warning" | "danger";
-
-/** Alert type matching the visual style map */
 type AlertType = "info" | "success" | "warning" | "danger";
-
-/** Industry tags for filtering relevance */
 type IndustryTag =
   | "crop"
   | "livestock"
   | "aquaculture"
+  | "vegetables"
   | "flight"
   | "surveyor"
   | "general";
-
-/** Timing window for proactive alerts */
 type TimingWindow = "Next 24h" | "1–3 Days" | "3–5 Days" | "4–7 Days";
 
-/** A single weather data point from the forecast */
 interface WeatherDataPoint {
   date: string;
-  temp: number;          // °C
-  humidity: number;      // %
-  windSpeed: number;     // km/h
-  windGust?: number;     // km/h
-  rainfall: number;      // mm
+  temp: number;
+  humidity: number;
+  windSpeed: number;
+  windGust?: number;
+  rainfall: number;
   description: string;
-  pressure?: number;     // hPa
-  visibility?: number;   // km
+  pressure?: number;
+  visibility?: number;
   uvIndex?: number;
+  soilMoisture?: number;  // % — for irrigation/vegetable alerts
 }
 
-/** A generated proactive alert */
 interface ProactiveAlert {
   id: string;
   type: AlertType;
   title: string;
   message: string;
-  detail: string;        // "Why" — contextual supporting data
+  detail: string;
   timing: TimingWindow;
   tags: IndustryTag[];
   isRead: boolean;
   time: string;
-  icon: string;          // icon key for rendering
+  icon: string;
+  generatedAt: number;   // Unix ms — used for 72h dedup
+  deliveredViaPush?: boolean;
+  deliveredViaSMS?: boolean;
 }
 
 /* ============================================================
- * THRESHOLDS — Configurable trigger points for alert generation
- * ============================================================
- *
- * These thresholds determine when an alert is fired. They are
- * calibrated to avoid false alerts while providing sufficient
- * lead time for preparation.
+ * DELIVERY CONSTANTS
+ * ============================================================ */
+
+/** Minimum ms between alert re-generation cycles (72 hours) */
+const ALERT_INTERVAL_MS = 72 * 60 * 60 * 1000;
+
+/** Weather data refresh interval (15 min for real-time feel) */
+const WEATHER_REFRESH_MS = 15 * 60 * 1000;
+
+/** LocalStorage keys for last-sent tracking */
+const LS_LAST_GENERATED = "agri_alerts_last_generated";
+const LS_ALERT_CACHE = "agri_alerts_cache";
+
+/* ============================================================
+ * THRESHOLDS
  * ============================================================ */
 
 const THRESHOLDS = {
-  // --- Rainfall thresholds (mm/day) ---
   LIGHT_RAIN: 2.5,
   MODERATE_RAIN: 10,
   HEAVY_RAIN: 25,
   EXTREME_RAIN: 50,
-
-  // --- Wind thresholds (km/h) ---
   MODERATE_WIND: 30,
   STRONG_WIND: 50,
-  SEVERE_WIND: 75,       // Potential tornado / cyclone conditions
-  EXTREME_WIND: 100,     // Confirmed severe storm / tornado
-
-  // --- Temperature thresholds (°C) ---
+  SEVERE_WIND: 75,
+  EXTREME_WIND: 100,
   FROST_RISK: 3,
   COLD_STRESS: 5,
   HEAT_STRESS_LIVESTOCK: 32,
   EXTREME_HEAT: 38,
   AQUA_TEMP_LOW: 15,
   AQUA_TEMP_HIGH: 32,
-
-  // --- Humidity thresholds (%) ---
   FUNGAL_RISK_HUMIDITY: 85,
   DUST_STORM_LOW_HUMIDITY: 20,
-
-  // --- Dry period (consecutive days without significant rain) ---
   DRY_PERIOD_IRRIGATION: 5,
   PROLONGED_DRY: 14,
-
-  // --- Flight / aerial risk ---
   FLIGHT_WIND_CAUTION: 35,
   FLIGHT_WIND_DANGER: 55,
-  FLIGHT_VISIBILITY_LOW: 3,    // km
+  FLIGHT_VISIBILITY_LOW: 3,
   FLIGHT_GUST_SEVERE: 65,
-
-  // --- Pressure drop for storm prediction (hPa over 24h) ---
   RAPID_PRESSURE_DROP: 8,
+  VEGETABLE_HEAT_STRESS: 35,
+  VEGETABLE_COLD_STRESS: 8,
+  UV_HIGH: 7,
+  UV_EXTREME: 10,
 };
 
 /* ============================================================
- * 1. WEATHER ANALYSIS
- * ------------------------------------------------------------
- * Parses raw forecast data and classifies conditions.
- * Returns structured insights for the recommendation engine.
+ * DYNAMIC MESSAGE POOLS
+ * Each pool has multiple variants to prevent repetition.
+ * pickFrom() selects one based on day-of-week + hour seed
+ * so the same user gets different messages on different days.
+ * ============================================================ */
+
+function pickFrom<T>(arr: T[], seed: number = Date.now()): T {
+  // Rotate through variants using a hash of the current 3-day period + array length
+  const period = Math.floor(seed / ALERT_INTERVAL_MS);
+  return arr[(period + arr.length) % arr.length];
+}
+
+const MSG_POOLS = {
+  irrigation: (dry: number, total: number, loc: string) =>
+    pickFrom([
+      `${dry}+ consecutive dry days forecast for ${loc}. Tomatoes, leafy greens, and shallow-rooted crops urgently need water. Check soil moisture at 5 cm depth.`,
+      `No meaningful rainfall expected in ${loc} for ${dry} days. Schedule drip irrigation now for market garden beds and seedling trays. Root crops showing wilting risk.`,
+      `Soil moisture deficit building in ${loc} — ${total.toFixed(0)} mm total rain over the forecast window. Prioritise irrigating fruiting vegetables and young transplants.`,
+      `Prolonged dry spell ahead (${dry} days) in ${loc}. Activate sprinkler systems for field crops. Mulch bare soil to retain moisture. Monitor capillary break indicators.`,
+    ]),
+
+  heavyRain: (peak: number, loc: string) =>
+    pickFrom([
+      `Heavy downpour (${peak.toFixed(0)} mm/day) approaching ${loc}. Ridge and furrow drainage channels must be cleared now. Cover newly-sown beds and suspend fertiliser application.`,
+      `Intense rain forecast for ${loc} — up to ${peak.toFixed(0)} mm in a single day. Slope erosion risk is high. Prepare sandbag barriers around vulnerable seedbeds.`,
+      `${peak.toFixed(0)} mm/day rainfall expected near ${loc}. Waterlogging risk for heavy clay soils. Lift root vegetables early if possible. Anchor row covers.`,
+      `Major rain event imminent in ${loc} (${peak.toFixed(0)} mm peak). Move potted crops under shelter. Pause irrigation schedules. Mark low-lying field areas for drainage inspection.`,
+    ]),
+
+  fungal: (humidity: number, loc: string) =>
+    pickFrom([
+      `Humidity hitting ${humidity}% in ${loc} — prime conditions for late blight on tomatoes and downy mildew on cucumbers. Spray copper-based fungicide as a preventive.`,
+      `High moisture air (${humidity}% RH) persisting over ${loc}. Early-season rust and botrytis outbreaks are likely. Increase row spacing airflow and avoid overhead watering.`,
+      `Fungal pressure escalating in ${loc}: humidity ${humidity}%, warm nights. Check undersides of leaves for spore colonies. Apply organic sulphur spray within 24 hours.`,
+    ]),
+
+  frost: (min: number, loc: string) =>
+    pickFrom([
+      `Temperature will drop to ${min.toFixed(0)}°C in ${loc} tonight. Cover frost-tender seedlings with fleece. Move citrus and subtropical crops indoors immediately.`,
+      `Frost alert for ${loc}: lows of ${min.toFixed(0)}°C forecast. Apply anti-freeze spray on berry crops. Check heat cables in propagation tunnels are functioning.`,
+      `Near-zero temperatures (${min.toFixed(0)}°C) expected at ${loc}. Protect legumes and young brassicas with double-layer frost cloth. Water soil before sunset to hold heat.`,
+    ]),
+
+  heatStress: (max: number, loc: string) =>
+    pickFrom([
+      `${max.toFixed(0)}°C expected in ${loc}. Livestock require shaded paddocks, cool fresh water every 2 hours, and reduced movement during 10:00–16:00.`,
+      `Dangerous heat (${max.toFixed(0)}°C) forecast for ${loc}. Open all ventilation panels in sheds. Mist systems should run continuously. Monitor for panting and reduced feed intake.`,
+      `Heat wave conditions (${max.toFixed(0)}°C) in ${loc}. Move animals to night grazing. Install temporary shade cloth over water troughs. Vet contact recommended if behavioural change is seen.`,
+    ]),
+
+  vegetableHeat: (max: number, loc: string) =>
+    pickFrom([
+      `Temperatures reaching ${max.toFixed(0)}°C in ${loc} will cause tip-burn on lettuce and bolting in leafy vegetables. Harvest early morning; shade tender crops.`,
+      `Heat stress threshold exceeded (${max.toFixed(0)}°C) for ${loc}. Brassicas and spinach will bolt quickly. Install 30% shade cloth and increase watering frequency.`,
+      `${max.toFixed(0)}°C heat alert for ${loc}. Capsicum and tomato flowers may abort above 35°C. Use overhead mist irrigation during hottest hours to cool canopy.`,
+    ]),
+
+  vegetableCold: (min: number, loc: string) =>
+    pickFrom([
+      `Cold spell (${min.toFixed(0)}°C) coming to ${loc}. Protect warm-season vegetables: beans, courgettes, and sweet corn are particularly vulnerable to chilling injury.`,
+      `Low temperatures (${min.toFixed(0)}°C) forecast for ${loc}. Cover aubergine, capsicum, and cucumber with thermal fleece. Avoid cold water irrigation on cold mornings.`,
+      `Chilling risk (${min.toFixed(0)}°C) in ${loc}. Tomato fruit set is impaired below 10°C. Use cloches over ripening fruit. Delay transplanting warm-season seedlings.`,
+    ]),
+
+  stormShelter: (wind: number, loc: string) =>
+    pickFrom([
+      `Storm with winds to ${wind} km/h approaching ${loc}. Secure all livestock in reinforced pens. Check fence lines for weak points. Collect hay bales off paddocks now.`,
+      `Severe weather imminent in ${loc} — winds ${wind} km/h. Move vulnerable animals to covered shelter. Tie down feed troughs and water tanks. Suspend machinery operations.`,
+      `${wind} km/h winds forecast for ${loc}. Bring working animals off exposed hillsides. Check structural integrity of steel sheds. Document any storm damage for insurance.`,
+    ]),
+
+  aquaTempStress: (min: number, max: number, loc: string) =>
+    pickFrom([
+      `Air temps of ${min.toFixed(0)}–${max.toFixed(0)}°C in ${loc} will shift pond/tank water temperatures outside the safe range. Increase aeration; reduce feeding rates by 30%.`,
+      `Thermal stress window for aquaculture in ${loc}: air ${max.toFixed(0)}°C. Monitor dissolved oxygen every 3 hours. Prepare emergency aeration equipment.`,
+      `Water quality risk in ${loc} from temperature extremes (${min.toFixed(0)}–${max.toFixed(0)}°C). Reduce stocking density in critical ponds. Log daily O₂ and pH readings.`,
+    ]),
+
+  disasterRain: (total: number, loc: string) =>
+    pickFrom([
+      `Critical rainfall total (${total.toFixed(0)} mm) forecast for ${loc}. Flash flood risk is high. All aquaculture ponds must have overflow channels cleared. Move fish feed stores to elevated ground.`,
+      `Flood-level rainfall (${total.toFixed(0)} mm) approaching ${loc}. Livestock should be moved off floodplain paddocks. Emergency kit: pumps, nets, biosecurity supplies.`,
+      `${total.toFixed(0)} mm total rainfall forecast — flood alert for ${loc}. Earthwork structures and levees should be inspected immediately. Report any breaches to local authority.`,
+    ]),
+
+  tornado: (gust: number, loc: string) =>
+    pickFrom([
+      `⚠️ Tornado/cyclone conditions detected for ${loc}. Gusts to ${gust} km/h. Evacuate livestock to the most sheltered building. All outdoor work MUST cease immediately.`,
+      `Extreme wind event (${gust} km/h gusts) in ${loc}. Tornado or severe cyclone possible. Board up fragile structures. Move portable equipment indoors. Follow emergency services instructions.`,
+    ]),
+
+  surveyor: (rain: number, wind: number, loc: string) =>
+    pickFrom([
+      `Muddy terrain and GPS drift expected in ${loc} due to ${rain.toFixed(0)} mm rain and ${wind} km/h wind. Schedule indoor data processing tasks and postpone field traverses.`,
+      `Field conditions in ${loc} will deteriorate: ${rain.toFixed(0)} mm rainfall may cause equipment slippage and level instability. Carry extra stakes and waterproof cases.`,
+      `Survey postponement recommended for ${loc}. Wet soils (${rain.toFixed(0)} mm forecast) affect drone take-off safety and reflector visibility. Rebook for a dry-weather window.`,
+    ]),
+
+  uvHigh: (uv: number, loc: string) =>
+    pickFrom([
+      `UV Index reaching ${uv} in ${loc}. Protect outdoor farm workers with SPF 50+ sunscreen, hats, and UV-rated clothing. Schedule high-exposure work before 10:00.`,
+      `High UV (${uv}) forecast for ${loc}. Limit outdoor field work during 11:00–14:00. UV also accelerates pesticide photodegradation — adjust spray timing accordingly.`,
+    ]),
+};
+
+/* ============================================================
+ * WEATHER ANALYSIS
  * ============================================================ */
 
 interface WeatherInsight {
@@ -138,6 +237,7 @@ interface WeatherInsight {
   minTemp: number;
   avgHumidity: number;
   maxHumidity: number;
+  maxUV: number;
   hasFrostRisk: boolean;
   hasHeatStress: boolean;
   hasHeavyRain: boolean;
@@ -146,43 +246,29 @@ interface WeatherInsight {
   needsIrrigation: boolean;
   pressureDropDetected: boolean;
   lowVisibility: boolean;
+  hasExtremeHeat: boolean;
   dataByDay: WeatherDataPoint[];
 }
 
-/**
- * analyzeWeatherData
- *
- * HOW IT WORKS:
- * - Iterates through forecast data points (typically 7 days).
- * - Calculates aggregates (max wind, total rain, dry streaks).
- * - Flags boolean risk indicators for downstream consumption.
- * - Consecutive dry days are counted to avoid false irrigation alerts
- *   during rainy periods.
- */
 function analyzeWeatherData(forecast: WeatherDataPoint[]): WeatherInsight {
   if (!forecast || forecast.length === 0) {
     return {
       daysOfData: 0, maxRainfall: 0, totalRainfall: 0,
       consecutiveDryDays: 0, maxWindSpeed: 0, maxWindGust: 0,
-      maxTemp: 0, minTemp: 0, avgHumidity: 0, maxHumidity: 0,
+      maxTemp: 0, minTemp: 0, avgHumidity: 0, maxHumidity: 0, maxUV: 0,
       hasFrostRisk: false, hasHeatStress: false, hasHeavyRain: false,
       hasStormRisk: false, hasTornadoRisk: false, needsIrrigation: false,
-      pressureDropDetected: false, lowVisibility: false, dataByDay: [],
+      pressureDropDetected: false, lowVisibility: false, hasExtremeHeat: false,
+      dataByDay: [],
     };
   }
 
-  let consecutiveDryDays = 0;
-  let currentDryStreak = 0;
-  let totalRainfall = 0;
-  let maxRainfall = 0;
-  let maxWindSpeed = 0;
-  let maxWindGust = 0;
-  let maxTemp = -Infinity;
-  let minTemp = Infinity;
-  let totalHumidity = 0;
-  let maxHumidity = 0;
-  let pressureDropDetected = false;
-  let lowVisibility = false;
+  let consecutiveDryDays = 0, currentDryStreak = 0, totalRainfall = 0;
+  let maxRainfall = 0, maxWindSpeed = 0, maxWindGust = 0;
+  let maxTemp = -Infinity, minTemp = Infinity;
+  let totalHumidity = 0, maxHumidity = 0;
+  let pressureDropDetected = false, lowVisibility = false;
+  let maxUV = 0;
 
   for (let i = 0; i < forecast.length; i++) {
     const day = forecast[i];
@@ -194,8 +280,8 @@ function analyzeWeatherData(forecast: WeatherDataPoint[]): WeatherInsight {
     minTemp = Math.min(minTemp, day.temp);
     totalHumidity += day.humidity;
     maxHumidity = Math.max(maxHumidity, day.humidity);
+    maxUV = Math.max(maxUV, day.uvIndex ?? 0);
 
-    // Count consecutive dry days for irrigation logic
     if (day.rainfall < THRESHOLDS.LIGHT_RAIN) {
       currentDryStreak++;
       consecutiveDryDays = Math.max(consecutiveDryDays, currentDryStreak);
@@ -203,15 +289,11 @@ function analyzeWeatherData(forecast: WeatherDataPoint[]): WeatherInsight {
       currentDryStreak = 0;
     }
 
-    // Detect rapid pressure drops (storm prediction)
     if (i > 0 && day.pressure && forecast[i - 1].pressure) {
       const drop = (forecast[i - 1].pressure as number) - (day.pressure as number);
-      if (drop >= THRESHOLDS.RAPID_PRESSURE_DROP) {
-        pressureDropDetected = true;
-      }
+      if (drop >= THRESHOLDS.RAPID_PRESSURE_DROP) pressureDropDetected = true;
     }
 
-    // Low visibility detection
     if (day.visibility !== undefined && day.visibility < THRESHOLDS.FLIGHT_VISIBILITY_LOW) {
       lowVisibility = true;
     }
@@ -221,33 +303,20 @@ function analyzeWeatherData(forecast: WeatherDataPoint[]): WeatherInsight {
 
   return {
     daysOfData: forecast.length,
-    maxRainfall,
-    totalRainfall,
-    consecutiveDryDays,
-    maxWindSpeed,
-    maxWindGust,
-    maxTemp,
-    minTemp,
-    avgHumidity,
-    maxHumidity,
+    maxRainfall, totalRainfall, consecutiveDryDays,
+    maxWindSpeed, maxWindGust, maxTemp, minTemp,
+    avgHumidity, maxHumidity, maxUV,
     hasFrostRisk: minTemp <= THRESHOLDS.FROST_RISK,
     hasHeatStress: maxTemp >= THRESHOLDS.HEAT_STRESS_LIVESTOCK,
+    hasExtremeHeat: maxTemp >= THRESHOLDS.EXTREME_HEAT,
     hasHeavyRain: maxRainfall >= THRESHOLDS.HEAVY_RAIN,
     hasStormRisk: maxWindSpeed >= THRESHOLDS.STRONG_WIND || pressureDropDetected,
-    hasTornadoRisk: maxWindGust >= THRESHOLDS.SEVERE_WIND,
+    hasTornadoRisk: maxWindGust >= THRESHOLDS.SEVERE_WIND && pressureDropDetected,
     needsIrrigation: consecutiveDryDays >= THRESHOLDS.DRY_PERIOD_IRRIGATION && totalRainfall < 10,
-    pressureDropDetected,
-    lowVisibility,
+    pressureDropDetected, lowVisibility,
     dataByDay: forecast,
   };
 }
-
-/* ============================================================
- * 2. ENVIRONMENTAL RISK CALCULATION
- * ------------------------------------------------------------
- * Evaluates compound risks: fungal disease, dust storms,
- * water quality shifts, etc.
- * ============================================================ */
 
 interface EnvironmentalRisk {
   fungalRisk: boolean;
@@ -255,69 +324,23 @@ interface EnvironmentalRisk {
   aquaTempStress: boolean;
   pollenSurge: boolean;
   waterQualityRisk: boolean;
+  vegetableHeatStress: boolean;
+  vegetableColdStress: boolean;
+  highUVRisk: boolean;
 }
 
-/**
- * calculateEnvironmentalRisks
- *
- * HOW IT WORKS:
- * - Combines humidity + temperature to flag fungal disease risk.
- * - Low humidity + high wind = dust storm potential.
- * - Temperature extremes affect aquaculture water quality.
- * - High temps + moderate humidity = pollen surge risk.
- * - Heavy rainfall near aquaculture = water quality disruption.
- */
 function calculateEnvironmentalRisks(insight: WeatherInsight): EnvironmentalRisk {
   return {
-    // Fungal risk: high humidity AND warm temperatures
-    fungalRisk:
-      insight.maxHumidity >= THRESHOLDS.FUNGAL_RISK_HUMIDITY &&
-      insight.maxTemp >= 18 &&
-      insight.maxTemp <= 30,
-
-    // Dust storm: very low humidity + strong winds
-    dustStormRisk:
-      insight.avgHumidity <= THRESHOLDS.DUST_STORM_LOW_HUMIDITY &&
-      insight.maxWindSpeed >= THRESHOLDS.MODERATE_WIND,
-
-    // Aquaculture temperature stress
-    aquaTempStress:
-      insight.minTemp <= THRESHOLDS.AQUA_TEMP_LOW ||
-      insight.maxTemp >= THRESHOLDS.AQUA_TEMP_HIGH,
-
-    // Pollen surge: warm + dry + light wind
-    pollenSurge:
-      insight.maxTemp >= 25 &&
-      insight.avgHumidity <= 60 &&
-      insight.maxWindSpeed >= 15 &&
-      insight.maxWindSpeed <= 40,
-
-    // Water quality risk: heavy rain runoff into aquaculture
-    waterQualityRisk:
-      insight.hasHeavyRain && insight.totalRainfall >= 40,
+    fungalRisk: insight.maxHumidity >= THRESHOLDS.FUNGAL_RISK_HUMIDITY && insight.maxTemp >= 18 && insight.maxTemp <= 30,
+    dustStormRisk: insight.avgHumidity <= THRESHOLDS.DUST_STORM_LOW_HUMIDITY && insight.maxWindSpeed >= THRESHOLDS.MODERATE_WIND,
+    aquaTempStress: insight.minTemp <= THRESHOLDS.AQUA_TEMP_LOW || insight.maxTemp >= THRESHOLDS.AQUA_TEMP_HIGH,
+    pollenSurge: insight.maxTemp >= 25 && insight.avgHumidity <= 60 && insight.maxWindSpeed >= 15 && insight.maxWindSpeed <= 40,
+    waterQualityRisk: insight.hasHeavyRain && insight.totalRainfall >= 40,
+    vegetableHeatStress: insight.maxTemp >= THRESHOLDS.VEGETABLE_HEAT_STRESS,
+    vegetableColdStress: insight.minTemp <= THRESHOLDS.VEGETABLE_COLD_STRESS && insight.minTemp > THRESHOLDS.FROST_RISK,
+    highUVRisk: insight.maxUV >= THRESHOLDS.UV_HIGH,
   };
 }
-
-/* ============================================================
- * 3. FLIGHT RISK DETECTION
- * ------------------------------------------------------------
- * Separate module to detect aerial/airborne risks affecting
- * crops, livestock, aquaculture, and farm operations.
- *
- * HOW FLIGHT RISKS ARE CALCULATED:
- * - Wind speed and gust thresholds are compared against forecast.
- * - Storm probability is inferred from pressure drops + wind.
- * - Visibility data flags low-vis conditions for pilots.
- * - Tornado risk uses combined gust + pressure indicators.
- *
- * HOW THE ALERT IS TRIGGERED:
- * - Each risk returns a severity and timing window.
- * - Alerts are pushed into the main alert stack.
- *
- * HOW RECOMMENDATIONS ARE GENERATED:
- * - Actionable statements are constructed based on severity.
- * - Industry-specific advice is appended (crop cover, shelter, etc.).
- * ============================================================ */
 
 interface FlightRisk {
   severity: Severity;
@@ -328,102 +351,52 @@ interface FlightRisk {
   description: string;
 }
 
-/**
- * detectFlightRisks
- *
- * Evaluates aerial risks from weather insight data.
- * Returns the highest-severity flight risk detected.
- */
 function detectFlightRisks(insight: WeatherInsight, envRisks: EnvironmentalRisk): FlightRisk {
-  // Determine timing based on when the worst conditions appear
   const peakWindDay = insight.dataByDay.reduce(
-    (worst, day, idx) => (day.windSpeed > (insight.dataByDay[worst]?.windSpeed ?? 0) ? idx : worst),
-    0
+    (worst, day, idx) => (day.windSpeed > (insight.dataByDay[worst]?.windSpeed ?? 0) ? idx : worst), 0
   );
   const timing: TimingWindow = peakWindDay <= 1 ? "Next 24h" : peakWindDay <= 3 ? "1–3 Days" : "3–5 Days";
 
-  // --- Tornado / cyclone risk (highest priority) ---
   if (insight.hasTornadoRisk && insight.pressureDropDetected) {
     return {
-      severity: "danger",
-      type: "tornado",
-      windSpeed: insight.maxWindSpeed,
-      gustSpeed: insight.maxWindGust,
-      timing,
-      description: `Tornado/cyclone risk detected. Wind gusts up to ${insight.maxWindGust} km/h with rapid pressure drop. Secure all outdoor equipment, cover crops, and shelter livestock immediately. Avoid all fieldwork during high winds.`,
+      severity: "danger", type: "tornado",
+      windSpeed: insight.maxWindSpeed, gustSpeed: insight.maxWindGust, timing,
+      description: `Tornado/cyclone risk detected. Gusts up to ${insight.maxWindGust} km/h with rapid pressure drop. Secure all outdoor equipment and shelter livestock immediately.`,
     };
   }
-
-  // --- Dust storm risk ---
   if (envRisks.dustStormRisk && insight.maxWindGust >= THRESHOLDS.FLIGHT_GUST_SEVERE) {
     return {
-      severity: "danger",
-      type: "dust_storm",
-      windSpeed: insight.maxWindSpeed,
-      gustSpeed: insight.maxWindGust,
-      timing,
-      description: `Dust storm conditions expected. Wind ${insight.maxWindSpeed} km/h with low humidity. Protect seedlings, secure greenhouse covers, and shelter animals. Airborne dust may trigger crop disease and livestock respiratory stress.`,
+      severity: "danger", type: "dust_storm",
+      windSpeed: insight.maxWindSpeed, gustSpeed: insight.maxWindGust, timing,
+      description: `Dust storm conditions expected. ${insight.maxWindSpeed} km/h wind with low humidity. Protect seedlings, greenhouse covers, and shelter animals.`,
     };
   }
-
-  // --- Severe wind / hailstorm ---
   if (insight.maxWindSpeed >= THRESHOLDS.FLIGHT_WIND_DANGER) {
     return {
-      severity: "warning",
-      type: "strong_wind",
-      windSpeed: insight.maxWindSpeed,
-      gustSpeed: insight.maxWindGust,
-      timing,
-      description: `Strong wind and potential hail expected. Wind speeds up to ${insight.maxWindSpeed} km/h. Protect young plants, check greenhouse stability, and monitor livestock housing. Secure loose farm equipment and irrigation systems.`,
+      severity: "warning", type: "strong_wind",
+      windSpeed: insight.maxWindSpeed, gustSpeed: insight.maxWindGust, timing,
+      description: `Strong wind and potential hail expected up to ${insight.maxWindSpeed} km/h. Protect young plants, check greenhouse stability, secure equipment.`,
     };
   }
-
-  // --- Low visibility ---
   if (insight.lowVisibility) {
     return {
-      severity: "warning",
-      type: "low_visibility",
-      windSpeed: insight.maxWindSpeed,
-      gustSpeed: insight.maxWindGust,
-      timing,
-      description: `Low visibility conditions detected (< ${THRESHOLDS.FLIGHT_VISIBILITY_LOW} km). Unsafe for aerial surveying and flight operations. Postpone drone or aircraft activities. Exercise caution on farm roads.`,
+      severity: "warning", type: "low_visibility",
+      windSpeed: insight.maxWindSpeed, gustSpeed: insight.maxWindGust, timing,
+      description: `Low visibility (< ${THRESHOLDS.FLIGHT_VISIBILITY_LOW} km). Unsafe for aerial surveying. Postpone drone and aircraft operations.`,
     };
   }
-
-  // --- Moderate wind caution ---
   if (insight.maxWindSpeed >= THRESHOLDS.FLIGHT_WIND_CAUTION) {
     return {
-      severity: "info",
-      type: "strong_wind",
-      windSpeed: insight.maxWindSpeed,
-      gustSpeed: insight.maxWindGust,
-      timing,
-      description: `Moderate winds (${insight.maxWindSpeed} km/h) expected. Monitor conditions before aerial operations. Light crops may need temporary support.`,
+      severity: "info", type: "strong_wind",
+      windSpeed: insight.maxWindSpeed, gustSpeed: insight.maxWindGust, timing,
+      description: `Moderate winds (${insight.maxWindSpeed} km/h) expected. Monitor conditions before aerial operations.`,
     };
   }
-
-  return {
-    severity: "info",
-    type: "none",
-    windSpeed: insight.maxWindSpeed,
-    gustSpeed: insight.maxWindGust,
-    timing: "Next 24h",
-    description: "",
-  };
+  return { severity: "info", type: "none", windSpeed: insight.maxWindSpeed, gustSpeed: insight.maxWindGust, timing: "Next 24h", description: "" };
 }
 
 /* ============================================================
- * 4. RECOMMENDATION ENGINE
- * ------------------------------------------------------------
- * Generates the full alert stack from analyzed data.
- *
- * Each function handles a specific domain:
- *   - Crop recommendations
- *   - Livestock recommendations
- *   - Aquaculture recommendations
- *   - Surveyor recommendations
- *   - Flight/aerial recommendations
- *   - Environmental/disaster recommendations
+ * RECOMMENDATION ENGINE — All industry domains
  * ============================================================ */
 
 let alertIdCounter = 0;
@@ -439,300 +412,243 @@ function timeLabel(dayIndex: number): TimingWindow {
   return "4–7 Days";
 }
 
-/**
- * generateRecommendations
- *
- * Master function that orchestrates all recommendation generators.
- * Returns a deduplicated, priority-sorted alert stack.
- */
 function generateRecommendations(
   insight: WeatherInsight,
   envRisks: EnvironmentalRisk,
   flightRisk: FlightRisk,
-  locationName: string
+  locationName: string,
+  seed: number
 ): ProactiveAlert[] {
   const alerts: ProactiveAlert[] = [];
   const now = new Date().toLocaleString();
+  const ts = seed;
 
-  // ---- CROP RECOMMENDATIONS ----
-
-  /**
-   * Irrigation alert — ONLY fires during prolonged dry periods.
-   * Avoids false alerts during rainy periods by checking
-   * consecutive dry days AND low total rainfall.
-   */
+  // ---- CROPS ----
   if (insight.needsIrrigation) {
     alerts.push({
-      id: makeId(),
-      type: "warning",
-      title: "Initiate Irrigation",
-      message: `Dry period of ${insight.consecutiveDryDays}+ days forecast for ${locationName}. Initiate irrigation for tomatoes, leafy vegetables, and shallow-rooted crops. Check soil moisture daily.`,
-      detail: `Total rainfall forecast: ${insight.totalRainfall.toFixed(1)} mm over ${insight.daysOfData} days. Consecutive dry days: ${insight.consecutiveDryDays}.`,
-      timing: "1–3 Days",
-      tags: ["crop"],
-      isRead: false,
-      time: now,
-      icon: "droplets",
+      id: makeId(), type: "warning", icon: "droplets",
+      title: "Initiate Irrigation — Crops",
+      message: MSG_POOLS.irrigation(insight.consecutiveDryDays, insight.totalRainfall, locationName),
+      detail: `Total rain forecast: ${insight.totalRainfall.toFixed(1)} mm over ${insight.daysOfData} days. Dry streak: ${insight.consecutiveDryDays} days.`,
+      timing: "1–3 Days", tags: ["crop"], isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Heavy rain / crop cover alert
-   */
   if (insight.hasHeavyRain) {
     const peakDay = insight.dataByDay.findIndex(d => d.rainfall >= THRESHOLDS.HEAVY_RAIN);
     alerts.push({
-      id: makeId(),
-      type: "warning",
+      id: makeId(), type: "warning", icon: "cloud-rain",
       title: "Heavy Rain — Protect Crops",
-      message: `Heavy rain (up to ${insight.maxRainfall.toFixed(0)} mm/day) expected ${timeLabel(peakDay)} in ${locationName}. Cover young crops and secure greenhouses. No irrigation needed. Ensure drainage channels are clear.`,
+      message: MSG_POOLS.heavyRain(insight.maxRainfall, locationName),
       detail: `Peak rainfall: ${insight.maxRainfall.toFixed(1)} mm. Wind: ${insight.maxWindSpeed} km/h. Humidity: ${insight.maxHumidity}%.`,
-      timing: timeLabel(peakDay),
-      tags: ["crop", "general"],
-      isRead: false,
-      time: now,
-      icon: "cloud-rain",
+      timing: timeLabel(peakDay), tags: ["crop", "general"], isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Fungal disease risk — triggered by high humidity + warm temps
-   */
   if (envRisks.fungalRisk) {
     alerts.push({
-      id: makeId(),
-      type: "warning",
-      title: "Monitor for Fungal Risk",
-      message: `High humidity (${insight.maxHumidity}%) with warm temperatures creates favorable conditions for fungal diseases in ${locationName}. Inspect crops for early signs of blight, mildew, or rust. Apply preventive fungicide if appropriate.`,
-      detail: `Max humidity: ${insight.maxHumidity}%. Temp range: ${insight.minTemp.toFixed(0)}–${insight.maxTemp.toFixed(0)}°C.`,
-      timing: "1–3 Days",
-      tags: ["crop"],
-      isRead: false,
-      time: now,
-      icon: "sprout",
+      id: makeId(), type: "warning", icon: "sprout",
+      title: "Fungal Disease Risk — Crops",
+      message: MSG_POOLS.fungal(insight.maxHumidity, locationName),
+      detail: `Max humidity: ${insight.maxHumidity}%. Temp: ${insight.minTemp.toFixed(0)}–${insight.maxTemp.toFixed(0)}°C.`,
+      timing: "1–3 Days", tags: ["crop"], isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Frost risk for crops
-   */
   if (insight.hasFrostRisk) {
     alerts.push({
-      id: makeId(),
-      type: "danger",
-      title: "Frost Risk — Protect Sensitive Crops",
-      message: `Temperature dropping to ${insight.minTemp.toFixed(0)}°C in ${locationName}. Cover frost-sensitive crops (seedlings, tropical plants). Use mulch or frost cloth. Move potted plants indoors.`,
-      detail: `Minimum temperature: ${insight.minTemp.toFixed(1)}°C. Frost threshold: ${THRESHOLDS.FROST_RISK}°C.`,
-      timing: "Next 24h",
-      tags: ["crop"],
-      isRead: false,
-      time: now,
-      icon: "thermometer",
+      id: makeId(), type: "danger", icon: "thermometer",
+      title: "Frost Risk — Crops",
+      message: MSG_POOLS.frost(insight.minTemp, locationName),
+      detail: `Min temp: ${insight.minTemp.toFixed(1)}°C. Frost threshold: ${THRESHOLDS.FROST_RISK}°C.`,
+      timing: "Next 24h", tags: ["crop", "vegetables"], isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  // ---- LIVESTOCK RECOMMENDATIONS ----
+  // ---- VEGETABLES (separate domain) ----
+  if (envRisks.vegetableHeatStress) {
+    alerts.push({
+      id: makeId(), type: "warning", icon: "salad",
+      title: "Vegetable Heat Stress Alert",
+      message: MSG_POOLS.vegetableHeat(insight.maxTemp, locationName),
+      detail: `Max temp: ${insight.maxTemp.toFixed(1)}°C. Vegetable heat threshold: ${THRESHOLDS.VEGETABLE_HEAT_STRESS}°C.`,
+      timing: "Next 24h", tags: ["vegetables", "crop"], isRead: false, time: now, generatedAt: ts,
+    });
+  }
+  if (envRisks.vegetableColdStress) {
+    alerts.push({
+      id: makeId(), type: "warning", icon: "thermometer",
+      title: "Vegetable Cold Stress Alert",
+      message: MSG_POOLS.vegetableCold(insight.minTemp, locationName),
+      detail: `Min temp: ${insight.minTemp.toFixed(1)}°C. Vegetable cold threshold: ${THRESHOLDS.VEGETABLE_COLD_STRESS}°C.`,
+      timing: "Next 24h", tags: ["vegetables"], isRead: false, time: now, generatedAt: ts,
+    });
+  }
 
-  /**
-   * Heat stress for livestock
-   */
+  // ---- LIVESTOCK ----
   if (insight.hasHeatStress) {
     alerts.push({
-      id: makeId(),
-      type: "warning",
+      id: makeId(), type: "warning", icon: "thermometer",
       title: "Livestock Heat Stress Alert",
-      message: `Temperatures reaching ${insight.maxTemp.toFixed(0)}°C in ${locationName}. Ensure adequate shade, ventilation, and water supply for all livestock. Reduce handling and transport. Monitor for signs of heat exhaustion.`,
+      message: MSG_POOLS.heatStress(insight.maxTemp, locationName),
       detail: `Max temp: ${insight.maxTemp.toFixed(1)}°C. Threshold: ${THRESHOLDS.HEAT_STRESS_LIVESTOCK}°C.`,
-      timing: "Next 24h",
-      tags: ["livestock"],
-      isRead: false,
-      time: now,
-      icon: "thermometer",
+      timing: "Next 24h", tags: ["livestock"], isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Storm shelter alert for livestock
-   */
   if (insight.hasStormRisk) {
     alerts.push({
-      id: makeId(),
-      type: "danger",
+      id: makeId(), type: "danger", icon: "wind",
       title: "Storm Alert — Shelter Livestock",
-      message: `Storm conditions expected in ${locationName} with winds up to ${insight.maxWindSpeed} km/h. Move livestock to sheltered areas. Secure fencing and pens. Ensure feed and water are accessible under cover.`,
-      detail: `Wind speed: ${insight.maxWindSpeed} km/h. Gusts: ${insight.maxWindGust} km/h. Pressure drop detected: ${insight.pressureDropDetected ? "Yes" : "No"}.`,
-      timing: "1–3 Days",
-      tags: ["livestock", "general"],
-      isRead: false,
-      time: now,
-      icon: "wind",
+      message: MSG_POOLS.stormShelter(insight.maxWindSpeed, locationName),
+      detail: `Wind: ${insight.maxWindSpeed} km/h. Gusts: ${insight.maxWindGust} km/h. Pressure drop: ${insight.pressureDropDetected ? "Yes" : "No"}.`,
+      timing: "1–3 Days", tags: ["livestock", "general"], isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Cold stress for livestock
-   */
   if (insight.minTemp <= THRESHOLDS.COLD_STRESS) {
     alerts.push({
-      id: makeId(),
-      type: "warning",
-      title: "Cold Stress — Livestock Care",
-      message: `Low temperatures (${insight.minTemp.toFixed(0)}°C) forecast for ${locationName}. Provide extra bedding and shelter for young animals. Increase feed rations. Check water troughs for freezing.`,
+      id: makeId(), type: "warning", icon: "thermometer",
+      title: "Cold Stress — Livestock",
+      message: `Low temperatures (${insight.minTemp.toFixed(0)}°C) forecast for ${locationName}. Extra bedding and shelter required for young animals. Increase feed rations. Check water troughs for freezing.`,
       detail: `Min temp: ${insight.minTemp.toFixed(1)}°C. Cold stress threshold: ${THRESHOLDS.COLD_STRESS}°C.`,
-      timing: "Next 24h",
-      tags: ["livestock"],
-      isRead: false,
-      time: now,
-      icon: "thermometer",
+      timing: "Next 24h", tags: ["livestock"], isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  // ---- AQUACULTURE RECOMMENDATIONS ----
-
-  /**
-   * Temperature stress for aquaculture
-   */
+  // ---- AQUACULTURE ----
   if (envRisks.aquaTempStress) {
-    const isHot = insight.maxTemp >= THRESHOLDS.AQUA_TEMP_HIGH;
-    const isCold = insight.minTemp <= THRESHOLDS.AQUA_TEMP_LOW;
     alerts.push({
-      id: makeId(),
-      type: "warning",
+      id: makeId(), type: "warning", icon: "fish",
       title: "Aquaculture Temperature Alert",
-      message: `Water temperature may ${isHot ? "exceed safe limits" : "drop below optimal range"} in ${locationName}. ${isHot ? "Increase aeration and reduce feeding rates. Monitor dissolved oxygen." : "Consider heating systems or reduced stocking density. Watch for lethargy in fish."} `,
-      detail: `Air temp range: ${insight.minTemp.toFixed(0)}–${insight.maxTemp.toFixed(0)}°C. Safe aqua range: ${THRESHOLDS.AQUA_TEMP_LOW}–${THRESHOLDS.AQUA_TEMP_HIGH}°C.`,
-      timing: "1–3 Days",
-      tags: ["aquaculture"],
-      isRead: false,
-      time: now,
-      icon: "fish",
+      message: MSG_POOLS.aquaTempStress(insight.minTemp, insight.maxTemp, locationName),
+      detail: `Air temp: ${insight.minTemp.toFixed(0)}–${insight.maxTemp.toFixed(0)}°C. Safe aqua range: ${THRESHOLDS.AQUA_TEMP_LOW}–${THRESHOLDS.AQUA_TEMP_HIGH}°C.`,
+      timing: "1–3 Days", tags: ["aquaculture"], isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Water quality risk from heavy rainfall runoff
-   */
   if (envRisks.waterQualityRisk) {
     alerts.push({
-      id: makeId(),
-      type: "danger",
+      id: makeId(), type: "danger", icon: "waves",
       title: "Water Quality Risk — Aquaculture",
-      message: `Heavy rainfall (${insight.totalRainfall.toFixed(0)} mm total) may cause runoff contamination in ${locationName}. Monitor pH, ammonia, and turbidity in ponds/tanks. Prepare emergency water treatment. Reduce feeding temporarily.`,
-      detail: `Total rainfall: ${insight.totalRainfall.toFixed(1)} mm. Max single-day: ${insight.maxRainfall.toFixed(1)} mm.`,
-      timing: "1–3 Days",
-      tags: ["aquaculture"],
-      isRead: false,
-      time: now,
-      icon: "waves",
+      message: MSG_POOLS.disasterRain(insight.totalRainfall, locationName),
+      detail: `Total rainfall: ${insight.totalRainfall.toFixed(1)} mm. Max/day: ${insight.maxRainfall.toFixed(1)} mm.`,
+      timing: "1–3 Days", tags: ["aquaculture"], isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  // ---- SURVEYOR RECOMMENDATIONS ----
-
-  /**
-   * Surveyor field conditions alert
-   */
+  // ---- SURVEYOR ----
   if (insight.hasHeavyRain || insight.hasStormRisk || insight.lowVisibility) {
     alerts.push({
-      id: makeId(),
-      type: "warning",
+      id: makeId(), type: "warning", icon: "eye",
       title: "Surveyor Field Conditions Warning",
-      message: `Unfavorable field conditions expected in ${locationName}. ${insight.hasHeavyRain ? "Heavy rain will make terrain muddy and GPS accuracy may decrease. " : ""}${insight.lowVisibility ? "Low visibility reduces measurement accuracy. " : ""}${insight.hasStormRisk ? "Storm risk — postpone outdoor survey work. " : ""}Plan indoor tasks or reschedule fieldwork.`,
+      message: MSG_POOLS.surveyor(insight.maxRainfall, insight.maxWindSpeed, locationName),
       detail: `Rain: ${insight.maxRainfall.toFixed(0)} mm. Wind: ${insight.maxWindSpeed} km/h. Visibility: ${insight.lowVisibility ? "Poor" : "Adequate"}.`,
-      timing: "1–3 Days",
-      tags: ["surveyor"],
-      isRead: false,
-      time: now,
-      icon: "eye",
+      timing: "1–3 Days", tags: ["surveyor"], isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  // ---- FLIGHT / AERIAL RECOMMENDATIONS ----
-
-  /**
-   * Flight alert — generated from detectFlightRisks()
-   * Only triggers for the user's local area.
-   */
+  // ---- FLIGHT ----
   if (flightRisk.type !== "none") {
     alerts.push({
-      id: makeId(),
-      type: flightRisk.severity,
-      title: `Flight Alert: ${flightRisk.type.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())} Risk`,
+      id: makeId(), type: flightRisk.severity as AlertType, icon: "plane",
+      title: `Flight Alert: ${flightRisk.type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())} Risk`,
       message: flightRisk.description,
       detail: `Wind: ${flightRisk.windSpeed} km/h. Gusts: ${flightRisk.gustSpeed} km/h. Location: ${locationName}.`,
-      timing: flightRisk.timing,
-      tags: ["flight", "crop", "livestock"],
-      isRead: false,
-      time: now,
-      icon: "plane",
+      timing: flightRisk.timing, tags: ["flight", "crop", "livestock"],
+      isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  // ---- ENVIRONMENTAL / DISASTER RECOMMENDATIONS ----
-
-  /**
-   * Tornado / severe weather alert
-   */
+  // ---- DISASTER / TORNADO ----
   if (insight.hasTornadoRisk) {
     alerts.push({
-      id: makeId(),
-      type: "danger",
+      id: makeId(), type: "danger", icon: "cloud-lightning",
       title: "⚠️ Tornado / Severe Storm Risk",
-      message: `Severe weather conditions detected for ${locationName}. Wind gusts up to ${insight.maxWindGust} km/h. Secure ALL outdoor equipment and materials. Move livestock to reinforced shelters. Cover crops where possible. Avoid fieldwork. Follow local emergency services.`,
+      message: MSG_POOLS.tornado(insight.maxWindGust, locationName),
       detail: `Max gust: ${insight.maxWindGust} km/h. Pressure drop: ${insight.pressureDropDetected ? "Detected" : "Not detected"}.`,
-      timing: "Next 24h",
-      tags: ["general", "crop", "livestock", "aquaculture"],
-      isRead: false,
-      time: now,
-      icon: "cloud-lightning",
+      timing: "Next 24h", tags: ["general", "crop", "livestock", "aquaculture", "vegetables"],
+      isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  /**
-   * Dust storm environmental alert
-   */
+  // ---- UV / ENVIRONMENTAL ----
+  if (envRisks.highUVRisk) {
+    alerts.push({
+      id: makeId(), type: "warning", icon: "sun",
+      title: `High UV Index — ${insight.maxUV >= THRESHOLDS.UV_EXTREME ? "Extreme" : "High"} Exposure Risk`,
+      message: MSG_POOLS.uvHigh(insight.maxUV, locationName),
+      detail: `UV Index: ${insight.maxUV}. Threshold: ${THRESHOLDS.UV_HIGH}.`,
+      timing: "Next 24h", tags: ["general", "crop", "vegetables"],
+      isRead: false, time: now, generatedAt: ts,
+    });
+  }
   if (envRisks.dustStormRisk) {
     alerts.push({
-      id: makeId(),
-      type: "warning",
+      id: makeId(), type: "warning", icon: "wind",
       title: "Dust Storm — Environmental Alert",
-      message: `Dry, windy conditions in ${locationName} may generate dust storms. Airborne particles can stress livestock respiratory systems and damage crop foliage. Cover water sources, reduce outdoor livestock exposure, and protect nursery plants.`,
+      message: `Dry, windy conditions in ${locationName} may generate dust storms. Humidity: ${insight.avgHumidity.toFixed(0)}%. Protect water sources and reduce outdoor livestock exposure.`,
       detail: `Humidity: ${insight.avgHumidity.toFixed(0)}%. Wind: ${insight.maxWindSpeed} km/h.`,
-      timing: "1–3 Days",
-      tags: ["general", "livestock", "crop"],
-      isRead: false,
-      time: now,
-      icon: "wind",
+      timing: "1–3 Days", tags: ["general", "livestock", "crop"],
+      isRead: false, time: now, generatedAt: ts,
     });
   }
-
-  /**
-   * Pollen surge (affects both crops and livestock)
-   */
   if (envRisks.pollenSurge) {
     alerts.push({
-      id: makeId(),
-      type: "info",
+      id: makeId(), type: "info", icon: "sprout",
       title: "Pollen Surge Conditions",
-      message: `Warm, dry conditions with moderate wind in ${locationName} may cause elevated pollen levels. Monitor livestock for allergic reactions. Beekeepers: favorable conditions for pollination activity.`,
+      message: `Warm, dry conditions with moderate wind in ${locationName} may cause elevated pollen levels. Monitor livestock for allergic reactions. Beekeepers: highly favourable pollination window.`,
       detail: `Temp: ${insight.maxTemp.toFixed(0)}°C. Humidity: ${insight.avgHumidity.toFixed(0)}%. Wind: ${insight.maxWindSpeed} km/h.`,
-      timing: "1–3 Days",
-      tags: ["livestock", "crop"],
-      isRead: false,
-      time: now,
-      icon: "sprout",
+      timing: "1–3 Days", tags: ["livestock", "crop"],
+      isRead: false, time: now, generatedAt: ts,
     });
   }
 
-  // Sort by severity: danger > warning > info > success
   const severityOrder: Record<AlertType, number> = { danger: 0, warning: 1, info: 2, success: 3 };
   alerts.sort((a, b) => severityOrder[a.type] - severityOrder[b.type]);
-
   return alerts;
 }
 
 /* ============================================================
- * 5. VISUAL MAPS & UI CONFIGURATION
+ * PUSH NOTIFICATION HELPER
+ * Requests permission and sends a Web Push notification
+ * for danger-level alerts. Also calls the Supabase edge
+ * function (send-alert-push) which delivers the SMS.
+ * ============================================================ */
+
+async function sendPushNotification(alert: ProactiveAlert, userId?: string) {
+  // Web Push (dashboard / PWA)
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(alert.title, {
+      body: alert.message.slice(0, 120),
+      icon: "/favicon.ico",
+      tag: alert.id,
+    });
+  } else if ("Notification" in window && Notification.permission === "default") {
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      new Notification(alert.title, {
+        body: alert.message.slice(0, 120),
+        icon: "/favicon.ico",
+        tag: alert.id,
+      });
+    }
+  }
+
+  // Mobile SMS via Supabase edge function (if user opted in)
+  if (userId && (alert.type === "danger" || alert.type === "warning")) {
+    try {
+      await supabase.functions.invoke("send-alert-sms", {
+        body: {
+          userId,
+          title: alert.title,
+          message: alert.message.slice(0, 160),
+          severity: alert.type,
+          tags: alert.tags,
+        },
+      });
+    } catch (_e) {
+      // SMS delivery is best-effort; silently ignore failures
+    }
+  }
+}
+
+/* ============================================================
+ * VISUAL MAPS & UI CONFIG
  * ============================================================ */
 
 const iconMap: Record<AlertType, any> = {
@@ -742,7 +658,6 @@ const iconMap: Record<AlertType, any> = {
   success: CheckCircle,
 };
 
-/** Left-border accent color per severity for at-a-glance scanning */
 const styleMap: Record<AlertType, string> = {
   warning: "border-l-warning bg-warning/5",
   danger: "border-l-destructive bg-destructive/5",
@@ -757,17 +672,16 @@ const iconColorMap: Record<AlertType, string> = {
   success: "text-success",
 };
 
-/** Industry tag colors */
 const tagColorMap: Record<IndustryTag, string> = {
   crop: "bg-success/10 text-success border-success/20",
   livestock: "bg-warning/10 text-warning border-warning/20",
   aquaculture: "bg-accent/10 text-accent border-accent/20",
+  vegetables: "bg-emerald-500/10 text-emerald-600 border-emerald-300/30",
   flight: "bg-destructive/10 text-destructive border-destructive/20",
   surveyor: "bg-primary/10 text-primary border-primary/20",
   general: "bg-muted text-muted-foreground border-border",
 };
 
-/** Icon components for alert cards */
 const alertIconMap: Record<string, any> = {
   wind: Wind,
   droplets: Droplets,
@@ -779,20 +693,21 @@ const alertIconMap: Record<string, any> = {
   eye: Eye,
   sprout: Sprout,
   fish: Fish,
+  salad: Salad,
+  sun: AlertCircle,
 };
 
 /* ============================================================
- * 6. ALERTS COMPONENT
+ * ALERTS COMPONENT
  * ============================================================ */
 
 export default function Alerts() {
   const { user } = useAuth();
   const { position } = useGeolocation();
-  const { forecast } = useWeather(position.lat, position.lon);
+  const { forecast, refresh: refreshWeather } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
   const {
     alerts: visibleAlerts,
-    unreadAlerts: unread,
     markRead,
     dismiss,
   } = useUserAlerts(forecast, position.locationName);
@@ -801,64 +716,141 @@ export default function Alerts() {
   const [dbAlerts, setDbAlerts] = useState<any[]>([]);
   const [showTicketForm, setShowTicketForm] = useState(false);
   const [ticketLoading, setTicketLoading] = useState(false);
-  const [ticket, setTicket] = useState({
-    subject: "",
-    description: "",
-    category: "general",
-  });
+  const [ticket, setTicket] = useState({ subject: "", description: "", category: "general" });
   const [activeTagFilter, setActiveTagFilter] = useState<IndustryTag | "all">("all");
+  const [lastGeneratedAt, setLastGeneratedAt] = useState<number>(() => {
+    const stored = localStorage.getItem(LS_LAST_GENERATED);
+    return stored ? parseInt(stored, 10) : 0;
+  });
+  const [cachedAlerts, setCachedAlerts] = useState<ProactiveAlert[]>(() => {
+    try {
+      const stored = localStorage.getItem(LS_ALERT_CACHE);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [refreshing, setRefreshing] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch database disaster alerts
+  /* ----------- Real-time disaster alerts via Supabase ----------- */
   useEffect(() => {
+    // Initial fetch
     supabase
       .from("disaster_alerts")
       .select("*")
       .eq("active", true)
       .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setDbAlerts(data);
-      });
-  }, []);
+      .then(({ data }) => { if (data) setDbAlerts(data); });
 
-  /**
-   * Generate proactive alerts from weather data.
-   * Memoized to avoid recalculation on every render.
-   */
-  const proactiveAlerts = useMemo(() => {
-    if (!forecast || forecast.length === 0) return [];
+    // Subscribe to new inserts / updates in real-time
+    const channel = supabase
+      .channel("disaster_alerts_rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "disaster_alerts" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const newAlert = payload.new as any;
+            setDbAlerts(prev => [newAlert, ...prev]);
+            // Push immediately for new disasters
+            sendPushNotification(
+            {
+                id: newAlert.id,
+                type: "danger" as AlertType,
+                title: newAlert.title,
+                message: newAlert.description,
+                detail: "",
+                timing: "Next 24h" as TimingWindow,
+                tags: ["general"] as IndustryTag[],
+                isRead: false,
+                time: new Date().toLocaleString(),
+                generatedAt: Date.now(),
+                icon: "cloud-lightning",
+              },
+              user?.id
+            );
+          }
+          if (payload.eventType === "UPDATE") {
+            setDbAlerts(prev => prev.map(a => a.id === payload.new.id ? payload.new : a));
+          }
+          if (payload.eventType === "DELETE") {
+            setDbAlerts(prev => prev.filter(a => a.id !== payload.old?.id));
+          }
+        }
+      )
+      .subscribe();
 
-    // Step 1: Analyze weather data
-    const insight = analyzeWeatherData(forecast);
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
 
-    // Step 2: Calculate environmental risks
-    const envRisks = calculateEnvironmentalRisks(insight);
+  /* ----------- 72-hour proactive alert generation ----------- */
+  const generateAndCache = useCallback(
+    (seed: number) => {
+      if (!forecast || forecast.length === 0) return;
 
-    // Step 3: Detect flight-specific risks
-    const flightRisk = detectFlightRisks(insight, envRisks);
+      const insight = analyzeWeatherData(forecast);
+      const envRisks = calculateEnvironmentalRisks(insight);
+      const flightRisk = detectFlightRisks(insight, envRisks);
+      const newAlerts = generateRecommendations(
+        insight, envRisks, flightRisk,
+        position.locationName || "your area",
+        seed
+      );
 
-    // Step 4: Generate full recommendation stack
-    return generateRecommendations(
-      insight,
-      envRisks,
-      flightRisk,
-      position.locationName || "your area"
-    );
-  }, [forecast, position.locationName]);
+      setCachedAlerts(newAlerts);
+      setLastGeneratedAt(seed);
+      localStorage.setItem(LS_LAST_GENERATED, String(seed));
+      localStorage.setItem(LS_ALERT_CACHE, JSON.stringify(newAlerts));
 
-  // Combine proactive alerts with user alerts from the hook
+      // Deliver push/SMS for danger and warning alerts
+      newAlerts
+        .filter(a => a.type === "danger" || a.type === "warning")
+        .forEach(a => sendPushNotification(a, user?.id));
+    },
+    [forecast, position.locationName, user?.id]
+  );
+
+  // On mount and every 15min: check if 72h window has elapsed; regenerate if so
+  useEffect(() => {
+    const check = () => {
+      const now = Date.now();
+      if (now - lastGeneratedAt >= ALERT_INTERVAL_MS) {
+        generateAndCache(now);
+      }
+    };
+
+    check(); // immediate check on mount / forecast update
+    intervalRef.current = setInterval(check, WEATHER_REFRESH_MS);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [generateAndCache, lastGeneratedAt]);
+
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    refreshWeather?.();
+    setTimeout(() => {
+      generateAndCache(Date.now());
+      setRefreshing(false);
+      toast({ title: "Alerts refreshed", description: "Latest weather data applied." });
+    }, 1500);
+  };
+
+  /* ----------- Derived alert stack ----------- */
+  const proactiveAlerts = useMemo(() => cachedAlerts, [cachedAlerts]);
+
   const allAlerts = useMemo(() => {
-    const combined = [...proactiveAlerts, ...visibleAlerts];
+    const combined: any[] = [...proactiveAlerts, ...visibleAlerts];
     if (activeTagFilter === "all") return combined;
     return combined.filter(
-      (a) => "tags" in a && (a as ProactiveAlert).tags?.includes(activeTagFilter)
+      (a) => "tags" in a && a.tags?.includes(activeTagFilter)
     );
   }, [proactiveAlerts, visibleAlerts, activeTagFilter]);
 
-  const unreadAlerts = allAlerts.filter((a) => !a.isRead);
-  const readAlerts = allAlerts.filter((a) => a.isRead);
+  const unreadAlerts = allAlerts.filter(a => !a.isRead);
+  const readAlerts = allAlerts.filter(a => a.isRead);
 
   const toggleExpand = useCallback((id: string) => {
-    setExpandedIds((prev) => {
+    setExpandedIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -867,11 +859,7 @@ export default function Alerts() {
 
   const submitTicket = async () => {
     if (!ticket.subject.trim() || !ticket.description.trim()) {
-      toast({
-        title: "Required",
-        description: "Please fill in subject and description.",
-        variant: "destructive",
-      });
+      toast({ title: "Required", description: "Please fill in subject and description.", variant: "destructive" });
       return;
     }
     setTicketLoading(true);
@@ -895,16 +883,113 @@ export default function Alerts() {
   const industryFilters: { label: string; value: IndustryTag | "all" }[] = [
     { label: "All", value: "all" },
     { label: "🌾 Crops", value: "crop" },
+    { label: "🥦 Vegetables", value: "vegetables" },
     { label: "🐄 Livestock", value: "livestock" },
     { label: "🐟 Aquaculture", value: "aquaculture" },
     { label: "✈️ Flight", value: "flight" },
     { label: "📐 Surveyor", value: "surveyor" },
   ];
 
+  const nextRefreshIn = useMemo(() => {
+    const remaining = ALERT_INTERVAL_MS - (Date.now() - lastGeneratedAt);
+    const hours = Math.max(0, Math.floor(remaining / (1000 * 60 * 60)));
+    const mins = Math.max(0, Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60)));
+    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  }, [lastGeneratedAt]);
+
+  /* ============================================================
+   * RENDER — Alert Card (reused for unread and read sections)
+   * ============================================================ */
+  const renderAlertCard = (a: any, dimmed = false) => {
+    const Icon = iconMap[a.type as AlertType] ?? Info;
+    const expanded = expandedIds.has(a.id);
+    const DetailIcon = a.icon ? alertIconMap[a.icon] : null;
+
+    return (
+      <div
+        key={a.id}
+        className={`rounded-lg border-l-4 p-4 ${styleMap[a.type as AlertType] ?? "border-l-accent bg-accent/5"} transition-all ${dimmed ? "opacity-60" : ""}`}
+      >
+        <div className="flex gap-3">
+          <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${iconColorMap[a.type as AlertType] ?? "text-accent"}`} />
+          <div className="flex-1 min-w-0">
+            {/* Title row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold text-sm">{a.title}</h4>
+                {!dimmed && <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />}
+                {a.timing && (
+                  <Badge variant="outline" className="text-[10px]">{a.timing}</Badge>
+                )}
+                {DetailIcon && <DetailIcon className="h-3.5 w-3.5 text-muted-foreground" />}
+              </div>
+              <button onClick={() => toggleExpand(a.id)} className="text-muted-foreground hover:text-foreground ml-2 shrink-0">
+                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {/* Message */}
+            <p className={`text-sm text-muted-foreground mt-1 ${!expanded ? "line-clamp-2" : ""}`}>
+              {a.message}
+            </p>
+
+            {/* Expanded detail */}
+            {expanded && a.detail && (
+              <p className="text-xs text-muted-foreground/70 mt-2 italic border-l-2 border-border pl-2">
+                {a.detail}
+              </p>
+            )}
+
+            {/* Delivery badges */}
+            {expanded && (a.deliveredViaPush || a.deliveredViaSMS) && (
+              <div className="flex gap-2 mt-2">
+                {a.deliveredViaPush && (
+                  <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                    📲 Push delivered
+                  </span>
+                )}
+                {a.deliveredViaSMS && (
+                  <span className="text-[10px] bg-success/10 text-success px-2 py-0.5 rounded-full">
+                    📱 SMS sent
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {a.tags?.map((tag: IndustryTag) => (
+                <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${tagColorMap[tag] ?? tagColorMap.general}`}>
+                  #{tag}
+                </span>
+              ))}
+              <span className="flex-1" />
+              <p className="text-xs text-muted-foreground">{a.time}</p>
+              {!dimmed && markRead && (
+                <button onClick={() => markRead(a.id)} className="text-xs text-primary hover:underline flex items-center gap-1">
+                  <Check className="h-3 w-3" /> Mark read
+                </button>
+              )}
+              {dismiss && (
+                <button onClick={() => dismiss(a.id)} className="text-xs text-destructive hover:underline flex items-center gap-1">
+                  <Trash2 className="h-3 w-3" /> Dismiss
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /* ============================================================
+   * JSX
+   * ============================================================ */
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto">
+
       {/* ---- Header ---- */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold">Proactive Alerts</h1>
           {unreadAlerts.length > 0 && (
@@ -913,14 +998,27 @@ export default function Alerts() {
             </span>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowTicketForm(!showTicketForm)}
-        >
-          <MessageSquarePlus className="h-4 w-4 mr-1" /> Support Ticket
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowTicketForm(!showTicketForm)}>
+            <MessageSquarePlus className="h-4 w-4 mr-1" /> Support Ticket
+          </Button>
+        </div>
       </div>
+
+      {/* ---- Next scheduled refresh ---- */}
+      <p className="text-xs text-muted-foreground mb-4">
+        ⏱ Next scheduled alert cycle in <strong>{nextRefreshIn}</strong> &nbsp;•&nbsp;
+        Alerts refresh every 72 hours with real-time weather data
+      </p>
 
       {/* ---- Industry Tag Filters ---- */}
       <div className="flex flex-wrap gap-2 mb-6">
@@ -943,22 +1041,14 @@ export default function Alerts() {
       {showTicketForm && (
         <div className="bg-card border border-border rounded-xl p-4 mb-6 space-y-3">
           <h3 className="font-semibold text-sm">Submit a Support Ticket</h3>
-          <Input
-            placeholder="Subject"
-            value={ticket.subject}
-            onChange={(e) => setTicket({ ...ticket, subject: e.target.value })}
-          />
-          <Select
-            value={ticket.category}
-            onValueChange={(v) => setTicket({ ...ticket, category: v })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+          <Input placeholder="Subject" value={ticket.subject} onChange={(e) => setTicket({ ...ticket, subject: e.target.value })} />
+          <Select value={ticket.category} onValueChange={(v) => setTicket({ ...ticket, category: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="general">General</SelectItem>
               <SelectItem value="weather">Weather Issue</SelectItem>
               <SelectItem value="crop">Crop Problem</SelectItem>
+              <SelectItem value="vegetables">Vegetable Issue</SelectItem>
               <SelectItem value="livestock">Livestock Issue</SelectItem>
               <SelectItem value="aquaculture">Aquaculture Issue</SelectItem>
               <SelectItem value="flight">Flight / Aerial Risk</SelectItem>
@@ -975,53 +1065,36 @@ export default function Alerts() {
           />
           <div className="flex gap-2">
             <Button onClick={submitTicket} disabled={ticketLoading} size="sm">
-              {ticketLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-1" /> Submit
-                </>
-              )}
+              {ticketLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-1" /> Submit</>}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowTicketForm(false)}>
-              Cancel
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowTicketForm(false)}>Cancel</Button>
           </div>
         </div>
       )}
 
-      {/* ---- Database Disaster Alerts (Critical/External) ---- */}
+      {/* ---- Real-time Disaster Alerts (Supabase realtime) ---- */}
       {dbAlerts.length > 0 && (
         <section className="mb-6">
-          <h2 className="font-semibold text-sm text-destructive mb-3">
-            ⚠️ DISASTER ALERTS
+          <h2 className="font-semibold text-sm text-destructive mb-3 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+            LIVE DISASTER ALERTS
           </h2>
           <div className="space-y-3">
             {dbAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className="rounded-lg border-l-4 border-l-destructive bg-destructive/5 p-4"
-              >
+              <div key={alert.id} className="rounded-lg border-l-4 border-l-destructive bg-destructive/5 p-4">
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <AlertOctagon className="h-4 w-4 text-destructive" />
                       <h4 className="font-semibold text-sm">{alert.title}</h4>
-                      <Badge variant="outline" className="text-[10px]">
-                        {alert.severity}
-                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">{alert.severity}</Badge>
+                      <span className="text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium">LIVE</span>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {alert.description}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{alert.description}</p>
                     {alert.affected_regions?.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Regions: {alert.affected_regions.join(", ")}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">Regions: {alert.affected_regions.join(", ")}</p>
                     )}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(alert.created_at).toLocaleString()}
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">{new Date(alert.created_at).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -1033,208 +1106,34 @@ export default function Alerts() {
       {/* ---- Main Alert Stack ---- */}
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="space-y-5">
-          {/* Unread / New Alerts */}
+
+          {/* Unread / New */}
           {unreadAlerts.length > 0 && (
             <section>
-              <h2 className="font-semibold text-sm text-muted-foreground mb-3">
-                NEW
-              </h2>
+              <h2 className="font-semibold text-sm text-muted-foreground mb-3">NEW</h2>
               <div className="space-y-3">
-                {unreadAlerts.map((a: any) => {
-                  const Icon = iconMap[a.type as AlertType] ?? Info;
-                  const expanded = expandedIds.has(a.id);
-                  const DetailIcon = a.icon ? alertIconMap[a.icon] : null;
-
-                  return (
-                    <div
-                      key={a.id}
-                      className={`rounded-lg border-l-4 p-4 ${
-                        styleMap[a.type as AlertType] ?? "border-l-accent bg-accent/5"
-                      } transition-all`}
-                    >
-                      <div className="flex gap-3">
-                        <Icon
-                          className={`h-5 w-5 mt-0.5 shrink-0 ${
-                            iconColorMap[a.type as AlertType] ?? "text-accent"
-                          }`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          {/* Header: Title + Severity + Timing */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold text-sm">{a.title}</h4>
-                              <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
-                              {a.timing && (
-                                <Badge variant="outline" className="text-[10px]">
-                                  {a.timing}
-                                </Badge>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => toggleExpand(a.id)}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              {expanded ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </button>
-                          </div>
-
-                          {/* Body: Action statement */}
-                          <p
-                            className={`text-sm text-muted-foreground mt-1 ${
-                              !expanded ? "line-clamp-2" : ""
-                            }`}
-                          >
-                            {a.message}
-                          </p>
-
-                          {/* Expanded: Contextual detail */}
-                          {expanded && a.detail && (
-                            <p className="text-xs text-muted-foreground/70 mt-2 italic">
-                              {a.detail}
-                            </p>
-                          )}
-
-                          {/* Footer: Tags + Actions */}
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            {a.tags?.map((tag: IndustryTag) => (
-                              <span
-                                key={tag}
-                                className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
-                                  tagColorMap[tag] ?? tagColorMap.general
-                                }`}
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                            <span className="flex-1" />
-                            <p className="text-xs text-muted-foreground">{a.time}</p>
-                            {markRead && (
-                              <button
-                                onClick={() => markRead(a.id)}
-                                className="text-xs text-primary hover:underline flex items-center gap-1"
-                              >
-                                <Check className="h-3 w-3" /> Mark read
-                              </button>
-                            )}
-                            {dismiss && (
-                              <button
-                                onClick={() => dismiss(a.id)}
-                                className="text-xs text-destructive hover:underline flex items-center gap-1"
-                              >
-                                <Trash2 className="h-3 w-3" /> Dismiss
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {unreadAlerts.map(a => renderAlertCard(a, false))}
               </div>
             </section>
           )}
 
-          {/* Read / Earlier Alerts */}
+          {/* Read / Earlier */}
           {readAlerts.length > 0 && (
             <section>
-              <h2 className="font-semibold text-sm text-muted-foreground mb-3">
-                EARLIER
-              </h2>
+              <h2 className="font-semibold text-sm text-muted-foreground mb-3">EARLIER</h2>
               <div className="space-y-3">
-                {readAlerts.map((a: any) => {
-                  const Icon = iconMap[a.type as AlertType] ?? Info;
-                  const expanded = expandedIds.has(a.id);
-
-                  return (
-                    <div
-                      key={a.id}
-                      className={`rounded-lg border-l-4 p-4 ${
-                        styleMap[a.type as AlertType] ?? "border-l-accent bg-accent/5"
-                      } opacity-70 transition-all`}
-                    >
-                      <div className="flex gap-3">
-                        <Icon
-                          className={`h-5 w-5 mt-0.5 shrink-0 ${
-                            iconColorMap[a.type as AlertType] ?? "text-accent"
-                          }`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold text-sm">{a.title}</h4>
-                              {a.timing && (
-                                <Badge variant="outline" className="text-[10px]">
-                                  {a.timing}
-                                </Badge>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => toggleExpand(a.id)}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              {expanded ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </button>
-                          </div>
-                          <p
-                            className={`text-sm text-muted-foreground mt-1 ${
-                              !expanded ? "line-clamp-2" : ""
-                            }`}
-                          >
-                            {a.message}
-                          </p>
-                          {expanded && a.detail && (
-                            <p className="text-xs text-muted-foreground/70 mt-2 italic">
-                              {a.detail}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            {a.tags?.map((tag: IndustryTag) => (
-                              <span
-                                key={tag}
-                                className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
-                                  tagColorMap[tag] ?? tagColorMap.general
-                                }`}
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                            <span className="flex-1" />
-                            <p className="text-xs text-muted-foreground">{a.time}</p>
-                            {dismiss && (
-                              <button
-                                onClick={() => dismiss(a.id)}
-                                className="text-xs text-destructive hover:underline flex items-center gap-1"
-                              >
-                                <Trash2 className="h-3 w-3" /> Dismiss
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {readAlerts.map(a => renderAlertCard(a, true))}
               </div>
             </section>
           )}
 
-          {/* Empty State */}
+          {/* Empty state */}
           {allAlerts.length === 0 && dbAlerts.length === 0 && (
             <div className="text-center py-12">
               <Bell className="h-12 w-12 mx-auto text-muted-foreground/30" />
-              <p className="text-muted-foreground mt-3">
-                No alerts for your area right now
-              </p>
+              <p className="text-muted-foreground mt-3">No alerts for your area right now</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Alerts are generated automatically from weather and environmental data
+                Alerts auto-generate from live weather data every 72 hours
               </p>
             </div>
           )}
@@ -1245,16 +1144,27 @@ export default function Alerts() {
           <div className="bg-muted rounded-xl p-4">
             <h3 className="font-semibold text-sm mb-2">How Alerts Work</h3>
             <ul className="text-xs text-muted-foreground space-y-1.5">
-              <li>• Weather data is analyzed for rainfall, wind, temperature & humidity</li>
-              <li>• Alerts are generated for your specific location only</li>
-              <li>• Recommendations cover crops, livestock, aquaculture, flight & surveying</li>
+              <li>• Real-time weather data is analysed every 15 minutes</li>
+              <li>• Full alert cycle regenerates every 72 hours with fresh messages</li>
+              <li>• Covers: crops, vegetables, livestock, aquaculture, rain, disasters</li>
+              <li>• Danger/warning alerts are also pushed to your phone via SMS</li>
+              <li>• Web push notifications fire for live disaster alerts</li>
               <li>• Timing windows: Next 24h, 1–3 Days, 3–5 Days, 4–7 Days</li>
-              <li>• Filter by industry using the tags above</li>
+              <li>• Filter by industry using the tag buttons above</li>
             </ul>
           </div>
-          <div className="bg-muted rounded-xl p-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              📱 Critical alerts are also sent via SMS to your registered phone number.
+          <div className="bg-muted rounded-xl p-4">
+            <h3 className="font-semibold text-sm mb-2">Delivery Channels</h3>
+            <ul className="text-xs text-muted-foreground space-y-1.5">
+              <li>📊 <strong>Dashboard</strong> — all alerts shown here in real-time</li>
+              <li>📲 <strong>Web Push</strong> — browser notifications for danger events</li>
+              <li>📱 <strong>SMS</strong> — critical alerts sent to your registered number</li>
+              <li>🔴 <strong>Live</strong> — disaster alerts stream via Supabase Realtime</li>
+            </ul>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              Last generated: {lastGeneratedAt > 0 ? new Date(lastGeneratedAt).toLocaleString() : "Pending first weather data"}
             </p>
           </div>
         </div>
