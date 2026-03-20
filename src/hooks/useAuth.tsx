@@ -18,8 +18,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ error: any }>; // ✅ ADD THIS
 }
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -184,9 +184,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const forgotPassword = useCallback(async (email: string) => {
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) throw error;
+
+    return { error: null };
+  } catch (error: any) {
+    console.error("Forgot password error:", error?.message ?? error);
+    return { error };
+  }
+}, []);
+  
   return (
     <AuthContext.Provider
-      value={{ user, session, loading, signUp, signIn, signOut, refreshSession }}
+      value={{ user, session, loading, signUp, signIn, signOut, refreshSession, forgotPassword, }}
     >
       {children}
     </AuthContext.Provider>
