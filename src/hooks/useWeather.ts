@@ -1,98 +1,138 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { WeatherDay, weeklyForecast as mockForecast } from "@/data/mock-data";
 
-export interface WeatherDataPoint {
-  date: string;
-  temp: number;
-  humidity: number;
-  windSpeed: number;
-  windGust?: number;
-  rainfall: number;
-  description: string;
-  pressure?: number;
-  visibility?: number;
-  uvIndex?: number;
-  soilMoisture?: number;
+const CACHE_KEY = "agroclimate_weather_cache";
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes for freshness
+
+interface CachedWeather {
+  data: WeatherDay[];
+  timestamp: number;
+  lat: number;
+  lon: number;
 }
 
-/** Cache key for localStorage */
-const LS_WEATHER_CACHE = "agri_weather_cache";
-const LS_WEATHER_TIMESTAMP = "agri_weather_ts";
+// Tomorrow.io weather code to emoji mapping
+const weatherCodeMap: Record<number, string> = {
+  1000: "☀️", 1100: "⛅", 1101: "⛅", 1102: "☁️",
+  1001: "☁️", 2000: "🌫️", 2100: "🌫️",
+  4000: "🌧️", 4001: "🌧️", 4200: "🌧️", 4201: "🌧️",
+  5000: "❄️", 5001: "❄️", 5100: "❄️", 5101: "❄️",
+  6000: "🌧️", 6001: "🌧️", 6200: "🌧️", 6201: "🌧️",
+  7000: "❄️", 7101: "❄️", 7102: "❄️",
+  8000: "⛈️",
+};
 
-/** Refresh interval: 15 minutes */
-const REFRESH_MS = 10 * 60 * 1000;
+const weatherCodeDesc: Record<number, string> = {
+  1000: "Clear, Sunny", 1100: "Mostly Clear", 1101: "Partly Cloudy", 1102: "Mostly Cloudy",
+  1001: "Cloudy", 2000: "Fog", 2100: "Light Fog",
+  4000: "Drizzle", 4001: "Rain", 4200: "Light Rain", 4201: "Heavy Rain",
+  5000: "Snow", 5001: "Flurries", 5100: "Light Snow", 5101: "Heavy Snow",
+  6000: "Freezing Drizzle", 6001: "Freezing Rain", 6200: "Light Freezing Rain", 6201: "Heavy Freezing Rain",
+  7000: "Ice Pellets", 7101: "Heavy Ice Pellets", 7102: "Light Ice Pellets",
+  8000: "Thunderstorm",
+};
 
-/** Cache validity: 1 hour (fallback if API fails) */
-const CACHE_MAX_AGE_MS = 60 * 60 * 1000;
+function mapTomorrowToWeatherDay(daily: any, index: number): WeatherDay {
+  const date = new Date(daily.time);
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const vals = daily.values || {};
+  const code = vals.weatherCodeMax || vals.weatherCodeMin || 1000;
 
-function loadCache(): WeatherDataPoint[] | null {
-  try {
-    const ts = localStorage.getItem(LS_WEATHER_TIMESTAMP);
-    const data = localStorage.getItem(LS_WEATHER_CACHE);
-    if (ts && data && Date.now() - parseInt(ts, 10) < CACHE_MAX_AGE_MS) {
-      return JSON.parse(data);
-    }
-  } catch { /* ignore */ }
-  return null;
+  return {
+    day: index === 0 ? "Today" : days[date.getDay()],
+    date: `${months[date.getMonth()]} ${date.getDate()}`,
+    icon: weatherCodeMap[code] || "☀️",
+    tempHigh: Math.round(vals.temperatureMax ?? vals.temperature ?? 30),
+    tempLow: Math.round(vals.temperatureMin ?? (vals.temperature ?? 25) - 5),
+    rainProb: Math.round(vals.precipitationProbabilityMax ?? vals.precipitationProbabilityAvg ?? 0),
+    description: weatherCodeDesc[code] || "Clear",
+    humidity: Math.round(vals.humidityMax ?? vals.humidityAvg ?? 60),
+    wind: Math.round(vals.windSpeedMax ?? vals.windSpeedAvg ?? 5),
+  };
 }
 
-function saveCache(forecast: WeatherDataPoint[]) {
-  try {
-    localStorage.setItem(LS_WEATHER_CACHE, JSON.stringify(forecast));
-    localStorage.setItem(LS_WEATHER_TIMESTAMP, String(Date.now()));
-  } catch { /* ignore */ }
+function mapRealtimeToWeatherDay(realtime: any): WeatherDay {
+  const vals = realtime?.data?.values || {};
+  const code = vals.weatherCode || 1000;
+  const now = new Date();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  return {
+    day: "Today",
+    date: `${months[now.getMonth()]} ${now.getDate()}`,
+    icon: weatherCodeMap[code] || "☀️",
+    tempHigh: Math.round(vals.temperature ?? 30),
+    tempLow: Math.round((vals.temperature ?? 25) - 4),
+    rainProb: Math.round(vals.precipitationProbability ?? 0),
+    description: weatherCodeDesc[code] || "Clear",
+    humidity: Math.round(vals.humidity ?? 60),
+    wind: Math.round(vals.windSpeed ?? 5),
+  };
 }
 
 export function useWeather(lat?: number, lon?: number) {
-  const [forecast, setForecast] = useState<WeatherDataPoint[]>(() => loadCache() ?? []);
+  const [forecast, setForecast] = useState<WeatherDay[]>(mockForecast);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isLive, setIsLive] = useState(false);
 
-  const fetchForecast = useCallback(async () => {
-    if (!lat || !lon) return;
+  useEffect(() => {
+    if (lat === undefined || lon === undefined) return;
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke(
-        "weather-proxy",
-        { body: { lat, lon } }
-      );
-
-      if (fnError) throw new Error(fnError.message);
-      if (!data?.forecast?.length) throw new Error("No forecast data returned");
-
-      const weatherData: WeatherDataPoint[] = data.forecast;
-      setForecast(weatherData);
-      saveCache(weatherData);
-    } catch (err: any) {
-      console.error("Weather fetch failed:", err);
-      setError(err.message ?? "Failed to fetch weather");
-
-      // Fall back to cache if available
-      const cached = loadCache();
-      if (cached && cached.length > 0) {
-        setForecast(cached);
-      }
-    } finally {
-      setLoading(false);
+    // Try cache first
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed: CachedWeather = JSON.parse(cached);
+        const sameArea = Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
+        if (sameArea && Date.now() - parsed.timestamp < CACHE_DURATION) {
+          setForecast(parsed.data);
+          setIsLive(true);
+          return;
+        }
+      } catch { /* ignore bad cache */ }
     }
+
+    const fetchWeather = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("weather", {
+          body: { lat, lon },
+        });
+
+        if (error || data?.error) throw new Error(data?.error || "Fetch failed");
+
+        // Parse Tomorrow.io response
+        const dailyTimelines = data.forecast?.timelines?.daily || [];
+        const forecastDays = dailyTimelines.slice(0, 7).map(mapTomorrowToWeatherDay);
+
+        // Replace first day with realtime data for accuracy
+        if (data.realtime?.data?.values) {
+          const realtimeDay = mapRealtimeToWeatherDay(data.realtime);
+          if (forecastDays.length > 0) {
+            // Keep forecast high/low but use realtime current temp
+            realtimeDay.tempLow = forecastDays[0].tempLow;
+            forecastDays[0] = realtimeDay;
+          } else {
+            forecastDays.unshift(realtimeDay);
+          }
+        }
+
+        if (forecastDays.length > 0) {
+          setForecast(forecastDays);
+          setIsLive(true);
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp: Date.now(), lat, lon }));
+        }
+      } catch (err) {
+        console.warn("Weather API unavailable, using cached/mock data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWeather();
   }, [lat, lon]);
 
-  // Fetch on mount and every 15 minutes
-  useEffect(() => {
-    fetchForecast();
-    intervalRef.current = setInterval(fetchForecast, REFRESH_MS);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [fetchForecast]);
-
-  const refresh = useCallback(() => {
-    fetchForecast();
-  }, [fetchForecast]);
-
-  return { forecast, loading, error, refresh };
+  return { forecast, loading, isLive };
 }
