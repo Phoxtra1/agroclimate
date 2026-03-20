@@ -97,10 +97,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, currentSession) => {
-      // Handles: INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, etc.
-      updateAuthState(currentSession ?? null);
-      console.log("[Auth event]:", event);
-    });
+        console.log("[Auth event]:", event);
+
+  // 🔥 CRITICAL FIX
+  if (event === "PASSWORD_RECOVERY") {
+    console.log("Redirecting to reset password page...");
+    window.location.href = "/reset-password";
+    return;
+  }
+
+  updateAuthState(currentSession ?? null);
+});
 
     // 2) Restore session on refresh
     void refreshSession();
