@@ -1159,7 +1159,7 @@ export default function Alerts() {
               <li>📊 <strong>Dashboard</strong> — all alerts shown here in real-time</li>
               <li>📲 <strong>Web Push</strong> — browser notifications for danger events</li>
               <li>📱 <strong>SMS</strong> — critical alerts sent to your registered number</li>
-              <li>🔴 <strong>Live</strong> — disaster alerts stream via Supabase Realtime</li>
+              <li>🔴 <strong>Live</strong> — disaster alerts stream</li>
             </ul>
           </div>
           <div className="bg-card border border-border rounded-xl p-4 text-center">
