@@ -598,6 +598,30 @@ function generateRecommendations(
     });
   }
 
+  // ---- BASELINE STATUS ALERTS ----
+  // Ensure every industry tag has at least one alert so filters aren't empty
+  const coveredTags = new Set(alerts.flatMap(a => a.tags));
+  const baselineAlerts: { tag: IndustryTag; title: string; message: string; icon: string }[] = [
+    { tag: "crop", title: "Crop Conditions — Normal", message: `No critical crop alerts for ${locationName}. Current forecast shows manageable conditions. Continue routine monitoring of soil moisture, pest pressure, and growth stages.`, icon: "sprout" },
+    { tag: "vegetables", title: "Vegetable Garden — Stable", message: `Vegetable growing conditions in ${locationName} are within safe ranges. No extreme heat, frost, or excessive rainfall expected. Maintain regular watering and weeding schedules.`, icon: "salad" },
+    { tag: "livestock", title: "Livestock Conditions — Safe", message: `No heat stress, cold stress, or storm risks detected for livestock in ${locationName}. Maintain standard feed and water routines. Monitor pasture quality.`, icon: "thermometer" },
+    { tag: "aquaculture", title: "Aquaculture — Normal Range", message: `Air temperatures in ${locationName} are within safe bounds for pond and tank operations. Continue standard aeration and feeding schedules. Monitor dissolved oxygen.`, icon: "fish" },
+    { tag: "flight", title: "Flight Conditions — Clear", message: `Wind speeds and visibility in ${locationName} are within safe operating limits for aerial surveying and drone operations. Check local NOTAMs before flight.`, icon: "plane" },
+    { tag: "surveyor", title: "Survey Conditions — Favourable", message: `Field conditions in ${locationName} are suitable for ground surveying. No heavy rain or high wind expected. GPS accuracy should be normal.`, icon: "eye" },
+  ];
+
+  for (const base of baselineAlerts) {
+    if (!coveredTags.has(base.tag)) {
+      alerts.push({
+        id: makeId(), type: "success" as AlertType, icon: base.icon,
+        title: base.title,
+        message: base.message,
+        detail: `Based on ${insight.daysOfData}-day forecast. Temp: ${insight.minTemp.toFixed(0)}–${insight.maxTemp.toFixed(0)}°C. Rain: ${insight.totalRainfall.toFixed(1)} mm. Wind: ${insight.maxWindSpeed} km/h.`,
+        timing: "1–3 Days" as TimingWindow, tags: [base.tag], isRead: false, time: now, generatedAt: ts,
+      });
+    }
+  }
+
   const severityOrder: Record<AlertType, number> = { danger: 0, warning: 1, info: 2, success: 3 };
   alerts.sort((a, b) => severityOrder[a.type] - severityOrder[b.type]);
   return alerts;
@@ -890,11 +914,23 @@ export default function Alerts() {
     { label: "📐 Surveyor", value: "surveyor" },
   ];
 
-  const nextRefreshIn = useMemo(() => {
-    const remaining = ALERT_INTERVAL_MS - (Date.now() - lastGeneratedAt);
-    const hours = Math.max(0, Math.floor(remaining / (1000 * 60 * 60)));
-    const mins = Math.max(0, Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60)));
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+  // Live countdown timer that ticks every 60 seconds
+  const [nextRefreshIn, setNextRefreshIn] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const remaining = ALERT_INTERVAL_MS - (Date.now() - lastGeneratedAt);
+      if (remaining <= 0) {
+        setNextRefreshIn("now");
+        return;
+      }
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const mins = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((remaining % (1000 * 60)) / 1000);
+      setNextRefreshIn(hours > 0 ? `${hours}h ${mins}m ${secs}s` : `${mins}m ${secs}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, [lastGeneratedAt]);
 
   /* ============================================================
