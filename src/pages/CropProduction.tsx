@@ -5,7 +5,7 @@ export default function CropProduction() {
   const [loading, setLoading] = useState(true);
 
   const API_URL =
-    "https://YOUR_PROJECT.supabase.co/functions/v1/agro-recommendation";
+    "https://https://apoqexuhlysoirtcvgfo.supabase.co/functions/v1/agro-recommendation";
 
   async function fetchData(lat: number, lon: number) {
     try {
