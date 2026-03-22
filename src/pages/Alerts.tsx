@@ -66,6 +66,16 @@ interface ProactiveAlert {
   generatedAt: number;   // Unix ms — used for 72h dedup
   deliveredViaPush?: boolean;
   deliveredViaSMS?: boolean;
+  actionWindow?: string;
+  priority?: "low" | "medium" | "high" | "critical";
+}
+
+  interface FarmProfile {
+  cropType: "tomato" | "maize" | "pepper" | "rice";
+  plantingDate: string;
+  growthStage: "germination" | "vegetative" | "flowering" | "fruiting";
+  soilType?: "sandy" | "loamy" | "clay";
+  irrigationType?: "drip" | "rainfed" | "sprinkler";
 }
 
 /* ============================================================
@@ -417,11 +427,31 @@ function generateRecommendations(
   envRisks: EnvironmentalRisk,
   flightRisk: FlightRisk,
   locationName: string,
-  seed: number
+  seed: number,
+  farm?: FarmProfile  
 ): ProactiveAlert[] {
-  const alerts: ProactiveAlert[] = [];
   const now = new Date().toLocaleString();
   const ts = seed;
+
+  const alerts: ProactiveAlert[] = [];
+  const farm = { cropType: "tomato" }; // later replace with real user data
+  const diseaseRisk = detectCropDiseaseRisk(insight, farm);
+  
+  if (diseaseRisk.blightRisk) {
+  alerts.push({
+    id: makeId(),
+    type: "warning",
+    icon: "sprout",
+    title: "Tomato Blight Risk",
+    message: "High humidity and moderate temperature detected. High risk of blight. Apply preventive fungicide and improve airflow.",
+    detail: `Humidity: ${insight.maxHumidity}% | Temp: ${insight.maxTemp}°C`,
+    timing: "1–3 Days",
+    tags: ["crop"],
+    isRead: false,
+    time: new Date().toLocaleString(),
+    generatedAt: seed,
+  });
+}
 
   // ---- CROPS ----
   if (insight.needsIrrigation) {
@@ -450,6 +480,8 @@ function generateRecommendations(
       message: MSG_POOLS.fungal(insight.maxHumidity, locationName),
       detail: `Max humidity: ${insight.maxHumidity}%. Temp: ${insight.minTemp.toFixed(0)}–${insight.maxTemp.toFixed(0)}°C.`,
       timing: "1–3 Days", tags: ["crop"], isRead: false, time: now, generatedAt: ts,
+      actionWindow: "within 24 hours",
+      priority: "high",
     });
   }
   if (insight.hasFrostRisk) {
@@ -756,6 +788,7 @@ export default function Alerts() {
   });
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [farm, setFarm] = useState<FarmProfile | null>(null);
 
   /* ----------- Real-time disaster alerts via Supabase ----------- */
   useEffect(() => {
@@ -766,6 +799,19 @@ export default function Alerts() {
       .eq("active", true)
       .order("created_at", { ascending: false })
       .then(({ data }) => { if (data) setDbAlerts(data); });
+    
+   useEffect(() => {
+  if (!user?.id) return;
+
+  supabase
+    .from("farm_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .single()
+    .then(({ data }) => {
+      if (data) setFarm(data);
+    });
+}, [user?.id]);
 
     // Subscribe to new inserts / updates in real-time
     const channel = supabase
@@ -821,6 +867,31 @@ export default function Alerts() {
         position.locationName || "your area",
         seed
       );
+
+      function detectCropDiseaseRisk(
+  insight: WeatherInsight,
+  farm?: { cropType?: string }
+): CropDiseaseRisk {
+  if (!farm?.cropType) return {};
+
+  if (farm.cropType === "tomato") {
+    return {
+      blightRisk: insight.maxHumidity > 85 && insight.maxTemp < 30,
+      bacterialSpot: insight.hasHeavyRain && insight.maxTemp > 25,
+    };
+  }
+
+  if (farm.cropType === "maize") {
+    return {
+      leafBlight: insight.maxHumidity > 80,
+    };
+  }
+
+  return {};
+}
+
+  return {};
+}
 
       setCachedAlerts(newAlerts);
       setLastGeneratedAt(seed);
@@ -933,6 +1004,14 @@ export default function Alerts() {
     return () => clearInterval(id);
   }, [lastGeneratedAt]);
 
+  async function submitFeedback(alertId: string, applied: boolean) {
+  await supabase.from("alert_feedback").insert({
+    user_id: user?.id,
+    alert_id: alertId,
+    applied,
+  });
+}
+
   /* ============================================================
    * RENDER — Alert Card (reused for unread and read sections)
    * ============================================================ */
@@ -1005,6 +1084,20 @@ export default function Alerts() {
                 <button onClick={() => markRead(a.id)} className="text-xs text-primary hover:underline flex items-center gap-1">
                   <Check className="h-3 w-3" /> Mark read
                 </button>
+               <div className="flex gap-2 mt-2">
+             <button
+              onClick={() => submitFeedback(a.id, true)}
+              className="text-xs bg-success/10 px-2 py-1 rounded"
+             >
+               👍 Applied
+             </button>
+             <button
+             onClick={() => submitFeedback(a.id, false)}
+              className="text-xs bg-destructive/10 px-2 py-1 rounded"
+           >
+              👎 Ignored
+           </button>
+            </div>
               )}
               {dismiss && (
                 <button onClick={() => dismiss(a.id)} className="text-xs text-destructive hover:underline flex items-center gap-1">
