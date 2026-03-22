@@ -1,6 +1,4 @@
-// Copy this file to your other project's component folder
-// Requires: src/data/agro-data.ts (see src/reference/agro-data.ts)
-
+// src/components/CropProduction.tsx
 import { useState } from "react";
 import { cropCategories, getCurrentSeason } from "@/data/agro-data";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -9,14 +7,30 @@ import { Badge } from "@/components/ui/badge";
 export default function CropProduction() {
   const [activeCategory, setActiveCategory] = useState("cash");
   const [expandedCrop, setExpandedCrop] = useState<string | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState("All Africa");
 
   const currentMonth = new Date().getMonth() + 1;
   const season = getCurrentSeason(currentMonth);
   const category = cropCategories.find((c) => c.id === activeCategory)!;
 
+  // Filter crops by region
+  const filteredCrops = category.crops.filter((crop) =>
+    selectedRegion === "All Africa" ? true : crop.regions.includes(selectedRegion)
+  );
+
+  const regions = [
+    "All Africa",
+    "West Africa",
+    "East Africa",
+    "Central Africa",
+    "Southern Africa",
+    "Sahel",
+    "Coastal Africa",
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between">
@@ -26,11 +40,28 @@ export default function CropProduction() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Recommended crops for the current season in your area
+            Recommended crops for the current season and region
           </p>
         </div>
 
-        {/* Category tabs */}
+        {/* Region Selector */}
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {regions.map((region) => (
+            <button
+              key={region}
+              onClick={() => setSelectedRegion(region)}
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                selectedRegion === region
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {region}
+            </button>
+          ))}
+        </div>
+
+        {/* Category Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
           {cropCategories.map((cat) => (
             <button
@@ -39,7 +70,7 @@ export default function CropProduction() {
                 setActiveCategory(cat.id);
                 setExpandedCrop(null);
               }}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 activeCategory === cat.id
                   ? "bg-primary text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -52,9 +83,13 @@ export default function CropProduction() {
 
         <p className="text-sm text-muted-foreground mb-4">{category.description}</p>
 
-        {/* Crop list */}
+        {/* Crop List */}
         <div className="space-y-3">
-          {category.crops.map((crop) => {
+          {filteredCrops.length === 0 && (
+            <p className="text-sm text-muted-foreground">No crops available for this region.</p>
+          )}
+
+          {filteredCrops.map((crop) => {
             const isExpanded = expandedCrop === crop.name;
             return (
               <div
@@ -90,7 +125,7 @@ export default function CropProduction() {
 
                 {isExpanded && (
                   <div className="px-4 pb-4 space-y-4">
-                    {/* Info grid */}
+                    {/* Info Grid */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-muted/50 p-3 rounded-lg">
                         <p className="text-xs text-muted-foreground">🌱 Planting</p>
