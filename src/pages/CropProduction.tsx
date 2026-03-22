@@ -1,112 +1,69 @@
-import { useState } from "react";
-import { cropCategories, getCurrentSeason } from "@/data/agro-data";
-import { Droplets, Sun, MapPin, ChevronDown, ChevronUp } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 
 export default function CropProduction() {
-  const [activeCategory, setActiveCategory] = useState("cash");
-  const [expandedCrop, setExpandedCrop] = useState<string | null>(null);
-  const currentMonth = new Date().getMonth() + 1;
-  const season = getCurrentSeason(currentMonth);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const category = cropCategories.find((c) => c.id === activeCategory)!;
+  async function fetchData(lat: number, lon: number) {
+    try {
+      const res = await fetch(
+        `/api/v1/agro/recommendations?lat=${lat}&lon=${lon}`
+      );
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      console.error("Failed to load crop data", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition((pos) => {
+      fetchData(pos.coords.latitude, pos.coords.longitude);
+    });
+  }, []);
+
+  // auto refresh every 30 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (data?.location) {
+        fetchData(data.location.lat, data.location.lon);
+      }
+    }, 1000 * 60 * 30);
+
+    return () => clearInterval(interval);
+  }, [data]);
+
+  if (loading) return <p className="p-4">Loading live crop data...</p>;
+  if (!data) return <p className="p-4">No data available</p>;
 
   return (
-    <div className="p-4 lg:p-8 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-xl font-bold">Crop Production</h1>
-        <Badge variant="outline" className="text-xs">
-          {season.type === "rainy" ? "🌧️" : "☀️"} {season.name}
-        </Badge>
-      </div>
-      <p className="text-sm text-muted-foreground mb-5">
-        Recommended crops for the current season in your area
-      </p>
+    <div className="p-4 max-w-5xl mx-auto">
+      <h1 className="text-lg font-bold mb-4">
+        Smart Crop Recommendations
+      </h1>
 
-      {/* Category tabs */}
-      <div className="flex gap-2 flex-wrap mb-5">
-        {cropCategories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => { setActiveCategory(cat.id); setExpandedCrop(null); }}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeCategory === cat.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            <span>{cat.icon}</span> {cat.name}
-          </button>
-        ))}
-      </div>
+      {data.crops.map((crop: any) => (
+        <div key={crop.name} className="bg-card p-4 rounded-xl mb-3 shadow-sm">
+          <div className="flex justify-between">
+            <h2 className="font-semibold">{crop.name}</h2>
+            <span>{Math.round(crop.score * 100)}%</span>
+          </div>
 
-      <p className="text-xs text-muted-foreground mb-4">{category.description}</p>
+          <p className="text-xs mt-1">
+            Yield: {crop.yieldForecast} | Risk: {crop.riskLevel}
+          </p>
 
-      {/* Crop list */}
-      <div className="space-y-3">
-        {category.crops.map((crop) => {
-          const isExpanded = expandedCrop === crop.name;
-          return (
-            <div key={crop.name} className="bg-card rounded-xl shadow-sm overflow-hidden">
-              <button
-                onClick={() => setExpandedCrop(isExpanded ? null : crop.name)}
-                className="w-full flex items-center justify-between p-4 text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{crop.icon}</span>
-                  <div>
-                    <p className="font-semibold text-sm">{crop.name}</p>
-                    <p className="text-xs text-muted-foreground">🌱 Plant: {crop.plantingSeason}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {crop.irrigationNeeded && (
-                    <Badge variant="secondary" className="text-[10px] gap-1">
-                      <Droplets className="h-3 w-3" /> Irrigation
-                    </Badge>
-                  )}
-                  {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                </div>
-              </button>
+          {crop.irrigation && (
+            <p className="text-xs mt-1">💧 Irrigation recommended</p>
+          )}
 
-              {isExpanded && (
-                <div className="px-4 pb-4 pt-0 border-t border-border">
-                  <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
-                    <div>
-                      <p className="font-medium text-muted-foreground">🌱 Planting</p>
-                      <p>{crop.plantingSeason}</p>
-                    </div>
-                    <div>
-                      <p className="font-medium text-muted-foreground">🫛 Harvest</p>
-                      <p>{crop.harvestSeason}</p>
-                    </div>
-                    <div>
-                      <p className="font-medium text-muted-foreground">🌧️ Rainfall</p>
-                      <p>{crop.rainfall}</p>
-                    </div>
-                    <div>
-                      <p className="font-medium text-muted-foreground">💧 Irrigation</p>
-                      <p>{crop.irrigationNeeded ? "Required / Recommended" : "Rain-fed is sufficient"}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1"><MapPin className="h-3 w-3 inline" /> Best Regions</p>
-                    <div className="flex flex-wrap gap-1">
-                      {crop.regions.map((r) => (
-                        <Badge key={r} variant="outline" className="text-[10px]">{r}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-3 bg-primary/10 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-primary">💡 Farmer Tip</p>
-                    <p className="text-xs text-muted-foreground mt-1">{crop.tips}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+          <div className="mt-2 bg-primary/10 p-2 rounded">
+            <p className="text-xs">💡 {crop.tips}</p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
