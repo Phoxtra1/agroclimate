@@ -39,6 +39,40 @@ export function getCurrentSeason(month: number): Season {
   return seasons.find((s) => s.months.includes(month)) ?? seasons[0];
 }
 
+export const livestockCategories = [
+  {
+    id: "cattle",
+    name: "Cattle",
+    icon: "🐄",
+    description: "Cattle rearing across Africa",
+    animals: [
+      { name: "Cow", tips: "Feed regularly, vaccinate", regions: ["West Africa", "East Africa"] },
+      { name: "Bull", tips: "Used for breeding", regions: ["West Africa", "East Africa"] }
+    ]
+  },
+  {
+    id: "goats",
+    name: "Goats",
+    icon: "🐐",
+    description: "Goat farming for milk and meat",
+    animals: [
+      { name: "Boer Goat", tips: "High meat yield", regions: ["Southern Africa", "East Africa"] },
+      { name: "Local Goat", tips: "Resilient to local conditions", regions: ["West Africa", "Sahel"] }
+    ]
+  },
+  {
+    id: "poultry",
+    name: "Poultry",
+    icon: "🐔",
+    description: "Chicken, ducks, and other birds",
+    animals: [
+      { name: "Chicken", tips: "Feed high-protein diet", regions: ["All Africa"] },
+      { name: "Duck", tips: "Requires access to water", regions: ["West Africa", "Central Africa"] }
+    ]
+  }
+  // Add more categories as needed
+];
+
 export const cropCategories: CropCategory[] = [
   {
     id: "cash",
@@ -59,6 +93,7 @@ export const cropCategories: CropCategory[] = [
         soilType: "Deep, well-drained loamy soil",
         temperatureRange: "21 – 32 °C",
       },
+      
       {
         name: "Oil Palm",
         icon: "🌴",
