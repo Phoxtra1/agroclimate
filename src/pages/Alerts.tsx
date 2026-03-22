@@ -49,7 +49,7 @@ interface WeatherDataPoint {
   pressure?: number;
   visibility?: number;
   uvIndex?: number;
-  soilMoisture?: number;  // % — for irrigation/vegetable alerts
+  soilMoisture?: number;
 }
 
 interface ProactiveAlert {
@@ -63,14 +63,14 @@ interface ProactiveAlert {
   isRead: boolean;
   time: string;
   icon: string;
-  generatedAt: number;   // Unix ms — used for 72h dedup
+  generatedAt: number;
   deliveredViaPush?: boolean;
   deliveredViaSMS?: boolean;
   actionWindow?: string;
   priority?: "low" | "medium" | "high" | "critical";
 }
 
-  interface FarmProfile {
+interface FarmProfile {
   cropType: "tomato" | "maize" | "pepper" | "rice";
   plantingDate: string;
   growthStage: "germination" | "vegetative" | "flowering" | "fruiting";
@@ -78,17 +78,18 @@ interface ProactiveAlert {
   irrigationType?: "drip" | "rainfed" | "sprinkler";
 }
 
+interface CropDiseaseRisk {
+  blightRisk?: boolean;
+  bacterialSpot?: boolean;
+  leafBlight?: boolean;
+}
+
 /* ============================================================
  * DELIVERY CONSTANTS
  * ============================================================ */
 
-/** Minimum ms between alert re-generation cycles (72 hours) */
 const ALERT_INTERVAL_MS = 72 * 60 * 60 * 1000;
-
-/** Weather data refresh interval (15 min for real-time feel) */
 const WEATHER_REFRESH_MS = 15 * 60 * 1000;
-
-/** LocalStorage keys for last-sent tracking */
 const LS_LAST_GENERATED = "agri_alerts_last_generated";
 const LS_ALERT_CACHE = "agri_alerts_cache";
 
@@ -128,13 +129,9 @@ const THRESHOLDS = {
 
 /* ============================================================
  * DYNAMIC MESSAGE POOLS
- * Each pool has multiple variants to prevent repetition.
- * pickFrom() selects one based on day-of-week + hour seed
- * so the same user gets different messages on different days.
  * ============================================================ */
 
 function pickFrom<T>(arr: T[], seed: number = Date.now()): T {
-  // Rotate through variants using a hash of the current 3-day period + array length
   const period = Math.floor(seed / ALERT_INTERVAL_MS);
   return arr[(period + arr.length) % arr.length];
 }
@@ -406,6 +403,32 @@ function detectFlightRisks(insight: WeatherInsight, envRisks: EnvironmentalRisk)
 }
 
 /* ============================================================
+ * CROP DISEASE RISK DETECTION
+ * ============================================================ */
+
+function detectCropDiseaseRisk(
+  insight: WeatherInsight,
+  farm?: { cropType?: string }
+): CropDiseaseRisk {
+  if (!farm?.cropType) return {};
+
+  if (farm.cropType === "tomato") {
+    return {
+      blightRisk: insight.maxHumidity > 85 && insight.maxTemp < 30,
+      bacterialSpot: insight.hasHeavyRain && insight.maxTemp > 25,
+    };
+  }
+
+  if (farm.cropType === "maize") {
+    return {
+      leafBlight: insight.maxHumidity > 80,
+    };
+  }
+
+  return {};
+}
+
+/* ============================================================
  * RECOMMENDATION ENGINE — All industry domains
  * ============================================================ */
 
@@ -428,30 +451,31 @@ function generateRecommendations(
   flightRisk: FlightRisk,
   locationName: string,
   seed: number,
-  farm?: FarmProfile  
+  farmProfile?: FarmProfile | null,
 ): ProactiveAlert[] {
   const now = new Date().toLocaleString();
   const ts = seed;
-
   const alerts: ProactiveAlert[] = [];
-  const farm = { cropType: "tomato" }; // later replace with real user data
-  const diseaseRisk = detectCropDiseaseRisk(insight, farm);
-  
+
+  // Crop disease risk detection using farm profile
+  const farmData = farmProfile ?? { cropType: "tomato" };
+  const diseaseRisk = detectCropDiseaseRisk(insight, farmData);
+
   if (diseaseRisk.blightRisk) {
-  alerts.push({
-    id: makeId(),
-    type: "warning",
-    icon: "sprout",
-    title: "Tomato Blight Risk",
-    message: "High humidity and moderate temperature detected. High risk of blight. Apply preventive fungicide and improve airflow.",
-    detail: `Humidity: ${insight.maxHumidity}% | Temp: ${insight.maxTemp}°C`,
-    timing: "1–3 Days",
-    tags: ["crop"],
-    isRead: false,
-    time: new Date().toLocaleString(),
-    generatedAt: seed,
-  });
-}
+    alerts.push({
+      id: makeId(),
+      type: "warning",
+      icon: "sprout",
+      title: "Tomato Blight Risk",
+      message: "High humidity and moderate temperature detected. High risk of blight. Apply preventive fungicide and improve airflow.",
+      detail: `Humidity: ${insight.maxHumidity}% | Temp: ${insight.maxTemp}°C`,
+      timing: "1–3 Days",
+      tags: ["crop"],
+      isRead: false,
+      time: now,
+      generatedAt: ts,
+    });
+  }
 
   // ---- CROPS ----
   if (insight.needsIrrigation) {
@@ -494,7 +518,7 @@ function generateRecommendations(
     });
   }
 
-  // ---- VEGETABLES (separate domain) ----
+  // ---- VEGETABLES ----
   if (envRisks.vegetableHeatStress) {
     alerts.push({
       id: makeId(), type: "warning", icon: "salad",
@@ -631,7 +655,6 @@ function generateRecommendations(
   }
 
   // ---- BASELINE STATUS ALERTS ----
-  // Ensure every industry tag has at least one alert so filters aren't empty
   const coveredTags = new Set(alerts.flatMap(a => a.tags));
   const baselineAlerts: { tag: IndustryTag; title: string; message: string; icon: string }[] = [
     { tag: "crop", title: "Crop Conditions — Normal", message: `No critical crop alerts for ${locationName}. Current forecast shows manageable conditions. Continue routine monitoring of soil moisture, pest pressure, and growth stages.`, icon: "sprout" },
@@ -661,13 +684,9 @@ function generateRecommendations(
 
 /* ============================================================
  * PUSH NOTIFICATION HELPER
- * Requests permission and sends a Web Push notification
- * for danger-level alerts. Also calls the Supabase edge
- * function (send-alert-push) which delivers the SMS.
  * ============================================================ */
 
 async function sendPushNotification(alert: ProactiveAlert, userId?: string) {
-  // Web Push (dashboard / PWA)
   if ("Notification" in window && Notification.permission === "granted") {
     new Notification(alert.title, {
       body: alert.message.slice(0, 120),
@@ -685,7 +704,6 @@ async function sendPushNotification(alert: ProactiveAlert, userId?: string) {
     }
   }
 
-  // Mobile SMS via Supabase edge function (if user opted in)
   if (userId && (alert.type === "danger" || alert.type === "warning")) {
     try {
       await supabase.functions.invoke("send-alert-sms", {
@@ -697,8 +715,8 @@ async function sendPushNotification(alert: ProactiveAlert, userId?: string) {
           tags: alert.tags,
         },
       });
-    } catch (_e) {
-      // SMS delivery is best-effort; silently ignore failures
+    } catch {
+      // SMS delivery is best-effort
     }
   }
 }
@@ -798,34 +816,20 @@ export default function Alerts() {
       .select("*")
       .eq("active", true)
       .order("created_at", { ascending: false })
-      .then(({ data }) => { if (data) setDbAlerts(data); });
-    
-   useEffect(() => {
-  if (!user?.id) return;
-
-  supabase
-    .from("farm_profiles")
-    .select("*")
-    .eq("user_id", user.id)
-    .single()
-    .then(({ data }) => {
-      if (data) setFarm(data);
-    });
-}, [user?.id]);
+      .then(({ data }: any) => { if (data) setDbAlerts(data); });
 
     // Subscribe to new inserts / updates in real-time
     const channel = supabase
       .channel("disaster_alerts_rt")
       .on(
-        "postgres_changes",
+        "postgres_changes" as any,
         { event: "*", schema: "public", table: "disaster_alerts" },
-        (payload) => {
+        (payload: any) => {
           if (payload.eventType === "INSERT") {
             const newAlert = payload.new as any;
             setDbAlerts(prev => [newAlert, ...prev]);
-            // Push immediately for new disasters
             sendPushNotification(
-            {
+              {
                 id: newAlert.id,
                 type: "danger" as AlertType,
                 title: newAlert.title,
@@ -854,6 +858,19 @@ export default function Alerts() {
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
+  /* ----------- Fetch farm profile ----------- */
+  useEffect(() => {
+    if (!user?.id) return;
+
+    supabase
+      .from("farm_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .then(({ data }: any) => {
+        if (data && data.length > 0) setFarm(data[0]);
+      });
+  }, [user?.id]);
+
   /* ----------- 72-hour proactive alert generation ----------- */
   const generateAndCache = useCallback(
     (seed: number) => {
@@ -865,33 +882,9 @@ export default function Alerts() {
       const newAlerts = generateRecommendations(
         insight, envRisks, flightRisk,
         position.locationName || "your area",
-        seed
+        seed,
+        farm,
       );
-
-      function detectCropDiseaseRisk(
-  insight: WeatherInsight,
-  farm?: { cropType?: string }
-): CropDiseaseRisk {
-  if (!farm?.cropType) return {};
-
-  if (farm.cropType === "tomato") {
-    return {
-      blightRisk: insight.maxHumidity > 85 && insight.maxTemp < 30,
-      bacterialSpot: insight.hasHeavyRain && insight.maxTemp > 25,
-    };
-  }
-
-  if (farm.cropType === "maize") {
-    return {
-      leafBlight: insight.maxHumidity > 80,
-    };
-  }
-
-  return {};
-}
-
-  return {};
-}
 
       setCachedAlerts(newAlerts);
       setLastGeneratedAt(seed);
@@ -903,7 +896,7 @@ export default function Alerts() {
         .filter(a => a.type === "danger" || a.type === "warning")
         .forEach(a => sendPushNotification(a, user?.id));
     },
-    [forecast, position.locationName, user?.id]
+    [forecast, position.locationName, user?.id, farm]
   );
 
   // On mount and every 15min: check if 72h window has elapsed; regenerate if so
@@ -915,7 +908,7 @@ export default function Alerts() {
       }
     };
 
-    check(); // immediate check on mount / forecast update
+    check();
     intervalRef.current = setInterval(check, WEATHER_REFRESH_MS);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [generateAndCache, lastGeneratedAt]);
@@ -966,13 +959,21 @@ export default function Alerts() {
       location: position.locationName,
     });
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Error", description: (error as any).message, variant: "destructive" });
     } else {
       toast({ title: "Ticket submitted", description: "Our support team will review your report." });
       setTicket({ subject: "", description: "", category: "general" });
       setShowTicketForm(false);
     }
     setTicketLoading(false);
+  };
+
+  const submitFeedback = async (alertId: string, applied: boolean) => {
+    await supabase.from("alert_feedback").insert({
+      user_id: user?.id,
+      alert_id: alertId,
+      applied,
+    });
   };
 
   const industryFilters: { label: string; value: IndustryTag | "all" }[] = [
@@ -985,7 +986,7 @@ export default function Alerts() {
     { label: "📐 Surveyor", value: "surveyor" },
   ];
 
-  // Live countdown timer that ticks every 60 seconds
+  // Live countdown timer that ticks every second
   const [nextRefreshIn, setNextRefreshIn] = useState("");
   useEffect(() => {
     const tick = () => {
@@ -1004,16 +1005,8 @@ export default function Alerts() {
     return () => clearInterval(id);
   }, [lastGeneratedAt]);
 
-  async function submitFeedback(alertId: string, applied: boolean) {
-  await supabase.from("alert_feedback").insert({
-    user_id: user?.id,
-    alert_id: alertId,
-    applied,
-  });
-}
-
   /* ============================================================
-   * RENDER — Alert Card (reused for unread and read sections)
+   * RENDER — Alert Card
    * ============================================================ */
   const renderAlertCard = (a: any, dimmed = false) => {
     const Icon = iconMap[a.type as AlertType] ?? Info;
@@ -1084,20 +1077,6 @@ export default function Alerts() {
                 <button onClick={() => markRead(a.id)} className="text-xs text-primary hover:underline flex items-center gap-1">
                   <Check className="h-3 w-3" /> Mark read
                 </button>
-               <div className="flex gap-2 mt-2">
-             <button
-              onClick={() => submitFeedback(a.id, true)}
-              className="text-xs bg-success/10 px-2 py-1 rounded"
-             >
-               👍 Applied
-             </button>
-             <button
-             onClick={() => submitFeedback(a.id, false)}
-              className="text-xs bg-destructive/10 px-2 py-1 rounded"
-           >
-              👎 Ignored
-           </button>
-            </div>
               )}
               {dismiss && (
                 <button onClick={() => dismiss(a.id)} className="text-xs text-destructive hover:underline flex items-center gap-1">
@@ -1105,6 +1084,24 @@ export default function Alerts() {
                 </button>
               )}
             </div>
+
+            {/* Feedback buttons */}
+            {!dimmed && (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => submitFeedback(a.id, true)}
+                  className="text-xs bg-success/10 px-2 py-1 rounded hover:bg-success/20 transition-colors"
+                >
+                  👍 Applied
+                </button>
+                <button
+                  onClick={() => submitFeedback(a.id, false)}
+                  className="text-xs bg-destructive/10 px-2 py-1 rounded hover:bg-destructive/20 transition-colors"
+                >
+                  👎 Ignored
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
