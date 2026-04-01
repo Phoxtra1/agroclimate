@@ -863,7 +863,7 @@ export default function Alerts() {
     if (!user?.id) return;
 
     supabase
-      .from("farm_profiles")
+      .from("profiles")
       .select("*")
       .eq("user_id", user.id)
       .then(({ data }: any) => {
