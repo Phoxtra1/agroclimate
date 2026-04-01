@@ -805,10 +805,10 @@ export default function EnvironmentalMonitor() {
         <CardContent>
           <div className="grid grid-cols-7 gap-2">
             {forecast.slice(0, 7).map((day, i) => {
-              const dayTemp = day.temp ?? 25;
+              const dayTemp = (day as any).temp ?? day.tempHigh ?? 25;
               const dayHumidity = day.humidity ?? 50;
-              const dayWind = day.windSpeed ?? 0;
-              const dayRain = day.rainfall ?? 0;
+              const dayWind = (day as any).windSpeed ?? day.wind ?? 0;
+              const dayRain = (day as any).rainfall ?? day.rainProb ?? 0;
               const heatIdx = dayTemp + 0.5 * (dayHumidity - 50);
 
               let heatLevel: Severity = "Low";

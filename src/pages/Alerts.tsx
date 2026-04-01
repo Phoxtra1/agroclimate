@@ -969,11 +969,8 @@ export default function Alerts() {
   };
 
   const submitFeedback = async (alertId: string, applied: boolean) => {
-    await supabase.from("alert_feedback").insert({
-      user_id: user?.id,
-      alert_id: alertId,
-      applied,
-    });
+    // Feedback tracking - will be implemented with database table
+    console.log("Alert feedback:", { alertId, applied });
   };
 
   const industryFilters: { label: string; value: IndustryTag | "all" }[] = [
