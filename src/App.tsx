@@ -23,6 +23,8 @@ import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
 import AgroLearning from "./pages/AgroLearning";
 import VerifyEmail from "./pages/VerifyEmail";
+import ResetPassword from "./pages/ResetPassword";
+import FarmBusinessHub from "./pages/FarmBusinessHub";
 
 const queryClient = new QueryClient();
 
