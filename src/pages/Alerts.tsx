@@ -778,7 +778,7 @@ const alertIconMap: Record<string, any> = {
 export default function Alerts() {
   const { user } = useAuth();
   const { position } = useGeolocation();
-  const { forecast, refresh: refreshWeather } = useWeather(position.lat, position.lon);
+  const { forecast } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
   const {
     alerts: visibleAlerts,
