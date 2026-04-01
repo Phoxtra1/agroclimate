@@ -23,6 +23,8 @@ import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
 import AgroLearning from "./pages/AgroLearning";
 import VerifyEmail from "./pages/VerifyEmail";
+import ResetPassword from "./pages/ResetPassword";
+import FarmBusinessHub from "./pages/FarmBusinessHub";
 
 const queryClient = new QueryClient();
 
@@ -137,6 +139,7 @@ function AppRoutes() {
        element={user || isPreview ? <Navigate to="/dashboard" replace /> : <Landing />}
       />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/admin/*" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
@@ -152,6 +155,7 @@ function AppRoutes() {
       <Route path="/inventory" element={<ProtectedRoute><AgroInventory /></ProtectedRoute>} />
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
+      <Route path="/farm-business" element={<ProtectedRoute><FarmBusinessHub /></ProtectedRoute>} />
       <Route
         path="/learning"
         element={

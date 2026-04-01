@@ -778,7 +778,7 @@ const alertIconMap: Record<string, any> = {
 export default function Alerts() {
   const { user } = useAuth();
   const { position } = useGeolocation();
-  const { forecast, refresh: refreshWeather } = useWeather(position.lat, position.lon);
+  const { forecast } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
   const {
     alerts: visibleAlerts,
@@ -863,7 +863,7 @@ export default function Alerts() {
     if (!user?.id) return;
 
     supabase
-      .from("farm_profiles")
+      .from("profiles")
       .select("*")
       .eq("user_id", user.id)
       .then(({ data }: any) => {
@@ -876,7 +876,7 @@ export default function Alerts() {
     (seed: number) => {
       if (!forecast || forecast.length === 0) return;
 
-      const insight = analyzeWeatherData(forecast);
+      const insight = analyzeWeatherData(forecast as any);
       const envRisks = calculateEnvironmentalRisks(insight);
       const flightRisk = detectFlightRisks(insight, envRisks);
       const newAlerts = generateRecommendations(
@@ -915,7 +915,6 @@ export default function Alerts() {
 
   const handleManualRefresh = async () => {
     setRefreshing(true);
-    refreshWeather?.();
     setTimeout(() => {
       generateAndCache(Date.now());
       setRefreshing(false);
@@ -969,11 +968,8 @@ export default function Alerts() {
   };
 
   const submitFeedback = async (alertId: string, applied: boolean) => {
-    await supabase.from("alert_feedback").insert({
-      user_id: user?.id,
-      alert_id: alertId,
-      applied,
-    });
+    // Feedback tracking - will be implemented with database table
+    console.log("Alert feedback:", { alertId, applied });
   };
 
   const industryFilters: { label: string; value: IndustryTag | "all" }[] = [
