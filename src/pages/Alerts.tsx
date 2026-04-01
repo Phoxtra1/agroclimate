@@ -915,7 +915,6 @@ export default function Alerts() {
 
   const handleManualRefresh = async () => {
     setRefreshing(true);
-    refreshWeather?.();
     setTimeout(() => {
       generateAndCache(Date.now());
       setRefreshing(false);
