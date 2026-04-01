@@ -876,7 +876,7 @@ export default function Alerts() {
     (seed: number) => {
       if (!forecast || forecast.length === 0) return;
 
-      const insight = analyzeWeatherData(forecast);
+      const insight = analyzeWeatherData(forecast as any);
       const envRisks = calculateEnvironmentalRisks(insight);
       const flightRisk = detectFlightRisks(insight, envRisks);
       const newAlerts = generateRecommendations(
