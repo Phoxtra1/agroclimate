@@ -550,14 +550,25 @@ function useEnvironmentState(forecast: any[]): EnvironmentState | null {
   return useMemo(() => {
     if (!forecast || forecast.length === 0) return null;
 
-    const rainfall = analyzeRainfall(forecast);
-    const wind = analyzeWind(forecast);
-    const temperature = analyzeTemperature(forecast);
-    const humidity = analyzeHumidity(forecast);
-    const disasters = detectDisasters(forecast);
-    const agriculturalImpacts = assessAgriculturalImpact(forecast, rainfall, humidity, temperature, wind);
-    const flightRisk = assessFlightRisk(forecast, wind);
-    const airQuality = inferAirQuality(forecast);
+    // Map WeatherDay format to internal format expected by analysis functions
+    const mapped = forecast.map((day: any) => ({
+      temp: day.temp ?? day.tempHigh ?? 25,
+      humidity: day.humidity ?? 60,
+      windSpeed: day.windSpeed ?? day.wind ?? 5,
+      windGust: day.windGust ?? (day.wind ? day.wind * 1.4 : 8),
+      rainfall: day.rainfall ?? (day.rainProb != null ? day.rainProb * 0.3 : 0),
+      pressure: day.pressure ?? 1013,
+      visibility: day.visibility ?? 10,
+    }));
+
+    const rainfall = analyzeRainfall(mapped);
+    const wind = analyzeWind(mapped);
+    const temperature = analyzeTemperature(mapped);
+    const humidity = analyzeHumidity(mapped);
+    const disasters = detectDisasters(mapped);
+    const agriculturalImpacts = assessAgriculturalImpact(mapped, rainfall, humidity, temperature, wind);
+    const flightRisk = assessFlightRisk(mapped, wind);
+    const airQuality = inferAirQuality(mapped);
 
     return {
       rainfall,
