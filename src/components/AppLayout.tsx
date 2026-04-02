@@ -1,28 +1,31 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Lightbulb } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useNewTag } from "@/hooks/useNewTag";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
 const navItems = [
-  { to: "/dashboard", icon: Home, label: "Overview" },
-  { to: "/odeneho", icon: Bot, label: "Odeneho" },
-  { to: "/weather", icon: Cloud, label: "Weather" },
-  { to: "/environment", icon: Leaf, label: "Environment" },
-  { to: "/crops", icon: Sprout, label: "Crops" },
-  { to: "/livestock", icon: Bug, label: "Livestock" },
-  { to: "/aquaculture", icon: Fish, label: "Aquaculture" },
-  { to: "/inventory", icon: Package, label: "Agro Inventory" },
-  { to: "/flight-advisory", icon: Plane, label: "Flight Advisory" },
-  { to: "/calendar", icon: CalendarDays, label: "Calendar" },
-  { to: "/alerts", icon: Bell, label: "Alerts" },
-  { to: "/learning", icon: BookOpen, label: "Agro Learning" },
-  { to: "/profile", icon: User, label: "Profile" },
+  { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
+  { to: "/odeneho", icon: Bot, label: "Odeneho", id: "odeneho" },
+  { to: "/weather", icon: Cloud, label: "Weather", id: "weather" },
+  { to: "/environment", icon: Leaf, label: "Environment", id: "environment" },
+  { to: "/crops", icon: Sprout, label: "Crops", id: "crops" },
+  { to: "/livestock", icon: Bug, label: "Livestock", id: "livestock", isNew: true },
+  { to: "/aquaculture", icon: Fish, label: "Aquaculture", id: "aquaculture", isNew: true },
+  { to: "/farm-business", icon: Lightbulb, label: "Farm Business Hub", id: "farm-business", isNew: true },
+  { to: "/inventory", icon: Package, label: "Agro Inventory", id: "inventory" },
+  { to: "/flight-advisory", icon: Plane, label: "Flight Advisory", id: "flight-advisory" },
+  { to: "/calendar", icon: CalendarDays, label: "Calendar", id: "calendar" },
+  { to: "/alerts", icon: Bell, label: "Alerts", id: "alerts" },
+  { to: "/learning", icon: BookOpen, label: "Agro Learning", id: "learning" },
+  { to: "/profile", icon: User, label: "Profile", id: "profile" },
 ];
 
 const bottomNavItems = [
