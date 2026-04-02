@@ -37,13 +37,17 @@ const bottomNavItems = [
 ];
 
 function NavItems({ onClick, isAdmin }: { onClick?: () => void; isAdmin?: boolean }) {
+  const { isNew, markVisited } = useNewTag();
   return (
     <>
       {navItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
-          onClick={onClick}
+          onClick={() => {
+            markVisited(`nav-${item.id}`);
+            onClick?.();
+          }}
           className={({ isActive }) =>
             `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium ${
               isActive
@@ -53,7 +57,10 @@ function NavItems({ onClick, isAdmin }: { onClick?: () => void; isAdmin?: boolea
           }
         >
           <item.icon className="h-5 w-5" />
-          <span>{item.label}</span>
+          <span className="flex-1">{item.label}</span>
+          {item.isNew && isNew(`nav-${item.id}`) && (
+            <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>
+          )}
         </NavLink>
       ))}
       {isAdmin && (
