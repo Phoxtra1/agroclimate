@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { BookOpen, Sprout, Bug, Droplets, Leaf, ShieldCheck, Wheat, ChevronRight, PlayCircle, Bot } from "lucide-react";
+import { BookOpen, Sprout, Bug, Droplets, Leaf, ShieldCheck, Wheat, ChevronRight, PlayCircle, Bot, DollarSign, TrendingUp, Users, Warehouse, BarChart3, LineChart, Lightbulb, ArrowRight, Package } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link } from "react-router-dom";
+import { useNewTag } from "@/hooks/useNewTag";
 
 interface LearningTopic {
   id: string;
   icon: React.ElementType;
   title: string;
   isNew?: boolean;
-  sections: { title: string; content: string; image?: string }[];
+  sections: { title: string; content: string }[];
 }
 
 const topics: LearningTopic[] = [
@@ -19,7 +20,6 @@ const topics: LearningTopic[] = [
     id: "explainer",
     icon: PlayCircle,
     title: "Explainer",
-    isNew: true,
     sections: [
       {
         title: "Getting Started with AgroClimate",
@@ -44,6 +44,42 @@ const topics: LearningTopic[] = [
     ],
   },
   {
+    id: "post-harvest",
+    icon: Wheat,
+    title: "Post-Harvest & Food Safety",
+    isNew: true,
+    sections: [
+      {
+        title: "Reducing Post-Harvest Losses",
+        content: "Up to 30% of harvested crops are lost after harvest in Africa. This is the single biggest drain on farmer income.\n\nKey Causes of Loss:\n• Harvesting too early or too late\n• Poor drying — grain stored above 13% moisture develops mould and aflatoxin\n• Weevils, borers, and rodents in storage\n• Bruising and damage during transport\n• Lack of cold chain for perishables\n\nPrevention Steps:\n• Harvest at correct maturity stage\n• Dry crops properly before storage (grain moisture below 13%)\n• Use hermetic storage bags (PICS bags, GrainPro) for cereals and legumes — costs $2–3 per bag, saves 30% of grain\n• Clean and disinfect storage rooms before use\n• Check stored crops weekly for pest activity\n• Separate damaged produce from good ones immediately",
+      },
+      {
+        title: "Preservation Methods for African Farmers",
+        content: "Solar Drying:\nBuild a simple solar dryer with wooden frame, black polythene base, and clear plastic cover. Dries produce 30–50% faster than open air with less contamination. Cost: $20–50.\n\nSmoking:\nTraditional method for fish, meat, and some vegetables. Use improved smoking kilns (Chorkor oven for fish) for better quality and less fuel.\n\nSalting & Brining:\nFish and meat can be preserved with 15–20% salt concentration. Lasts 2–6 months without refrigeration.\n\nFermentation:\nCassava → gari, milk → yoghurt, maize → kenkey. Fermentation preserves food, adds nutritional value, and creates market-ready products.\n\nHermetic Storage:\nAirtight containers or bags that suffocate insects without chemicals. PICS bags for grain cost $2–3 and last 2+ seasons. Metal silos for larger quantities cost $50–200.\n\nCold Storage:\nCoolBot + air conditioner converts any insulated room into cold storage for $300–500. Solar-powered cold rooms available from $2,000–5,000 for community use.",
+      },
+      {
+        title: "Food Safety Basics",
+        content: "Safe food handling protects your family and increases market value:\n• Wash hands before handling food\n• Keep harvesting tools clean\n• Do not mix chemicals with food during transport\n• Dry food on clean surfaces, not bare ground\n• Avoid aflatoxin: dry maize and groundnuts quickly and completely\n• Store food away from moisture and rodents\n\nAflatoxin Prevention:\nAflatoxin is a deadly mould toxin common in maize and groundnuts in tropical Africa.\n• Harvest promptly at maturity\n• Dry to below 13% moisture within 48 hours\n• Sort and remove damaged or discolored kernels\n• Store in hermetic bags away from soil contact\n• Never consume or sell mouldy grain",
+      },
+      {
+        title: "Adding Value to Your Produce",
+        content: "Processing multiplies income:\n\nCassava → gari/flour: 3× raw value\nTomatoes → paste/sauce: 5× raw value\nGroundnuts → oil/paste: 2× raw value\nFruits → dried fruit/juice: 3–4× raw value\nMaize → flour/porridge mix: 2× raw value\n\nPackaging & Branding:\n• Clean, labelled packaging increases perceived value by 30–50%\n• Use clear bags so buyers can see quality\n• Include weight, production date, and contact info\n• Register a simple brand name with your district office\n\nGrading & Sorting:\n• Sort by size and quality — Grade A fetches 30–50% premium\n• Remove damaged, undersized, or discolored items\n• Uniform packaging builds buyer confidence",
+      },
+      {
+        title: "Why Are Most Farmers Still Poor?",
+        content: "If farming is profitable, why are most farmers still poor?\n\nThe truth: Farming IS profitable — but most farmers don't capture the profit. Here's why and what to do:\n\n1. Hidden Costs Eat Profits\nMost farmers underestimate costs by 40–60%. Transport, storage losses, middlemen fees, and unpaid family labor are rarely tracked.\n→ Action: Record every input, labor hour, and transport cost. Use Agro Inventory to calculate your true cost per kilogram. Never sell below this number.\n\n2. Post-Harvest Losses Destroy Income\nUp to 30% of harvested produce is lost to spoilage, pests, and poor storage.\n→ Action: Invest in hermetic bags ($2–3 each), dry grain below 13% moisture, and process perishables into shelf-stable products.\n\n3. Selling at the Wrong Time\nFarmers sell at harvest when prices are lowest because they need cash immediately.\n→ Action: Sell only 30% at harvest for urgent needs. Store the rest and sell in stages as prices rise (typically 40–80% increase within 2–3 months).\n\n4. Operating Alone\nIndividual farmers have zero negotiating power with buyers, suppliers, and transporters.\n→ Action: Join or form a cooperative of 10–20 farmers. Bulk-buy inputs for 20–40% savings. Sell collectively for better prices.",
+      },
+      {
+        title: "Setting Prices Instead of Begging Buyers",
+        content: "Why do farmers beg buyers instead of setting prices?\n\nBecause most farmers sell perishable products with no storage alternative, no market information, and no collective power. Fix these three and you control pricing.\n\n1. Know Your Break-Even Price\nCalculate: (Total Season Cost) ÷ (Total Harvest in kg) = minimum price per kg.\nNever accept less than this number. If a buyer offers less, you're literally paying them to take your produce.\n\n2. Get Market Intelligence\nCheck prices in 3+ markets before selling. Price differences of 30–100% exist between farmgate, local market, and urban market. Call contacts in different markets or use mobile price services.\n\n3. Store Strategically\nWarehouse receipt systems let you store grain, get a receipt, and borrow against it while waiting for better prices. Sell in stages: 30% at harvest, 30% after 2 months, 40% at peak price.\n\n4. Grade and Package\nGrade A produce commands 30–50% premium. Sort by size, color, and condition. Clean packaging with labels signals quality.\n\n5. Sell Collectively\n100 farmers selling 100 tonnes together have far more negotiating power than 1 farmer selling 1 tonne. Use contract farming and forward agreements to lock in prices before planting.",
+      },
+      {
+        title: "Surviving Bad Seasons",
+        content: "Why does one bad season destroy a farmer completely?\n\nBecause most smallholder farmers operate with zero reserves, single-crop dependency, and no risk management. Here's the practical fix:\n\n1. Never Depend on One Crop\nGrow 2–3 crops with different risk profiles: one drought-tolerant (millet, sorghum), one high-value (vegetables, spices), one staple (maize, rice). If one fails, others survive.\n\n2. Add Livestock or Aquaculture\nPoultry generates income in 6–8 weeks. Goats reproduce in 5–6 months. Fish ponds produce protein and income year-round. These buffer against crop failure.\n\n3. Build a 3-Month Reserve\nSave 10–20% of each season's revenue. Target 3 months of operating costs. Village Savings and Loan Associations (VSLAs) or mobile money savings make this practical.\n\n4. Explore Crop Insurance\nWeather-based index insurance is available in many African countries. Premiums are 5–10% of insured value. Some are government-subsidized. Ask your extension officer.\n\n5. Store Seed and Feed\nAlways keep seed for next season plus 50% extra. Store 2–3 months of animal feed. This prevents the devastating cycle of buying inputs at peak prices after a loss.\n\n6. Use Climate-Smart Varieties\nDrought-tolerant maize (SAMMAZ varieties), flood-tolerant rice (WITA-4), and heat-tolerant cowpea varieties exist for African conditions. They cost slightly more but survive extreme weather.",
+      },
+    ],
+  },
+  {
     id: "smart-farming",
     icon: Sprout,
     title: "Smart Farming",
@@ -54,7 +90,7 @@ const topics: LearningTopic[] = [
       },
       {
         title: "Planning Your Farm Season",
-        content: "Before the rains come:\n1. Clear and prepare your land early\n2. Check AgroClimate weather forecasts for planting windows\n3. Select crops suited to your region and season\n4. Calculate how much seed and fertilizer you need\n5. Prepare storage for your harvest\n\nDuring the growing season:\n• Monitor weather alerts for heavy rain or drought\n• Apply fertilizer at the right growth stage\n• Scout for pests weekly\n• Keep your drainage channels clear",
+        content: "Before the rains come:\n1. Clear and prepare your land early\n2. Check weather forecasts for planting windows\n3. Select crops suited to your region and season\n4. Calculate how much seed and fertilizer you need\n5. Prepare storage for your harvest\n\nDuring the growing season:\n• Monitor weather alerts for heavy rain or drought\n• Apply fertilizer at the right growth stage\n• Scout for pests weekly\n• Keep your drainage channels clear",
       },
       {
         title: "Record Keeping",
@@ -73,7 +109,7 @@ const topics: LearningTopic[] = [
       },
       {
         title: "Adapting to Climate Change",
-        content: "Practical steps every farmer can take:\n• Plant drought-tolerant crop varieties\n• Use mulching to conserve soil moisture\n• Practice minimum tillage to protect soil\n• Diversify crops instead of relying on one\n• Adopt agroforestry (planting trees with crops)\n• Harvest rainwater for dry periods\n• Use AgroClimate alerts to plan around weather",
+        content: "Practical steps every farmer can take:\n• Plant drought-tolerant crop varieties\n• Use mulching to conserve soil moisture\n• Practice minimum tillage to protect soil\n• Diversify crops instead of relying on one\n• Adopt agroforestry (planting trees with crops)\n• Harvest rainwater for dry periods\n• Use weather alerts to plan around weather events",
       },
       {
         title: "Carbon Farming Opportunities",
@@ -92,30 +128,11 @@ const topics: LearningTopic[] = [
       },
       {
         title: "Pesticide Safety",
-        content: "SAFETY FIRST when using pesticides:\n• Wear protective clothing: gloves, mask, long sleeves\n• Never spray against the wind\n• Do not eat, drink, or smoke while spraying\n• Wash hands and clothes thoroughly after spraying\n• Keep pesticides locked away from children\n• Do not use food containers for pesticide storage\n\nCheck AgroClimate weather before spraying:\n• Do not spray if rain is expected within 4 hours\n• Do not spray in strong winds (over 15 km/h)\n• Best time to spray is early morning or late afternoon",
+        content: "SAFETY FIRST when using pesticides:\n• Wear protective clothing: gloves, mask, long sleeves\n• Never spray against the wind\n• Do not eat, drink, or smoke while spraying\n• Wash hands and clothes thoroughly after spraying\n• Keep pesticides locked away from children\n• Do not use food containers for pesticide storage\n\nCheck weather before spraying:\n• Do not spray if rain is expected within 4 hours\n• Do not spray in strong winds (over 15 km/h)\n• Best time to spray is early morning or late afternoon",
       },
       {
         title: "Organic Alternatives",
         content: "Low-cost, natural pest and soil management:\n• Neem leaf extract for insect pests\n• Wood ash for some fungal diseases\n• Composting for soil fertility\n• Crop rotation to break pest cycles\n• Intercropping to confuse pests\n• Companion planting (maize with beans)\n\nThese methods reduce costs and protect your health.",
-      },
-    ],
-  },
-  {
-    id: "post-harvest",
-    icon: Wheat,
-    title: "Post-Harvest & Food Safety",
-    sections: [
-      {
-        title: "Reducing Post-Harvest Losses",
-        content: "Up to 30% of harvested crops are lost after harvest. Prevent this:\n• Harvest at the right maturity stage\n• Dry crops properly before storage (grain moisture below 13%)\n• Use improved storage bags (hermetic bags) for grains\n• Clean storage rooms before use\n• Check stored crops regularly for pests\n• Separate damaged produce from good ones",
-      },
-      {
-        title: "Food Safety Basics",
-        content: "Safe food handling protects your family and increases market value:\n• Wash hands before handling food\n• Keep harvesting tools clean\n• Do not mix chemicals with food during transport\n• Dry food on clean surfaces, not bare ground\n• Avoid aflatoxin: dry maize and groundnuts quickly and completely\n• Store food away from moisture and rodents",
-      },
-      {
-        title: "Adding Value to Your Produce",
-        content: "Increase your income through processing:\n• Drying vegetables and fruits for off-season sales\n• Milling grains into flour\n• Packaging produce attractively for urban markets\n• Sorting and grading by size and quality\n• Group marketing through cooperatives for better prices\n\nClean, well-packaged produce fetches higher prices at market.",
       },
     ],
   },
@@ -158,26 +175,15 @@ const topics: LearningTopic[] = [
 export default function AgroLearning() {
   const [selectedTopic, setSelectedTopic] = useState<string>(topics[0].id);
   const [selectedSection, setSelectedSection] = useState<number>(0);
-  const [dismissedNewTopics, setDismissedNewTopics] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const stored = window.localStorage.getItem("agro-learning-dismissed-new");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const hideNewTag = (topicId: string) => {
-    if (dismissedNewTopics.includes(topicId)) return;
-    const updated = [...dismissedNewTopics, topicId];
-    setDismissedNewTopics(updated);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("agro-learning-dismissed-new", JSON.stringify(updated));
-    }
-  };
+  const { isNew, markVisited } = useNewTag();
 
   const topic = topics.find((t) => t.id === selectedTopic)!;
+
+  const handleTopicClick = (topicId: string) => {
+    markVisited(`learning-${topicId}`);
+    setSelectedTopic(topicId);
+    setSelectedSection(0);
+  };
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] lg:h-screen">
@@ -195,7 +201,7 @@ export default function AgroLearning() {
             {topics.map((t) => (
               <button
                 key={t.id}
-                onClick={() => { hideNewTag(t.id); setSelectedTopic(t.id); setSelectedSection(0); }}
+                onClick={() => handleTopicClick(t.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
                   selectedTopic === t.id
                     ? "bg-primary/10 text-primary font-medium"
@@ -204,7 +210,7 @@ export default function AgroLearning() {
               >
                 <t.icon className="h-4 w-4 flex-shrink-0" />
                 <span className="flex-1">{t.title}</span>
-                {t.isNew && !dismissedNewTopics.includes(t.id) && <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>}
+                {t.isNew && isNew(`learning-${t.id}`) && <Badge variant="default" className="text-[10px] px-1.5 py-0">New</Badge>}
               </button>
             ))}
           </nav>
@@ -217,7 +223,7 @@ export default function AgroLearning() {
           {topics.map((t) => (
             <button
               key={t.id}
-              onClick={() => { hideNewTag(t.id); setSelectedTopic(t.id); setSelectedSection(0); }}
+              onClick={() => handleTopicClick(t.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
                 selectedTopic === t.id
                   ? "bg-primary text-primary-foreground"
@@ -226,7 +232,7 @@ export default function AgroLearning() {
             >
               <t.icon className="h-3 w-3" />
               {t.title}
-              {t.isNew && !dismissedNewTopics.includes(t.id) && <span className="bg-destructive text-destructive-foreground text-[8px] px-1 rounded">New</span>}
+              {t.isNew && isNew(`learning-${t.id}`) && <span className="bg-destructive text-destructive-foreground text-[8px] px-1 rounded">New</span>}
             </button>
           ))}
         </div>
@@ -250,7 +256,7 @@ export default function AgroLearning() {
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
                 {topic.title}
-                {topic.isNew && !dismissedNewTopics.includes(topic.id) && <Badge variant="default" className="text-xs">New</Badge>}
+                {topic.isNew && isNew(`learning-${topic.id}`) && <Badge variant="default" className="text-xs">New</Badge>}
               </h1>
               <p className="text-xs text-muted-foreground">{topic.sections.length} sections</p>
             </div>
@@ -282,13 +288,17 @@ export default function AgroLearning() {
           </div>
 
           {/* Ask Odeneho CTA */}
-          {selectedTopic === "explainer" && (
+          {(selectedTopic === "explainer" || selectedTopic === "post-harvest") && (
             <Card className="mt-4 border-dashed border-primary/40">
               <CardContent className="pt-4 flex items-center gap-3">
                 <Bot className="h-5 w-5 text-primary shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium">Need help understanding a feature?</p>
-                  <p className="text-xs text-muted-foreground">Ask Odeneho AI for a personalized walkthrough.</p>
+                  <p className="text-sm font-medium">
+                    {selectedTopic === "post-harvest" ? "Need personalized business or preservation advice?" : "Need help understanding a feature?"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedTopic === "post-harvest" ? "Ask Odeneho for strategies tailored to your crops, location, and season." : "Ask Odeneho AI for a personalized walkthrough."}
+                  </p>
                 </div>
                 <Link to="/odeneho">
                   <Button size="sm">Ask Odeneho</Button>
@@ -311,8 +321,7 @@ export default function AgroLearning() {
                 } else {
                   const nextIdx = topics.findIndex(t => t.id === selectedTopic) + 1;
                   if (nextIdx < topics.length) {
-                    setSelectedTopic(topics[nextIdx].id);
-                    setSelectedSection(0);
+                    handleTopicClick(topics[nextIdx].id);
                   }
                 }
               }}
