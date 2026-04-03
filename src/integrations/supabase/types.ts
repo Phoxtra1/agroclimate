@@ -104,6 +104,33 @@ export type Database = {
         }
         Relationships: []
       }
+      farm_qr_codes: {
+        Row: {
+          created_at: string
+          farm_location: string | null
+          farm_name: string
+          farmer_id: string
+          id: string
+          qr_code_data: string
+        }
+        Insert: {
+          created_at?: string
+          farm_location?: string | null
+          farm_name: string
+          farmer_id: string
+          id?: string
+          qr_code_data: string
+        }
+        Update: {
+          created_at?: string
+          farm_location?: string | null
+          farm_name?: string
+          farmer_id?: string
+          id?: string
+          qr_code_data?: string
+        }
+        Relationships: []
+      }
       farmer_crops: {
         Row: {
           created_at: string
@@ -173,6 +200,154 @@ export type Database = {
           updated_at?: string
           user_id?: string
           water_temp?: number | null
+        }
+        Relationships: []
+      }
+      handler_issues: {
+        Row: {
+          created_at: string
+          description: string | null
+          farmer_id: string
+          gps_lat: number | null
+          gps_lon: number | null
+          handler_id: string
+          id: string
+          issue_type: string
+          photo_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          farmer_id: string
+          gps_lat?: number | null
+          gps_lon?: number | null
+          handler_id: string
+          id?: string
+          issue_type: string
+          photo_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          farmer_id?: string
+          gps_lat?: number | null
+          gps_lon?: number | null
+          handler_id?: string
+          id?: string
+          issue_type?: string
+          photo_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "handler_issues_handler_id_fkey"
+            columns: ["handler_id"]
+            isOneToOne: false
+            referencedRelation: "handlers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      handler_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          deadline: string | null
+          description: string | null
+          evidence_required: boolean | null
+          farmer_id: string
+          field_location: string | null
+          handler_id: string
+          id: string
+          quantity_completed: number | null
+          quantity_expected: number | null
+          quantity_label: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          deadline?: string | null
+          description?: string | null
+          evidence_required?: boolean | null
+          farmer_id: string
+          field_location?: string | null
+          handler_id: string
+          id?: string
+          quantity_completed?: number | null
+          quantity_expected?: number | null
+          quantity_label?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          deadline?: string | null
+          description?: string | null
+          evidence_required?: boolean | null
+          farmer_id?: string
+          field_location?: string | null
+          handler_id?: string
+          id?: string
+          quantity_completed?: number | null
+          quantity_expected?: number | null
+          quantity_label?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "handler_tasks_handler_id_fkey"
+            columns: ["handler_id"]
+            isOneToOne: false
+            referencedRelation: "handlers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      handlers: {
+        Row: {
+          assigned_farm: string | null
+          created_at: string
+          farmer_id: string
+          handler_name: string
+          handler_type: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_farm?: string | null
+          created_at?: string
+          farmer_id: string
+          handler_name: string
+          handler_type?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_farm?: string | null
+          created_at?: string
+          farmer_id?: string
+          handler_name?: string
+          handler_type?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -539,6 +714,60 @@ export type Database = {
         }
         Relationships: []
       }
+      task_evidence: {
+        Row: {
+          created_at: string
+          device_id: string | null
+          evidence_type: string
+          file_url: string | null
+          gps_lat: number | null
+          gps_lon: number | null
+          handler_id: string
+          id: string
+          notes: string | null
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string | null
+          evidence_type?: string
+          file_url?: string | null
+          gps_lat?: number | null
+          gps_lon?: number | null
+          handler_id: string
+          id?: string
+          notes?: string | null
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string | null
+          evidence_type?: string
+          file_url?: string | null
+          gps_lat?: number | null
+          gps_lon?: number | null
+          handler_id?: string
+          id?: string
+          notes?: string | null
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_evidence_handler_id_fkey"
+            columns: ["handler_id"]
+            isOneToOne: false
+            referencedRelation: "handlers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_evidence_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "handler_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_alerts: {
         Row: {
           alert_id: string
@@ -590,6 +819,47 @@ export type Database = {
         }
         Relationships: []
       }
+      work_sessions: {
+        Row: {
+          clock_in: string
+          clock_out: string | null
+          created_at: string
+          farm_qr_id: string | null
+          gps_lat: number | null
+          gps_lon: number | null
+          handler_id: string
+          id: string
+        }
+        Insert: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+          farm_qr_id?: string | null
+          gps_lat?: number | null
+          gps_lon?: number | null
+          handler_id: string
+          id?: string
+        }
+        Update: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+          farm_qr_id?: string | null
+          gps_lat?: number | null
+          gps_lon?: number | null
+          handler_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_sessions_handler_id_fkey"
+            columns: ["handler_id"]
+            isOneToOne: false
+            referencedRelation: "handlers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -604,7 +874,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user"
+      app_role: "admin" | "moderator" | "user" | "handler"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -732,7 +1002,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user"],
+      app_role: ["admin", "moderator", "user", "handler"],
     },
   },
 } as const
