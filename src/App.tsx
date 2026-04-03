@@ -25,6 +25,8 @@ import AgroLearning from "./pages/AgroLearning";
 import VerifyEmail from "./pages/VerifyEmail";
 import ResetPassword from "./pages/ResetPassword";
 import FarmBusinessHub from "./pages/FarmBusinessHub";
+import HandlerManagement from "./pages/HandlerManagement";
+import HandlerWorkspace from "./pages/HandlerWorkspace";
 
 const queryClient = new QueryClient();
 
@@ -46,14 +48,58 @@ function LoadingScreen() {
   );
 }
 
+// Hook to check if user has handler role
+function useUserRole() {
+  const { user, loading: authLoading } = useAuth();
+  const [role, setRole] = useState<"user" | "handler" | "admin" | null>(null);
+  const [roleLoading, setRoleLoading] = useState(true);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { setRole(null); setRoleLoading(false); return; }
+
+    const checkRole = async () => {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      const roles = (data || []).map((r: any) => r.role);
+      if (roles.includes("admin")) setRole("admin");
+      else if (roles.includes("handler")) setRole("handler");
+      else setRole("user");
+      setRoleLoading(false);
+    };
+    checkRole();
+  }, [user, authLoading]);
+
+  return { role, roleLoading };
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { role, roleLoading } = useUserRole();
   const isPreview = isPreviewEnvironment();
 
-  if (loading) return <LoadingScreen />;
+  if (loading || roleLoading) return <LoadingScreen />;
   if (!user && !isPreview) return <Navigate to="/" replace />;
+  // Handlers cannot access farmer dashboard pages
+  if (role === "handler" && !isPreview) return <Navigate to="/handlers" replace />;
 
   return <AppLayout>{children}</AppLayout>;
+}
+
+function HandlerRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { role, roleLoading } = useUserRole();
+  const isPreview = isPreviewEnvironment();
+
+  if (loading || roleLoading) return <LoadingScreen />;
+  if (!user && !isPreview) return <Navigate to="/" replace />;
+  // Only handlers (or preview) can access handler workspace
+  if (role !== "handler" && !isPreview) return <Navigate to="/dashboard" replace />;
+
+  return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -64,43 +110,16 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-
     const checkAdminRole = async () => {
       if (loading) return;
-
-      if (isPreview) {
-        if (isMounted) {
-          setIsAdmin(true);
-          setRoleLoading(false);
-        }
-        return;
-      }
-
-      if (!user) {
-        if (isMounted) {
-          setIsAdmin(false);
-          setRoleLoading(false);
-        }
-        return;
-      }
-
-      const { data } = await supabase.rpc("has_role", {
-        _user_id: user.id,
-        _role: "admin",
-      });
-
-      if (isMounted) {
-        setIsAdmin(Boolean(data));
-        setRoleLoading(false);
-      }
+      if (isPreview) { if (isMounted) { setIsAdmin(true); setRoleLoading(false); } return; }
+      if (!user) { if (isMounted) { setIsAdmin(false); setRoleLoading(false); } return; }
+      const { data } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+      if (isMounted) { setIsAdmin(Boolean(data)); setRoleLoading(false); }
     };
-
     setRoleLoading(true);
     checkAdminRole();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [isPreview, loading, user]);
 
   if (loading || roleLoading) return <LoadingScreen />;
@@ -110,37 +129,40 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <AppLayout hideSidebar>{children}</AppLayout>;
 }
 
-function PublicOrProtectedRoute({
-  children,
-  publicFallback,
-}: {
-  children: React.ReactNode;
-  publicFallback: React.ReactNode;
-}) {
+function PublicOrProtectedRoute({ children, publicFallback }: { children: React.ReactNode; publicFallback: React.ReactNode }) {
   const { user, loading } = useAuth();
   const isPreview = isPreviewEnvironment();
-
   if (loading) return <LoadingScreen />;
   if (user || isPreview) return <AppLayout>{children}</AppLayout>;
-
   return <>{publicFallback}</>;
 }
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const { role, roleLoading } = useUserRole();
   const isPreview = isPreviewEnvironment();
 
-  if (loading) return <LoadingScreen />;
+  if (loading || (user && roleLoading)) return <LoadingScreen />;
+
+  // Determine post-login redirect
+  const getHomeRoute = () => {
+    if (role === "handler") return "/handlers";
+    return "/dashboard";
+  };
 
   return (
     <Routes>
-    <Route
-       path="/"
-       element={user || isPreview ? <Navigate to="/dashboard" replace /> : <Landing />}
+      <Route
+        path="/"
+        element={user || isPreview ? <Navigate to={getHomeRoute()} replace /> : <Landing />}
       />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
+      {/* Handler workspace */}
+      <Route path="/handlers" element={<HandlerRoute><HandlerWorkspace /></HandlerRoute>} />
+
+      {/* Farmer/user routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/admin/*" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
@@ -156,6 +178,7 @@ function AppRoutes() {
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
       <Route path="/farm-business" element={<ProtectedRoute><FarmBusinessHub /></ProtectedRoute>} />
+      <Route path="/handler-management" element={<ProtectedRoute><HandlerManagement /></ProtectedRoute>} />
       <Route
         path="/learning"
         element={
@@ -167,7 +190,7 @@ function AppRoutes() {
 
       <Route
         path="*"
-        element={user || isPreview ? <Navigate to="/dashboard" replace /> : <Navigate to="/" replace />}
+        element={user || isPreview ? <Navigate to={getHomeRoute()} replace /> : <Navigate to="/" replace />}
       />
     </Routes>
   );
