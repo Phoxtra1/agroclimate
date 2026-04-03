@@ -24,7 +24,7 @@ const navItems = [
   { to: "/flight-advisory", icon: Plane, label: "Flight Advisory", id: "flight-advisory" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar", id: "calendar" },
   { to: "/alerts", icon: Bell, label: "Alerts", id: "alerts" },
-  { to: "/learning", icon: BookOpen, label: "Agro Learning", id: "learning" },
+  { to: "/handler-management", icon: Users, label: "Handler", id: "handler-management", isNew: true },
   { to: "/profile", icon: User, label: "Profile", id: "profile" },
 ];
 
