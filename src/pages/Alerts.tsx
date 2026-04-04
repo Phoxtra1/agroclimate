@@ -706,15 +706,7 @@ async function sendPushNotification(alert: ProactiveAlert, userId?: string) {
 
   if (userId && (alert.type === "danger" || alert.type === "warning")) {
     try {
-      await supabase.functions.invoke("send-alert-sms", {
-        body: {
-          userId,
-          title: alert.title,
-          message: alert.message.slice(0, 160),
-          severity: alert.type,
-          tags: alert.tags,
-        },
-      });
+      console.info("SMS alert delivery handled by weather alert workflow", { userId, alertId: alert.id });
     } catch {
       // SMS delivery is best-effort
     }
@@ -807,6 +799,13 @@ export default function Alerts() {
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [farm, setFarm] = useState<FarmProfile | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => undefined);
+    }
+  }, []);
 
   /* ----------- Real-time disaster alerts via Supabase ----------- */
   useEffect(() => {
