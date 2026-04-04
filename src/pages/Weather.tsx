@@ -46,6 +46,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { reverseGeocodeLocation, buildLocationName } from "@/lib/location";
 
 // ────────────────────────────────────────────────────────────
 // CONFIG — Replace with your own key or inject via env
@@ -120,21 +121,14 @@ function useGeolocation() {
   useEffect(() => {
     let cancelled = false;
 
-    // Reverse-geocode using free Nominatim (no key required)
     async function reverseGeocode(lat: number, lon: number) {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=14`,
-          { headers: { "User-Agent": "AgroWeatherModule/1.0" } }
-        );
-        if (!res.ok) throw new Error("Geocode failed");
-        const data = await res.json();
-        const addr = data.address || {};
+        const resolved = await reverseGeocodeLocation(lat, lon);
         return {
-          locationName: addr.city || addr.town || addr.village || data.display_name?.split(",")[0] || "Unknown",
-          community: addr.suburb || addr.village || addr.town || undefined,
-          district: addr.county || addr.state_district || undefined,
-          region: addr.state || addr.country || undefined,
+          locationName: buildLocationName(resolved),
+          community: resolved.community || undefined,
+          district: resolved.district || undefined,
+          region: resolved.region || undefined,
         };
       } catch {
         return { locationName: "Your Location" };
@@ -170,7 +164,7 @@ function useGeolocation() {
         setLoading(false);
       },
       () => ipFallback(),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
     );
 
     return () => { cancelled = true; };

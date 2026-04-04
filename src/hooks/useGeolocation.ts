@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { reverseGeocodeLocation } from "@/lib/location";
 
 export interface GeoPosition {
   lat: number;
@@ -20,6 +21,10 @@ const DEFAULT_POSITION: GeoPosition = {
 };
 
 const GEO_CACHE_KEY = "agroclimate_geo_cache";
+const MAX_CACHE_DISTANCE = 0.003;
+
+const isSamePlace = (a: GeoPosition, lat: number, lon: number) =>
+  Math.abs(a.lat - lat) < MAX_CACHE_DISTANCE && Math.abs(a.lon - lon) < MAX_CACHE_DISTANCE;
 
 export function useGeolocation() {
   const [position, setPosition] = useState<GeoPosition>(() => {
@@ -38,13 +43,18 @@ export function useGeolocation() {
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        if (pos.coords.accuracy && pos.coords.accuracy > 1500) {
+          setHasResolved(true);
+          setLoading(false);
+          return;
+        }
+
         // If we have cached data near this location, keep using it for stability
         const cached = localStorage.getItem(GEO_CACHE_KEY);
         if (cached) {
           try {
             const prev: GeoPosition = JSON.parse(cached);
-            const sameArea = Math.abs(prev.lat - pos.coords.latitude) < 0.01 && Math.abs(prev.lon - pos.coords.longitude) < 0.01;
-            if (sameArea && prev.community) {
+            if (isSamePlace(prev, pos.coords.latitude, pos.coords.longitude) && prev.locationName) {
               setPosition(prev);
               setHasResolved(true);
               setLoading(false);
@@ -64,19 +74,12 @@ export function useGeolocation() {
         };
 
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${geo.lat}&lon=${geo.lon}&format=json&zoom=14&addressdetails=1`
-          );
-          const data = await res.json();
-          const addr = data.address || {};
-
-          geo.community = addr.suburb || addr.village || addr.neighbourhood || addr.town || addr.city || "";
-          geo.district = addr.county || addr.city_district || addr.state_district || addr.town || "";
-          geo.region = addr.state || addr.region || "";
-          geo.country = addr.country || "Ghana";
-
-          const parts = [geo.community, geo.district, geo.region].filter(Boolean);
-          geo.locationName = parts.length > 0 ? parts.slice(0, 2).join(", ") : "Your Location";
+          const resolved = await reverseGeocodeLocation(geo.lat, geo.lon);
+          geo.community = resolved.community;
+          geo.district = resolved.district;
+          geo.region = resolved.region;
+          geo.country = resolved.country;
+          geo.locationName = resolved.locationName;
         } catch {
           // Keep default name
         }
@@ -90,7 +93,7 @@ export function useGeolocation() {
         setHasResolved(true);
         setLoading(false);
       },
-      { timeout: 10000, maximumAge: 600000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 120000 }
     );
   }, [hasResolved]);
 
