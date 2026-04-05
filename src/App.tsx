@@ -130,12 +130,26 @@ function PublicOrProtectedRoute({ children, publicFallback }: { children: React.
   return <>{publicFallback}</>;
 }
 
+// Extra guard: wait for Supabase to fully restore the session from storage
+function useSessionReady() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    // getSession() resolves only after the persisted session is restored
+    supabase.auth.getSession().then(() => setReady(true));
+  }, []);
+
+  return ready;
+}
+
 function AppRoutes() {
+  const sessionReady = useSessionReady();
   const { user, loading } = useAuth();
   const { role, roleLoading } = useUserRole();
   const isPreview = isPreviewEnvironment();
 
-  if (loading || (user && roleLoading)) return <LoadingScreen />;
+  // Wait for BOTH the session storage restore AND the auth provider
+  if (!sessionReady || loading || (user && roleLoading)) return <LoadingScreen />;
 
   // Determine post-login redirect
   const getHomeRoute = () => {
