@@ -110,11 +110,11 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (loading || roleLoading) return <LoadingScreen />;
 
   if (!user && !isPreview) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (role !== "admin" && !isPreview) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   return <AppLayout hideSidebar>{children}</AppLayout>;
