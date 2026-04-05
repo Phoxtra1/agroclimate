@@ -111,7 +111,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (loading || roleLoading) return <LoadingScreen />;
 
   if (!user && !isPreview) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   // FIX: Non-admin users go to /dashboard, NOT back to /admin (which caused infinite loop)
@@ -172,7 +172,7 @@ function AppRoutes() {
 
       {/* Farmer/user routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/admin/*" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CropCalendar /></ProtectedRoute>} />
       <Route path="/crops" element={<ProtectedRoute><CropProduction /></ProtectedRoute>} />
