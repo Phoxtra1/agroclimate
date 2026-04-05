@@ -104,27 +104,18 @@ function HandlerRoute({ children }: { children: React.ReactNode }) {
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { role, roleLoading } = useUserRole();
   const isPreview = isPreviewEnvironment();
-  const [roleLoading, setRoleLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    const checkAdminRole = async () => {
-      if (loading) return;
-      if (isPreview) { if (isMounted) { setIsAdmin(true); setRoleLoading(false); } return; }
-      if (!user) { if (isMounted) { setIsAdmin(false); setRoleLoading(false); } return; }
-      const { data } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
-      if (isMounted) { setIsAdmin(Boolean(data)); setRoleLoading(false); }
-    };
-    setRoleLoading(true);
-    checkAdminRole();
-    return () => { isMounted = false; };
-  }, [isPreview, loading, user]);
 
   if (loading || roleLoading) return <LoadingScreen />;
-  if (!user && !isPreview) return <Navigate to="/" replace />;
-  if (!isAdmin && !isPreview) return <Navigate to="/dashboard" replace />;
+
+  if (!user && !isPreview) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (role !== "admin" && !isPreview) {
+    return <Navigate to="/" replace />;
+  }
 
   return <AppLayout hideSidebar>{children}</AppLayout>;
 }
