@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { QRCodeSVG } from "qrcode.react";
 import {
   Users, Plus, ClipboardList, Clock, AlertTriangle, QrCode,
-  MapPin, Calendar, CheckCircle2, XCircle, Loader2, Copy, Download
+  MapPin, Calendar, CheckCircle2, XCircle, Loader2, Copy, Download, Eye, FileText
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -70,6 +70,19 @@ interface FarmQR {
   created_at: string;
 }
 
+interface TaskEvidence {
+  id: string;
+  task_id: string;
+  handler_id: string;
+  evidence_type: string;
+  file_url: string | null;
+  notes: string | null;
+  device_id: string | null;
+  gps_lat: number | null;
+  gps_lon: number | null;
+  created_at: string;
+}
+
 export default function HandlerManagement() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -78,6 +91,7 @@ export default function HandlerManagement() {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [issues, setIssues] = useState<HandlerIssue[]>([]);
   const [farmQRs, setFarmQRs] = useState<FarmQR[]>([]);
+  const [evidence, setEvidence] = useState<TaskEvidence[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Create handler dialog
@@ -99,12 +113,13 @@ export default function HandlerManagement() {
     if (!user) return;
     setLoading(true);
 
-    const [h, t, s, i, q] = await Promise.all([
+    const [h, t, s, i, q, e] = await Promise.all([
       supabase.from("handlers").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
       supabase.from("handler_tasks").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
       supabase.from("work_sessions").select("*").order("clock_in", { ascending: false }).limit(50),
       supabase.from("handler_issues").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
       supabase.from("farm_qr_codes").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("task_evidence").select("*").order("created_at", { ascending: false }),
     ]);
 
     if (h.data) setHandlers(h.data);
@@ -115,6 +130,11 @@ export default function HandlerManagement() {
     }
     if (i.data) setIssues(i.data);
     if (q.data) setFarmQRs(q.data);
+    if (e.data) {
+      const handlerIds = (h.data || []).map((item) => item.id);
+      const taskIds = (t.data || []).map((item) => item.id);
+      setEvidence(e.data.filter((item) => taskIds.includes(item.task_id) || handlerIds.includes(item.handler_id)));
+    }
     setLoading(false);
   }, [user]);
 
@@ -194,6 +214,7 @@ export default function HandlerManagement() {
   };
 
   const getHandlerName = (id: string) => handlers.find(h => h.id === id)?.handler_name ?? "Unknown";
+  const getTaskEvidence = (taskId: string) => evidence.filter((item) => item.task_id === taskId);
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -361,6 +382,11 @@ export default function HandlerManagement() {
               {tasks.map(t => (
                 <Card key={t.id}>
                   <CardContent className="pt-4">
+                    {(() => {
+                      const taskEvidence = getTaskEvidence(t.id);
+
+                      return (
+                        <>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <h3 className="font-semibold text-sm">{t.title}</h3>
@@ -370,10 +396,63 @@ export default function HandlerManagement() {
                           {t.field_location && <span>• {t.field_location}</span>}
                           {t.deadline && <span>• Due: {format(new Date(t.deadline), "dd MMM, HH:mm")}</span>}
                           {t.quantity_label && <span>• {t.quantity_completed ?? "—"}/{t.quantity_expected} {t.quantity_label}</span>}
+                          <span>• Evidence: {taskEvidence.length}</span>
                         </div>
                       </div>
                       <Badge className={statusColor(t.status)}>{t.status}</Badge>
                     </div>
+
+                    {taskEvidence.length > 0 && (
+                      <div className="mt-4 space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <FileText className="h-4 w-4 text-primary" /> Submitted evidence
+                        </div>
+
+                        {taskEvidence.map((item) => (
+                          <div key={item.id} className="rounded-lg border border-border bg-card p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-medium capitalize">{item.evidence_type}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {getHandlerName(item.handler_id)} • {format(new Date(item.created_at), "dd MMM yyyy, HH:mm")}
+                                </p>
+                              </div>
+
+                              {item.file_url && (
+                                <div className="flex gap-2">
+                                  <Button size="sm" variant="outline" asChild>
+                                    <a href={item.file_url} target="_blank" rel="noreferrer">
+                                      <Eye className="mr-1 h-3.5 w-3.5" /> View
+                                    </a>
+                                  </Button>
+                                  <Button size="sm" variant="outline" asChild>
+                                    <a href={item.file_url} target="_blank" rel="noreferrer" download>
+                                      <Download className="mr-1 h-3.5 w-3.5" /> Download
+                                    </a>
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+
+                            {item.file_url && item.evidence_type === "photo" && (
+                              <img
+                                src={item.file_url}
+                                alt={`Handler evidence for ${t.title}`}
+                                className="mt-3 h-28 w-full rounded-md object-cover"
+                                loading="lazy"
+                              />
+                            )}
+
+                            {item.notes && (
+                              <p className="mt-3 text-sm text-muted-foreground">{item.notes}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                        </>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               ))}

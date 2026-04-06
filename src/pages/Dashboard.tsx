@@ -21,7 +21,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
-  const { unreadAlerts, alerts, markRead, dismiss } = useUserAlerts(forecast, position.locationName);
+  const { unreadAlerts, alerts, markRead, dismiss, deleteAlert } = useUserAlerts(forecast, position.locationName);
 
   const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
 
@@ -53,7 +53,12 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-        <DashboardHeaderMenu unreadCount={unreadAlerts.length} />
+        <DashboardHeaderMenu
+          unreadCount={unreadAlerts.length}
+          alerts={alerts}
+          onMarkRead={markRead}
+          onDelete={deleteAlert}
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -161,6 +166,7 @@ export default function Dashboard() {
                     alert={alert}
                     onMarkRead={() => markRead(alert.id)}
                     onDismiss={() => dismiss(alert.id)}
+                    onDelete={() => deleteAlert(alert.id)}
                   />
                 ))}
               </div>
