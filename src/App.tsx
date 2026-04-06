@@ -111,7 +111,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (loading || roleLoading) return <LoadingScreen />;
 
   if (!user && !isPreview) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // FIX: Non-admin users go to /dashboard, NOT back to /admin (which caused infinite loop)
@@ -172,7 +172,7 @@ function AppRoutes() {
 
       {/* Farmer/user routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+      <Route path="/admin/*" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute><CropCalendar /></ProtectedRoute>} />
       <Route path="/crops" element={<ProtectedRoute><CropProduction /></ProtectedRoute>} />
@@ -204,17 +204,21 @@ function AppRoutes() {
   );
 }
 
+import { ThemeProvider } from "@/components/ThemeProvider";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
