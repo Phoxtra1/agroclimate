@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Lightbulb, Users } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNewTag } from "@/hooks/useNewTag";
@@ -19,7 +19,6 @@ const navItems = [
   { to: "/crops", icon: Sprout, label: "Crops", id: "crops" },
   { to: "/livestock", icon: Bug, label: "Livestock", id: "livestock", isNew: true },
   { to: "/aquaculture", icon: Fish, label: "Aquaculture", id: "aquaculture", isNew: true },
-  { to: "/farm-business", icon: Lightbulb, label: "Farm Business Hub", id: "farm-business", isNew: true },
   { to: "/inventory", icon: Package, label: "Agro Inventory", id: "inventory" },
   { to: "/flight-advisory", icon: Plane, label: "Flight Advisory", id: "flight-advisory" },
   { to: "/calendar", icon: CalendarDays, label: "Calendar", id: "calendar" },

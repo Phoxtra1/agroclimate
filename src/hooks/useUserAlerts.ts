@@ -15,94 +15,159 @@ export interface EnrichedAlert extends Alert {
   isDismissed: boolean;
 }
 
-// Generate dynamic alerts based on real-time weather
+function dateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createAlertId(prefix: string, location: string, date: string) {
+  const loc = location.replace(/[^a-zA-Z]/g, "").slice(0, 12).toLowerCase();
+  return `${prefix}-${loc}-${date}`;
+}
+
+// Generate multi-domain alerts from real weather data
 function generateWeatherAlerts(forecast: WeatherDay[], location: string): Alert[] {
   const alerts: Alert[] = [];
-  const now = new Date();
+  const dk = dateKey();
   const timeStr = "Just now";
 
   if (!forecast || forecast.length === 0) return alerts;
-
   const today = forecast[0];
 
+  // === WEATHER ===
   if (today.rainProb > 60) {
     alerts.push({
-      id: `weather-rain-${now.toDateString()}`,
+      id: createAlertId("weather-rain", location, dk),
       type: "warning",
       title: "Heavy Rain Alert",
-      message: `${today.rainProb}% rain probability expected in ${location}. Prepare drainage channels and protect stored harvest.`,
-      time: timeStr,
-      read: false,
+      message: `${today.rainProb}% rain probability in ${location}. Prepare drainage and protect stored harvest.`,
+      time: timeStr, read: false,
     });
   }
 
   if (today.tempHigh > 36) {
     alerts.push({
-      id: `weather-heat-${now.toDateString()}`,
+      id: createAlertId("weather-heat", location, dk),
       type: "danger",
       title: "Extreme Heat Warning",
-      message: `Temperatures reaching ${today.tempHigh}°C in ${location}. Irrigate crops early morning or late evening. Keep livestock hydrated.`,
-      time: timeStr,
-      read: false,
-    });
-  }
-
-  if (today.humidity > 85 && today.tempHigh > 28) {
-    alerts.push({
-      id: `weather-fungal-${now.toDateString()}`,
-      type: "warning",
-      title: "Fungal Disease Risk",
-      message: `High humidity (${today.humidity}%) combined with warm temperatures in ${location}. Monitor crops for fungal infections.`,
-      time: timeStr,
-      read: false,
+      message: `Temperatures reaching ${today.tempHigh}°C in ${location}. Irrigate early morning or late evening.`,
+      time: timeStr, read: false,
     });
   }
 
   if (today.wind > 30) {
     alerts.push({
-      id: `weather-wind-${now.toDateString()}`,
+      id: createAlertId("weather-wind", location, dk),
       type: "danger",
       title: "High Wind Warning",
-      message: `Wind speeds of ${today.wind} km/h in ${location}. Secure greenhouse structures and avoid aerial spraying.`,
-      time: timeStr,
-      read: false,
+      message: `Wind speeds of ${today.wind} km/h in ${location}. Secure structures and avoid aerial spraying.`,
+      time: timeStr, read: false,
     });
   }
 
-  // Good conditions alert
-  if (today.rainProb > 25 && today.rainProb < 60 && today.tempHigh < 35) {
+  // === CROPS ===
+  if (today.humidity > 85 && today.tempHigh > 28) {
     alerts.push({
-      id: `weather-planting-${now.toDateString()}`,
-      type: "success",
-      title: "Good Planting Conditions",
-      message: `Moderate moisture expected in ${location}. Soil conditions are ideal for planting or transplanting.`,
-      time: timeStr,
-      read: false,
+      id: createAlertId("crop-fungal", location, dk),
+      type: "warning",
+      title: "Crop Fungal Disease Risk",
+      message: `High humidity (${today.humidity}%) with warm temps in ${location}. Monitor crops for blight, rust, and mildew.`,
+      time: timeStr, read: false,
     });
   }
 
-  // Dry spell warning
+  if (today.tempHigh > 34 && today.rainProb < 20) {
+    alerts.push({
+      id: createAlertId("crop-wilt", location, dk),
+      type: "warning",
+      title: "Crop Wilt Stress",
+      message: `Hot dry conditions in ${location} (${today.tempHigh}°C, ${today.rainProb}% rain). Irrigate water-sensitive crops immediately.`,
+      time: timeStr, read: false,
+    });
+  }
+
+  // === LIVESTOCK ===
+  if (today.tempHigh > 35) {
+    alerts.push({
+      id: createAlertId("livestock-heat", location, dk),
+      type: "danger",
+      title: "Livestock Heat Stress",
+      message: `${today.tempHigh}°C in ${location}. Provide shade, extra water, and reduce animal movement.`,
+      time: timeStr, read: false,
+    });
+  }
+
+  if (today.wind > 25 && today.rainProb > 40) {
+    alerts.push({
+      id: createAlertId("livestock-shelter", location, dk),
+      type: "warning",
+      title: "Livestock Shelter Advisory",
+      message: `Storm conditions in ${location}. Move livestock to covered shelter and secure enclosures.`,
+      time: timeStr, read: false,
+    });
+  }
+
+  // === AQUACULTURE ===
+  if (today.tempHigh > 33) {
+    alerts.push({
+      id: createAlertId("aqua-temp", location, dk),
+      type: "warning",
+      title: "Pond Temperature Warning",
+      message: `High ambient temp (${today.tempHigh}°C) in ${location} may raise pond water temperature. Check dissolved oxygen and aerate if needed.`,
+      time: timeStr, read: false,
+    });
+  }
+
+  if (today.rainProb > 70) {
+    alerts.push({
+      id: createAlertId("aqua-overflow", location, dk),
+      type: "warning",
+      title: "Pond Overflow Risk",
+      message: `Heavy rain expected in ${location}. Check pond outlets and drainage to prevent fish escape.`,
+      time: timeStr, read: false,
+    });
+  }
+
+  // === ENVIRONMENT ===
+  if (today.humidity < 30 && today.tempHigh > 32) {
+    alerts.push({
+      id: createAlertId("env-fire", location, dk),
+      type: "danger",
+      title: "Bush Fire Risk",
+      message: `Very low humidity (${today.humidity}%) and high heat in ${location}. Avoid open burning near farmland.`,
+      time: timeStr, read: false,
+    });
+  }
+
   const avgRain = forecast.slice(0, 5).reduce((s, d) => s + d.rainProb, 0) / Math.min(forecast.length, 5);
   if (avgRain < 15) {
     alerts.push({
-      id: `weather-dry-${now.toDateString()}`,
+      id: createAlertId("env-drought", location, dk),
       type: "info",
       title: "Dry Spell Advisory",
-      message: `Very low rainfall expected this week in ${location} (avg ${Math.round(avgRain)}%). Plan irrigation for water-intensive crops.`,
-      time: timeStr,
-      read: false,
+      message: `Low rainfall expected this week in ${location} (avg ${Math.round(avgRain)}%). Plan irrigation for all crops.`,
+      time: timeStr, read: false,
     });
   }
 
-  // No-fly zone precaution
+  // === FLIGHT ===
   if (today.wind > 25 || today.rainProb > 50) {
     alerts.push({
-      id: `flight-nofly-${now.toDateString()}`,
+      id: createAlertId("flight-nofly", location, dk),
       type: "danger",
       title: "No-Fly Zone Precaution",
-      message: `Unsafe flight conditions in ${location} — ${today.wind > 25 ? `high winds (${today.wind} km/h)` : ""}${today.wind > 25 && today.rainProb > 50 ? " and " : ""}${today.rainProb > 50 ? `rain probability (${today.rainProb}%)` : ""}. Avoid drone, helicopter, and light aircraft operations.`,
-      time: timeStr,
-      read: false,
+      message: `Unsafe flight conditions in ${location}. Avoid drone and light aircraft operations.`,
+      time: timeStr, read: false,
+    });
+  }
+
+  // === GOOD CONDITIONS ===
+  if (today.rainProb > 25 && today.rainProb < 60 && today.tempHigh < 35 && today.tempHigh > 20) {
+    alerts.push({
+      id: createAlertId("crop-planting", location, dk),
+      type: "success",
+      title: "Good Planting Conditions",
+      message: `Moderate moisture and mild temperatures in ${location}. Ideal for planting or transplanting.`,
+      time: timeStr, read: false,
     });
   }
 
@@ -129,6 +194,28 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
     fetchStates();
   }, [user]);
 
+  // Request browser notification permission
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Send browser notifications for critical unread alerts
+  useEffect(() => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!forecast || !location) return;
+
+    const dynamicAlerts = generateWeatherAlerts(forecast, location);
+    const critical = dynamicAlerts.filter(a => a.type === "danger");
+    critical.forEach(a => {
+      const state = alertStates.find(s => s.alert_id === a.id);
+      if (!state?.is_read && !state?.is_dismissed) {
+        try { new Notification(a.title, { body: a.message, icon: "/placeholder.svg" }); } catch {}
+      }
+    });
+  }, [forecast, location, alertStates]);
+
   // Trigger SMS for critical conditions (once per session)
   useEffect(() => {
     if (!forecast || !location || smsSent || !forecast[0]) return;
@@ -145,10 +232,9 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   const getState = (alertId: string) =>
     alertStates.find((s) => s.alert_id === alertId);
 
-  // Generate dynamic alerts from weather
   const dynamicAlerts = generateWeatherAlerts(forecast || [], location || "Your area");
 
-  // Also fetch disaster_alerts from DB
+  // Fetch disaster_alerts from DB
   const [dbAlerts, setDbAlerts] = useState<Alert[]>([]);
   useEffect(() => {
     supabase.from("disaster_alerts").select("*").eq("active", true).order("created_at", { ascending: false }).limit(10)
@@ -182,7 +268,7 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
 
   const upsertState = useCallback(async (alertId: string, updates: Partial<UserAlertState>) => {
     if (!user) return;
-    const existing = getState(alertId);
+    const existing = alertStates.find(s => s.alert_id === alertId);
     if (existing) {
       await supabase
         .from("user_alerts")
@@ -206,5 +292,19 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   const dismiss = useCallback((alertId: string) => upsertState(alertId, { is_dismissed: true }), [upsertState]);
   const markUnread = useCallback((alertId: string) => upsertState(alertId, { is_read: false }), [upsertState]);
 
-  return { alerts: visibleAlerts, unreadAlerts, loading, markRead, dismiss, markUnread };
+  // Delete: remove from DB entirely
+  const deleteAlert = useCallback(async (alertId: string) => {
+    if (!user) return;
+    await supabase.from("user_alerts").delete().eq("user_id", user.id).eq("alert_id", alertId);
+    // Also dismiss locally so it vanishes immediately
+    setAlertStates(prev => {
+      const idx = prev.findIndex(s => s.alert_id === alertId);
+      if (idx >= 0) {
+        return prev.map((s, i) => i === idx ? { ...s, is_dismissed: true } : s);
+      }
+      return [...prev, { alert_id: alertId, is_read: true, is_dismissed: true }];
+    });
+  }, [user]);
+
+  return { alerts: visibleAlerts, unreadAlerts, loading, markRead, dismiss, markUnread, deleteAlert };
 }

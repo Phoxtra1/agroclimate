@@ -13,6 +13,7 @@ import { useCropAdvisory } from "@/hooks/useCropAdvisory";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserAlerts } from "@/hooks/useUserAlerts";
 import { Button } from "@/components/ui/button";
+import { DashboardHeaderMenu } from "@/components/DashboardHeaderMenu";
 
 export default function Dashboard() {
   const { position, loading: geoLoading } = useGeolocation();
@@ -20,7 +21,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
-  const { unreadAlerts, markRead, dismiss } = useUserAlerts(forecast, position.locationName);
+  const { unreadAlerts, alerts, markRead, dismiss } = useUserAlerts(forecast, position.locationName);
 
   const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
 
@@ -34,7 +35,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto">
-      {/* Header */}
+      {/* Header with menu */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold">Akwaaba, {displayName} 👋</h1>
@@ -52,6 +53,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+        <DashboardHeaderMenu unreadCount={unreadAlerts.length} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -153,7 +155,7 @@ export default function Dashboard() {
                 </Link>
               </div>
               <div className="space-y-3">
-                {unreadAlerts.map((alert) => (
+                {unreadAlerts.slice(0, 5).map((alert) => (
                   <AlertCard
                     key={alert.id}
                     alert={alert}
