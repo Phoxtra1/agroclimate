@@ -1,5 +1,5 @@
 import { Alert } from "@/data/mock-data";
-import { AlertTriangle, CheckCircle, Info, AlertOctagon, Check, X } from "lucide-react";
+import { AlertTriangle, CheckCircle, Info, AlertOctagon, Check, X, Trash2 } from "lucide-react";
 
 const iconMap = {
   warning: AlertTriangle,
@@ -26,9 +26,10 @@ interface AlertCardProps {
   alert: Alert & { isRead?: boolean };
   onMarkRead?: () => void;
   onDismiss?: () => void;
+  onDelete?: () => void;
 }
 
-export function AlertCard({ alert, onMarkRead, onDismiss }: AlertCardProps) {
+export function AlertCard({ alert, onMarkRead, onDismiss, onDelete }: AlertCardProps) {
   const Icon = iconMap[alert.type];
   const isRead = (alert as any).isRead ?? alert.read;
 
@@ -50,26 +51,32 @@ export function AlertCard({ alert, onMarkRead, onDismiss }: AlertCardProps) {
           <p className="text-sm text-muted-foreground mt-1">{alert.message}</p>
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-muted-foreground">{alert.time}</p>
-            {(onMarkRead || onDismiss) && (
-              <div className="flex items-center gap-1">
-                {onMarkRead && !isRead && (
-                  <button
-                    onClick={onMarkRead}
-                    className="text-xs text-primary hover:underline flex items-center gap-0.5"
-                  >
-                    <Check className="h-3 w-3" /> Mark read
-                  </button>
-                )}
-                {onDismiss && (
-                  <button
-                    onClick={onDismiss}
-                    className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-0.5 ml-2"
-                  >
-                    <X className="h-3 w-3" /> Dismiss
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-1">
+              {onMarkRead && !isRead && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onMarkRead(); }}
+                  className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                >
+                  <Check className="h-3 w-3" /> Read
+                </button>
+              )}
+              {onDismiss && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5 ml-2"
+                >
+                  <X className="h-3 w-3" /> Dismiss
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-0.5 ml-2"
+                >
+                  <Trash2 className="h-3 w-3" /> Delete
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
