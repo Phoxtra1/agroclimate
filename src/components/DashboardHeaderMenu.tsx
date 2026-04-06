@@ -1,23 +1,28 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Bell, Sun, Moon, Settings, Lightbulb, BellRing } from "lucide-react";
+import { Bell, Sun, Moon, Settings, Lightbulb, BellRing, Check, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/components/ThemeProvider";
+import type { EnrichedAlert } from "@/hooks/useUserAlerts";
 
 interface DashboardHeaderMenuProps {
   unreadCount?: number;
+  alerts?: EnrichedAlert[];
+  onMarkRead?: (alertId: string) => void;
+  onDelete?: (alertId: string) => void;
 }
 
-export function DashboardHeaderMenu({ unreadCount = 0 }: DashboardHeaderMenuProps) {
-  const { theme, setTheme, resolved } = useTheme();
+export function DashboardHeaderMenu({ unreadCount = 0, alerts = [], onMarkRead, onDelete }: DashboardHeaderMenuProps) {
+  const { setTheme, resolved } = useTheme();
   const [notifEnabled, setNotifEnabled] = useState(false);
 
   useEffect(() => {
@@ -32,28 +37,82 @@ export function DashboardHeaderMenu({ unreadCount = 0 }: DashboardHeaderMenuProp
     setNotifEnabled(perm === "granted");
   };
 
+  const recentAlerts = [...alerts]
+    .sort((a, b) => Number(a.isRead) - Number(b.isRead))
+    .slice(0, 6);
+
   return (
     <div className="flex items-center gap-1">
-      {/* Farm Business Hub */}
       <Link to="/farm-business">
         <Button variant="ghost" size="icon" className="relative h-9 w-9" title="Farm Business Hub">
           <Lightbulb className="h-4 w-4" />
         </Button>
       </Link>
 
-      {/* Notifications bell */}
-      <Link to="/alerts">
-        <Button variant="ghost" size="icon" className="relative h-9 w-9" title="Alerts">
-          <Bell className="h-4 w-4" />
-          {unreadCount > 0 && (
-            <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[9px] flex items-center justify-center">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </Badge>
-          )}
-        </Button>
-      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative h-9 w-9" title="Alerts">
+            <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <Badge className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center px-1 text-[9px]">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </Badge>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuLabel className="flex items-center justify-between">
+            <span>Notifications</span>
+            <span className="text-xs font-normal text-muted-foreground">{unreadCount} unread</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
 
-      {/* Settings dropdown */}
+          {recentAlerts.length === 0 ? (
+            <div className="px-2 py-4 text-sm text-muted-foreground">No alerts yet.</div>
+          ) : (
+            <div className="space-y-1 px-1 py-1">
+              {recentAlerts.map((alert) => (
+                <div key={alert.id} className="rounded-md border border-border/60 p-2">
+                  <button
+                    type="button"
+                    onClick={() => !alert.isRead && onMarkRead?.(alert.id)}
+                    className="w-full text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{alert.title}</p>
+                        {!alert.isRead && <span className="h-2 w-2 shrink-0 rounded-full bg-destructive" />}
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{alert.message}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{alert.time}</p>
+                    </div>
+                  </button>
+
+                  <div className="mt-2 flex gap-2">
+                    {!alert.isRead && (
+                      <button
+                        type="button"
+                        onClick={() => onMarkRead?.(alert.id)}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Check className="h-3 w-3" /> Read
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onDelete?.(alert.id)}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" /> Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-9 w-9" title="Settings">
@@ -62,25 +121,25 @@ export function DashboardHeaderMenu({ unreadCount = 0 }: DashboardHeaderMenuProp
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onClick={() => setTheme(resolved === "dark" ? "light" : "dark")} className="cursor-pointer">
-            {resolved === "dark" ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
+            {resolved === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
             {resolved === "dark" ? "Light Mode" : "Dark Mode"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {!notifEnabled ? (
             <DropdownMenuItem onClick={requestNotifications} className="cursor-pointer">
-              <BellRing className="h-4 w-4 mr-2" />
+              <BellRing className="mr-2 h-4 w-4" />
               Enable Notifications
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem disabled>
-              <BellRing className="h-4 w-4 mr-2" />
+              <BellRing className="mr-2 h-4 w-4" />
               Notifications On
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild className="cursor-pointer">
             <Link to="/profile">
-              <Settings className="h-4 w-4 mr-2" />
+              <Settings className="mr-2 h-4 w-4" />
               App Settings
             </Link>
           </DropdownMenuItem>

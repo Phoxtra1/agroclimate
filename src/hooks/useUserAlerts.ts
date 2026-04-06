@@ -237,20 +237,53 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   // Fetch disaster_alerts from DB
   const [dbAlerts, setDbAlerts] = useState<Alert[]>([]);
   useEffect(() => {
-    supabase.from("disaster_alerts").select("*").eq("active", true).order("created_at", { ascending: false }).limit(10)
-      .then(({ data }) => {
-        if (data) {
-          setDbAlerts(data.map(a => ({
-            id: a.id,
-            type: a.severity === "critical" ? "danger" as const : "warning" as const,
-            title: a.title,
-            message: a.description || "",
-            time: new Date(a.created_at).toLocaleDateString(),
-            read: false,
-          })));
+    if (!user) {
+      setDbAlerts([]);
+      return;
+    }
+
+    let mounted = true;
+
+    const fetchDisasterAlerts = async () => {
+      const { data } = await supabase
+        .from("disaster_alerts")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (!mounted || !data) return;
+
+      setDbAlerts(
+        data.map((a) => ({
+          id: a.id,
+          type: a.severity === "critical" ? "danger" as const : "warning" as const,
+          title: a.title,
+          message: a.description || "",
+          time: new Date(a.created_at).toLocaleString(),
+          read: false,
+        }))
+      );
+    };
+
+    fetchDisasterAlerts();
+
+    const channel = supabase
+      .channel("user-alerts-disaster-stream")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "disaster_alerts" },
+        () => {
+          fetchDisasterAlerts();
         }
-      });
-  }, []);
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const allAlerts = [...dynamicAlerts, ...dbAlerts];
 
