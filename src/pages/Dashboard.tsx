@@ -155,7 +155,7 @@ export default function Dashboard() {
                 </Link>
               </div>
               <div className="space-y-3">
-                {unreadAlerts.map((alert) => (
+                {unreadAlerts.slice(0, 5).map((alert) => (
                   <AlertCard
                     key={alert.id}
                     alert={alert}
