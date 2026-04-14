@@ -3,9 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import AlertEngine from "./Alert";
 import AIEngine from "./AIEngine";
-import InventoryEngine from "./InventoryEngine";
 import FlightEngine from "./FlightEngine";
-import EnvironmentEngine from "./EnvironmentEngine";
 import SystemControl from "./SystemControl";
 import UserSettings from "./UserSettings";
 import SecurityPanel from "./SecurityPanel";
@@ -18,16 +16,14 @@ import {
 } from "lucide-react";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
-type EngineKey = "overview" | "alert" | "ai" | "inventory" | "flight" | "environment" | "system" | "settings" | "security";
+type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" | "security";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
   { key: "security", label: "Security", icon: ShieldAlert },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "Odeneho AI", icon: Bot },
-  { key: "inventory", label: "Inventory", icon: Package },
   { key: "flight", label: "Flight Advisory", icon: Plane },
-  { key: "environment", label: "Environment", icon: Leaf },
   { key: "system", label: "System Control", icon: Settings },
   { key: "settings", label: "User Settings", icon: Users },
 ];
@@ -75,42 +71,13 @@ export default function AdminDashboard() {
     switch (activeEngine) {
       case "alert": return <AlertEngine />;
       case "ai": return <AIEngine />;
-      case "inventory": return <InventoryEngine />;
       case "flight": return <FlightEngine />;
-      case "environment": return <EnvironmentEngine />;
       case "system": return <SystemControl />;
       case "settings": return <UserSettings />;
       case "security": return <SecurityPanel />;
       default: return <OverviewPanel />;
     }
   };
-
-  const NavButtons = ({ onClick }: { onClick?: () => void }) => (
-    <>
-      <Button
-        variant="ghost"
-        onClick={() => { window.location.href = "/dashboard"; onClick?.(); }}
-        className="w-full justify-start gap-2 text-sm text-muted-foreground"
-        size="sm"
-      >
-        <Home className="h-4 w-4" />
-        Back to App
-      </Button>
-      <div className="border-t border-border my-2" />
-      {navItems.map((item) => (
-        <Button
-          key={item.key}
-          variant={activeEngine === item.key ? "default" : "ghost"}
-          onClick={() => { setActiveEngine(item.key); onClick?.(); }}
-          className="w-full justify-start gap-2 text-sm"
-          size="sm"
-        >
-          <item.icon className="h-4 w-4" />
-          {item.label}
-        </Button>
-      ))}
-    </>
-  );
 
   return (
     <div className="flex min-h-screen bg-background">
