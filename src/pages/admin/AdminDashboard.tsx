@@ -21,11 +21,11 @@ type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" 
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
-  { key: "security", label: "Security", icon: ShieldAlert },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "Odeneho AI", icon: Bot },
   { key: "flight", label: "Flight Advisory", icon: Plane },
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
+  { key: "security", label: "Security", icon: ShieldAlert },
   { key: "system", label: "System Control", icon: Settings },
   { key: "settings", label: "Admin Settings", icon: Users },
 ];
@@ -106,7 +106,7 @@ export default function AdminDashboard() {
       <aside className="w-60 bg-card border-r border-border flex-col fixed h-full z-30 hidden md:flex">
         <div className="flex items-center gap-2 px-5 h-16 border-b border-border">
           <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
-          <span className="font-bold text-lg text-foreground">Admin Panel</span>
+          <span className="font-bold text-lg text-foreground">Admin Workspace</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           <NavButtons />
