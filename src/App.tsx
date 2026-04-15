@@ -111,7 +111,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (loading || roleLoading) return <LoadingScreen />;
 
   if (!user && !isPreview) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   // FIX: Non-admin users go to /dashboard, NOT back to /admin (which caused infinite loop)
