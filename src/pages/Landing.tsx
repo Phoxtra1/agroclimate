@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import aminevaLogo from "@/assets/amineva-logo.png";
 import { supabase } from "@/integrations/supabase/client";
+import { APP_VERSION_LABEL, WHATS_NEW } from "@/config/version";
 
 export default function Landing() {
   const { signIn, signUp } = useAuth();
@@ -109,7 +110,7 @@ export default function Landing() {
                 <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
                 <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
               </div>
-              <p className="text-xs font-medium text-primary mb-2">Powered by Amineva</p>
+              <p className="text-xs font-semibold text-primary mb-2">AGC V1.0</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
                 Smart Insights for <span className="text-gradient-primary">Agriculture and Climate</span>
               </h2>
@@ -267,6 +268,29 @@ export default function Landing() {
           </Button>
         </div>
       </section>
+
+      {/* What's New */}
+      <section className="container mx-auto px-4 py-10">
+        <div className="max-w-3xl mx-auto bg-card border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold">{WHATS_NEW.title}</h3>
+            <span className="text-xs font-semibold text-primary border border-primary/30 rounded-full px-2 py-0.5">{APP_VERSION_LABEL}</span>
+          </div>
+          <ul className="space-y-2">
+            {WHATS_NEW.items.map((item) => (
+              <li key={item} className="flex gap-2 text-sm">
+                <span className="text-primary">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <footer className="container mx-auto px-4 py-6 text-center text-xs text-muted-foreground">
+        {APP_VERSION_LABEL}
+      </footer>
     </div>
   );
 }
+

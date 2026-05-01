@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users, Archive } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNewTag } from "@/hooks/useNewTag";
@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import aminevaLogo from "@/assets/amineva-logo.png";
+import { APP_VERSION_LABEL } from "@/config/version";
 
 const navItems = [
+  { to: "/post-harvest", icon: Archive, label: "Post-Harvest Tracker", id: "post-harvest", isNew: true },
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
   { to: "/odeneho", icon: Bot, label: "Odeneho", id: "odeneho" },
   { to: "/weather", icon: Cloud, label: "Weather", id: "weather" },
@@ -101,7 +103,10 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
         <header className="sticky top-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
-            <span className="font-bold text-sm">AgroClimate</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold text-sm">AgroClimate</span>
+              <span className="text-[9px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
+            </div>
           </div>
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
@@ -154,7 +159,10 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
         <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
           <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
             <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
-            <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
+              <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
+            </div>
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             <NavItems isAdmin={isAdmin} />

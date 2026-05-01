@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { APP_VERSION_LABEL, WHATS_NEW } from "@/config/version";
 
 interface ProfileData {
   display_name: string | null;
@@ -197,6 +198,21 @@ export default function Profile() {
             </div>
           </div>
         )}
+
+        <div className="bg-card border rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">App version</h3>
+            <span className="text-xs font-semibold text-primary border border-primary/30 rounded-full px-2 py-0.5">{APP_VERSION_LABEL}</span>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">{WHATS_NEW.title}</p>
+            <ul className="space-y-1">
+              {WHATS_NEW.items.map((it) => (
+                <li key={it} className="text-xs flex gap-2"><span className="text-primary">•</span><span>{it}</span></li>
+              ))}
+            </ul>
+          </div>
+        </div>
 
         <Button variant="outline" className="w-full" onClick={signOut}>
           <LogOut className="h-4 w-4 mr-2" /> Sign Out

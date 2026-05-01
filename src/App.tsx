@@ -28,6 +28,7 @@ import ResetPassword from "./pages/ResetPassword";
 import FarmBusinessHub from "./pages/FarmBusinessHub";
 import HandlerManagement from "./pages/HandlerManagement";
 import HandlerWorkspace from "./pages/HandlerWorkspace";
+import PostHarvestTracker from "./pages/PostHarvestTracker";
 
 const queryClient = new QueryClient();
 
@@ -187,6 +188,7 @@ function AppRoutes() {
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
       <Route path="/farm-business" element={<ProtectedRoute><FarmBusinessHub /></ProtectedRoute>} />
       <Route path="/handler-management" element={<ProtectedRoute><HandlerManagement /></ProtectedRoute>} />
+      <Route path="/post-harvest" element={<ProtectedRoute><PostHarvestTracker /></ProtectedRoute>} />
       <Route
         path="/learning"
         element={

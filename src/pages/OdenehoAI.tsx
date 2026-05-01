@@ -27,6 +27,14 @@ export default function OdenehoAI() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Pick up a prefilled prompt (e.g. from Post-Harvest Tracker "Get Advice")
+  useEffect(() => {
+    try {
+      const prefill = sessionStorage.getItem("odeneho-prefill");
+      if (prefill) { setInput(prefill); sessionStorage.removeItem("odeneho-prefill"); }
+    } catch {}
+  }, []);
+
   const streamChat = useCallback(async (allMessages: Msg[]) => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/odeneho-ai`;
     const weatherContext = forecast[0]
