@@ -103,7 +103,10 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
         <header className="sticky top-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
-            <span className="font-bold text-sm">AgroClimate</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold text-sm">AgroClimate</span>
+              <span className="text-[9px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
+            </div>
           </div>
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
@@ -156,7 +159,10 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
         <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
           <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
             <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
-            <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
+              <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
+            </div>
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             <NavItems isAdmin={isAdmin} />
