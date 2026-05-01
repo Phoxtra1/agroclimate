@@ -8,22 +8,24 @@ import SystemControl from "./SystemControl";
 import UserSettings from "./UserSettings";
 import SecurityPanel from "./SecurityPanel";
 import SubscriptionPanel from "./SubscriptionPanel";
+import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Bot, Plane, Settings, Users,
-  LogOut, ShieldAlert, Menu, CreditCard,
+  LogOut, ShieldAlert, Menu, CreditCard, Archive,
 } from "lucide-react";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
-type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" | "security" | "subscriptions";
+type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" | "security" | "subscriptions" | "post-harvest";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "Odeneho AI", icon: Bot },
   { key: "flight", label: "Flight Advisory", icon: Plane },
+  { key: "post-harvest", label: "Post-Harvest", icon: Archive },
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { key: "security", label: "Security", icon: ShieldAlert },
   { key: "system", label: "System Control", icon: Settings },
@@ -76,6 +78,7 @@ export default function AdminDashboard() {
       case "settings": return <UserSettings />;
       case "security": return <SecurityPanel />;
       case "subscriptions": return <SubscriptionPanel />;
+      case "post-harvest": return <PostHarvestAdminPanel />;
       default: return <OverviewPanel />;
     }
   };
