@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import aminevaLogo from "@/assets/amineva-logo.png";
+import { APP_VERSION_LABEL } from "@/config/version";
 
 const navItems = [
   { to: "/post-harvest", icon: Archive, label: "Post-Harvest Tracker", id: "post-harvest", isNew: true },
