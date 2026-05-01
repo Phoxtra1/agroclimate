@@ -109,7 +109,7 @@ export default function Landing() {
                 <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
                 <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
               </div>
-              <p className="text-xs font-medium text-primary mb-2">Powered by Amineva</p>
+              <p className="text-xs font-semibold text-primary mb-2">AGC V1.0</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
                 Smart Insights for <span className="text-gradient-primary">Agriculture and Climate</span>
               </h2>
