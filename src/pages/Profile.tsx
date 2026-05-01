@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { APP_VERSION_LABEL, WHATS_NEW } from "@/config/version";
 
 interface ProfileData {
   display_name: string | null;
