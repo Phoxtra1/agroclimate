@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users, Archive } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNewTag } from "@/hooks/useNewTag";
@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
 const navItems = [
+  { to: "/post-harvest", icon: Archive, label: "Post-Harvest Tracker", id: "post-harvest", isNew: true },
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
   { to: "/odeneho", icon: Bot, label: "Odeneho", id: "odeneho" },
   { to: "/weather", icon: Cloud, label: "Weather", id: "weather" },
