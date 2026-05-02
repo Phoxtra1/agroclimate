@@ -13,6 +13,9 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePostHarvest, computeRisk, uploadHarvestPhoto, type HarvestEntry, type RiskLevel } from "@/hooks/usePostHarvest";
+import { queueHarvest, getPendingCount, syncPendingHarvests, installOfflineSync } from "@/lib/offlineQueue";
+import { useEffect } from "react";
+import { CloudOff, RefreshCw } from "lucide-react";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
@@ -65,30 +68,69 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cropName || !quantity) { toast.error("Crop name and quantity are required"); return; }
+    if (!user) { toast.error("Please sign in"); return; }
     setSaving(true);
     try {
-      const photoUrls: string[] = [];
-      if (user && files.length) {
+      const offline = !navigator.onLine;
+      if (offline) {
+        await queueHarvest({
+          user_id: user.id,
+          crop_name: cropName,
+          quantity: Number(quantity),
+          unit, harvest_date: date,
+          storage_location: location || null,
+          storage_method: method || null,
+          notes: notes || null,
+        }, files);
+        toast.success("Saved offline — will sync automatically when online");
+      } else {
+        const photoUrls: string[] = [];
+        const failedPhotos: File[] = [];
         for (const f of files) {
           try { photoUrls.push(await uploadHarvestPhoto(user.id, f)); }
-          catch { toast.message("Photo will sync when online", { description: "Saved locally for now" }); }
+          catch { failedPhotos.push(f); }
+        }
+        try {
+          await addEntry({
+            crop_name: cropName,
+            quantity: Number(quantity),
+            unit, harvest_date: date,
+            storage_location: location || null,
+            storage_method: method || null,
+            notes: notes || null,
+            photos: photoUrls,
+          });
+          if (failedPhotos.length) {
+            // Queue remaining photos as a follow-up entry? simpler: queue full retry
+            toast.message(`Saved. ${failedPhotos.length} photo(s) will retry when online.`);
+            await queueHarvest({
+              user_id: user.id,
+              crop_name: `${cropName} (photos)`,
+              quantity: 0, unit, harvest_date: date,
+              storage_location: location || null,
+              storage_method: null, notes: "Photo-only retry",
+            }, failedPhotos);
+          } else {
+            toast.success("Harvest saved");
+          }
+        } catch {
+          // Network failure — queue the whole thing
+          await queueHarvest({
+            user_id: user.id,
+            crop_name: cropName,
+            quantity: Number(quantity),
+            unit, harvest_date: date,
+            storage_location: location || null,
+            storage_method: method || null,
+            notes: notes || null,
+          }, files);
+          toast.success("Saved offline — will sync automatically when online");
         }
       }
-      await addEntry({
-        crop_name: cropName,
-        quantity: Number(quantity),
-        unit,
-        harvest_date: date,
-        storage_location: location || null,
-        storage_method: method || null,
-        notes: notes || null,
-        photos: photoUrls,
-      });
-      toast.success("Harvest saved");
       setCropName(""); setQuantity(""); setLocation(""); setNotes(""); setFiles([]);
       onAdded();
     } catch (err: any) {
-      toast.error(err.message || "Could not save — will retry when online");
+      toast.error(err.message || "Could not save");
     } finally { setSaving(false); }
   };
 
