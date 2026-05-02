@@ -9,16 +9,17 @@ import UserSettings from "./UserSettings";
 import SecurityPanel from "./SecurityPanel";
 import SubscriptionPanel from "./SubscriptionPanel";
 import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
+import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Bot, Plane, Settings, Users,
-  LogOut, ShieldAlert, Menu, CreditCard, Archive,
+  LogOut, ShieldAlert, Menu, CreditCard, Archive, Store,
 } from "lucide-react";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
-type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" | "security" | "subscriptions" | "post-harvest";
+type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
@@ -26,6 +27,7 @@ const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "ai", label: "Odeneho AI", icon: Bot },
   { key: "flight", label: "Flight Advisory", icon: Plane },
   { key: "post-harvest", label: "Post-Harvest", icon: Archive },
+  { key: "market-link", label: "Market Link", icon: Store },
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
   { key: "security", label: "Security", icon: ShieldAlert },
   { key: "system", label: "System Control", icon: Settings },
@@ -79,6 +81,7 @@ export default function AdminDashboard() {
       case "security": return <SecurityPanel />;
       case "subscriptions": return <SubscriptionPanel />;
       case "post-harvest": return <PostHarvestAdminPanel />;
+      case "market-link": return <MarketLinkAdminPanel />;
       default: return <OverviewPanel />;
     }
   };

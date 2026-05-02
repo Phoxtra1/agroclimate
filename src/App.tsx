@@ -29,6 +29,8 @@ import FarmBusinessHub from "./pages/FarmBusinessHub";
 import HandlerManagement from "./pages/HandlerManagement";
 import HandlerWorkspace from "./pages/HandlerWorkspace";
 import PostHarvestTracker from "./pages/PostHarvestTracker";
+import MarketLink from "./pages/MarketLink";
+import { installOfflineSync } from "@/lib/offlineQueue";
 
 const queryClient = new QueryClient();
 
@@ -189,6 +191,7 @@ function AppRoutes() {
       <Route path="/farm-business" element={<ProtectedRoute><FarmBusinessHub /></ProtectedRoute>} />
       <Route path="/handler-management" element={<ProtectedRoute><HandlerManagement /></ProtectedRoute>} />
       <Route path="/post-harvest" element={<ProtectedRoute><PostHarvestTracker /></ProtectedRoute>} />
+      <Route path="/market-link" element={<ProtectedRoute><MarketLink /></ProtectedRoute>} />
       <Route
         path="/learning"
         element={
@@ -208,20 +211,23 @@ function AppRoutes() {
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  useEffect(() => { installOfflineSync(); }, []);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

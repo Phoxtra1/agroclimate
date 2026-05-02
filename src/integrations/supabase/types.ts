@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      buyer_orders: {
+        Row: {
+          buyer_id: string
+          buyer_name: string | null
+          created_at: string
+          crop_name: string
+          delivery_end: string | null
+          delivery_start: string | null
+          id: string
+          notes: string | null
+          quantity_needed: number
+          region: string | null
+          status: string
+          target_price: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          buyer_id: string
+          buyer_name?: string | null
+          created_at?: string
+          crop_name: string
+          delivery_end?: string | null
+          delivery_start?: string | null
+          id?: string
+          notes?: string | null
+          quantity_needed?: number
+          region?: string | null
+          status?: string
+          target_price?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string
+          buyer_name?: string | null
+          created_at?: string
+          crop_name?: string
+          delivery_end?: string | null
+          delivery_start?: string | null
+          id?: string
+          notes?: string | null
+          quantity_needed?: number
+          region?: string | null
+          status?: string
+          target_price?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       disaster_alerts: {
         Row: {
           active: boolean
@@ -148,6 +199,54 @@ export type Database = {
           created_at?: string
           crop_name?: string
           id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      farmer_inputs: {
+        Row: {
+          created_at: string
+          crop_name: string
+          expected_quantity: number
+          harvest_end: string | null
+          harvest_start: string | null
+          id: string
+          notes: string | null
+          region: string | null
+          risk_level: string
+          status: string
+          unit: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          crop_name: string
+          expected_quantity?: number
+          harvest_end?: string | null
+          harvest_start?: string | null
+          id?: string
+          notes?: string | null
+          region?: string | null
+          risk_level?: string
+          status?: string
+          unit?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          crop_name?: string
+          expected_quantity?: number
+          harvest_end?: string | null
+          harvest_start?: string | null
+          id?: string
+          notes?: string | null
+          region?: string | null
+          risk_level?: string
+          status?: string
+          unit?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -573,6 +672,63 @@ export type Database = {
         }
         Relationships: []
       }
+      market_contracts: {
+        Row: {
+          buyer_id: string
+          buyer_order_id: string | null
+          created_at: string
+          crop_name: string
+          delivery_end: string | null
+          delivery_start: string | null
+          farmer_id: string
+          farmer_input_id: string | null
+          id: string
+          locked_price: number
+          logistics_status: string
+          notes: string | null
+          quantity: number
+          state: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          buyer_id: string
+          buyer_order_id?: string | null
+          created_at?: string
+          crop_name: string
+          delivery_end?: string | null
+          delivery_start?: string | null
+          farmer_id: string
+          farmer_input_id?: string | null
+          id?: string
+          locked_price?: number
+          logistics_status?: string
+          notes?: string | null
+          quantity?: number
+          state?: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string
+          buyer_order_id?: string | null
+          created_at?: string
+          crop_name?: string
+          delivery_end?: string | null
+          delivery_start?: string | null
+          farmer_id?: string
+          farmer_input_id?: string | null
+          id?: string
+          locked_price?: number
+          logistics_status?: string
+          notes?: string | null
+          quantity?: number
+          state?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       post_harvest_entries: {
         Row: {
           created_at: string
@@ -618,6 +774,45 @@ export type Database = {
           unit?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      price_intelligence: {
+        Row: {
+          created_at: string
+          crop_name: string
+          current_price: number
+          id: string
+          region: string | null
+          suggested_price: number
+          trend: string
+          unit: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          crop_name: string
+          current_price?: number
+          id?: string
+          region?: string | null
+          suggested_price?: number
+          trend?: string
+          unit?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          crop_name?: string
+          current_price?: number
+          id?: string
+          region?: string | null
+          suggested_price?: number
+          trend?: string
+          unit?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
