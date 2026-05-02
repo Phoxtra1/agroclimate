@@ -310,8 +310,28 @@ function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; ope
 }
 
 export default function PostHarvestTracker() {
-  const { entries, loading, deleteEntry } = usePostHarvest();
+  const { entries, loading, deleteEntry, fetchEntries } = usePostHarvest();
   const [adviceEntry, setAdviceEntry] = useState<HarvestEntry | null>(null);
+  const [pending, setPending] = useState(getPendingCount());
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    installOfflineSync();
+    const refresh = () => setPending(getPendingCount());
+    const onOnline = () => { setOnline(true); refresh(); };
+    const onOffline = () => setOnline(false);
+    window.addEventListener("agc:queue-changed", refresh);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    const t = setInterval(refresh, 5000);
+    return () => {
+      window.removeEventListener("agc:queue-changed", refresh);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      clearInterval(t);
+    };
+  }, []);
 
   const dangerCount = entries.filter((e) => computeRisk(e).level === "danger").length;
 
@@ -321,12 +341,39 @@ export default function PostHarvestTracker() {
     toast.success("Entry deleted");
   };
 
+  const runSync = async () => {
+    setSyncing(true);
+    const r = await syncPendingHarvests();
+    setSyncing(false);
+    setPending(getPendingCount());
+    if (r.synced) { toast.success(`Synced ${r.synced} entr${r.synced === 1 ? "y" : "ies"}`); fetchEntries(); }
+    if (r.failed) toast.error(`${r.failed} still pending — will retry`);
+    if (!r.synced && !r.failed) toast.message("Nothing to sync");
+  };
+
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-5">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2"><Sprout className="h-6 w-6 text-primary" /> Post-Harvest Tracker</h1>
         <p className="text-sm text-muted-foreground">Track stored crops, monitor spoilage risk and get AI guidance.</p>
       </div>
+
+      {(pending > 0 || !online) && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-800 dark:text-yellow-200 rounded-lg p-3 flex items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-2">
+            <CloudOff className="h-4 w-4" />
+            <span>
+              {!online ? "You're offline. " : ""}
+              {pending > 0 ? `${pending} entr${pending === 1 ? "y" : "ies"} waiting to sync.` : "All saved locally — will sync when online."}
+            </span>
+          </div>
+          {online && pending > 0 && (
+            <Button size="sm" variant="outline" onClick={runSync} disabled={syncing}>
+              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Sync now
+            </Button>
+          )}
+        </div>
+      )}
 
       {dangerCount > 0 && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 rounded-lg p-3 flex items-start gap-2 text-sm">
