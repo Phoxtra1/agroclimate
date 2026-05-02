@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import {
   useMarketLink, suggestPrice,
-  type FarmerInput, type BuyerOrder, type MarketContract,
+  type FarmerInput, type BuyerOrder, type MarketContract, type PriceRow,
 } from "@/hooks/useMarketLink";
 import { useProfile } from "@/hooks/useProfile";
 
