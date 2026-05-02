@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,14 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sprout, AlertTriangle, Package, Camera, Sparkles, Trash2, Search, Loader2 } from "lucide-react";
+import { Sprout, AlertTriangle, Package, Camera, Sparkles, Trash2, Search, Loader2, CloudOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePostHarvest, computeRisk, uploadHarvestPhoto, type HarvestEntry, type RiskLevel } from "@/hooks/usePostHarvest";
 import { queueHarvest, getPendingCount, syncPendingHarvests, installOfflineSync } from "@/lib/offlineQueue";
-import { useEffect } from "react";
-import { CloudOff, RefreshCw } from "lucide-react";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
