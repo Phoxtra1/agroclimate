@@ -94,8 +94,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading || roleLoading) return <LoadingScreen />;
   if (!user && !isPreview) return <Navigate to="/" replace />;
-  // Handlers cannot access farmer dashboard pages
   if (role === "handler" && !isPreview) return <Navigate to="/handlers" replace />;
+  // Buyers must NOT enter the farmer dashboard
+  if (role === "buyer" && !isPreview) return <Navigate to="/marketplace" replace />;
 
   return <AppLayout>{children}</AppLayout>;
 }
