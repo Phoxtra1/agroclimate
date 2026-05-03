@@ -43,13 +43,36 @@ function writePhotos(photos: Record<string, CachedPhoto>) {
   localStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
 }
 
-function fileToDataUrl(file: File): Promise<string> {
+function fileToDataUrl(file: File | Blob): Promise<string> {
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(String(r.result));
     r.onerror = rej;
     r.readAsDataURL(file);
   });
+}
+
+// Downscale + JPEG-compress an image to reduce storage and upload time
+async function compressImage(file: File, maxEdge = 1280, quality = 0.7): Promise<Blob> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const dataUrl = await fileToDataUrl(file);
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+    const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, "image/jpeg", quality));
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file;
+  }
 }
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
@@ -65,7 +88,14 @@ export async function queueHarvest(
   const photo_keys: string[] = [];
   for (const f of files) {
     const key = `${entry.user_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    photos[key] = { key, user_id: entry.user_id, filename: f.name, type: f.type || "image/jpeg", data_url: await fileToDataUrl(f) };
+    const compressed = await compressImage(f);
+    photos[key] = {
+      key,
+      user_id: entry.user_id,
+      filename: (f.name || "photo.jpg").replace(/\.[^.]+$/, "") + ".jpg",
+      type: "image/jpeg",
+      data_url: await fileToDataUrl(compressed),
+    };
     photo_keys.push(key);
   }
   writePhotos(photos);
@@ -104,6 +134,24 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
 
     for (const item of queue) {
       try {
+        // CONFLICT-SAFE: skip if server already has a newer entry for this same
+        // user/crop/harvest_date that was created AFTER we queued it offline.
+        // This prevents an offline edit from clobbering newer server data.
+        const queuedAt = new Date(item.queued_at).toISOString();
+        const { data: newer } = await supabase
+          .from("post_harvest_entries" as any)
+          .select("id, updated_at")
+          .eq("user_id", item.user_id)
+          .eq("crop_name", item.crop_name)
+          .eq("harvest_date", item.harvest_date)
+          .gt("updated_at", queuedAt)
+          .limit(1);
+        if (newer && newer.length > 0) {
+          // Server has fresher data → drop this stale offline copy and free its photos
+          for (const k of item.photo_keys) delete photos[k];
+          continue;
+        }
+
         // Upload photos first
         const photoUrls: string[] = [];
         for (const k of item.photo_keys) {

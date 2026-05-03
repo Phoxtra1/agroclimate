@@ -18,12 +18,17 @@ export type Database = {
         Row: {
           buyer_id: string
           buyer_name: string | null
+          contact_email: string | null
+          contact_phone: string | null
           created_at: string
           crop_name: string
           delivery_end: string | null
           delivery_start: string | null
+          grade: string | null
           id: string
+          moisture: string | null
           notes: string | null
+          quality: string | null
           quantity_needed: number
           region: string | null
           status: string
@@ -34,12 +39,17 @@ export type Database = {
         Insert: {
           buyer_id: string
           buyer_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           crop_name: string
           delivery_end?: string | null
           delivery_start?: string | null
+          grade?: string | null
           id?: string
+          moisture?: string | null
           notes?: string | null
+          quality?: string | null
           quantity_needed?: number
           region?: string | null
           status?: string
@@ -50,12 +60,17 @@ export type Database = {
         Update: {
           buyer_id?: string
           buyer_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           crop_name?: string
           delivery_end?: string | null
           delivery_start?: string | null
+          grade?: string | null
           id?: string
+          moisture?: string | null
           notes?: string | null
+          quality?: string | null
           quantity_needed?: number
           region?: string | null
           status?: string
@@ -205,49 +220,73 @@ export type Database = {
       }
       farmer_inputs: {
         Row: {
+          category: string | null
+          contact_email: string | null
+          contact_phone: string | null
           created_at: string
           crop_name: string
+          delivery_timeline: string | null
           expected_quantity: number
           harvest_end: string | null
           harvest_start: string | null
           id: string
+          image_url: string | null
           notes: string | null
+          quality_grade: string | null
           region: string | null
           risk_level: string
           status: string
+          suggested_price: number | null
           unit: string
           updated_at: string
           user_id: string
+          verified: boolean | null
         }
         Insert: {
+          category?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           crop_name: string
+          delivery_timeline?: string | null
           expected_quantity?: number
           harvest_end?: string | null
           harvest_start?: string | null
           id?: string
+          image_url?: string | null
           notes?: string | null
+          quality_grade?: string | null
           region?: string | null
           risk_level?: string
           status?: string
+          suggested_price?: number | null
           unit?: string
           updated_at?: string
           user_id: string
+          verified?: boolean | null
         }
         Update: {
+          category?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
           created_at?: string
           crop_name?: string
+          delivery_timeline?: string | null
           expected_quantity?: number
           harvest_end?: string | null
           harvest_start?: string | null
           id?: string
+          image_url?: string | null
           notes?: string | null
+          quality_grade?: string | null
           region?: string | null
           risk_level?: string
           status?: string
+          suggested_price?: number | null
           unit?: string
           updated_at?: string
           user_id?: string
+          verified?: boolean | null
         }
         Relationships: []
       }
@@ -729,6 +768,60 @@ export type Database = {
         }
         Relationships: []
       }
+      market_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          read_at: string | null
+          recipient_id: string
+          related_order_id: string | null
+          related_supply_id: string | null
+          sender_id: string
+          thread_key: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          recipient_id: string
+          related_order_id?: string | null
+          related_supply_id?: string | null
+          sender_id: string
+          thread_key: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          recipient_id?: string
+          related_order_id?: string | null
+          related_supply_id?: string | null
+          sender_id?: string
+          thread_key?: string
+        }
+        Relationships: []
+      }
+      market_presence: {
+        Row: {
+          display_name: string | null
+          last_seen: string
+          user_id: string
+        }
+        Insert: {
+          display_name?: string | null
+          last_seen?: string
+          user_id: string
+        }
+        Update: {
+          display_name?: string | null
+          last_seen?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       post_harvest_entries: {
         Row: {
           created_at: string
@@ -1117,7 +1210,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user" | "handler"
+      app_role: "admin" | "moderator" | "user" | "handler" | "buyer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1245,7 +1338,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user", "handler"],
+      app_role: ["admin", "moderator", "user", "handler", "buyer"],
     },
   },
 } as const

@@ -30,6 +30,12 @@ import HandlerManagement from "./pages/HandlerManagement";
 import HandlerWorkspace from "./pages/HandlerWorkspace";
 import PostHarvestTracker from "./pages/PostHarvestTracker";
 import MarketLink from "./pages/MarketLink";
+import MarketplaceHome from "./pages/marketplace/MarketplaceHome";
+import MarketplaceSupplyPage from "./pages/marketplace/MarketplaceSupplyPage";
+import MarketplaceOrderForm from "./pages/marketplace/MarketplaceOrderForm";
+import MarketplaceOrderListing from "./pages/marketplace/MarketplaceOrderListing";
+import MarketplaceAuth from "./pages/marketplace/MarketplaceAuth";
+import MarketplaceInbox from "./pages/marketplace/MarketplaceInbox";
 import { installOfflineSync } from "@/lib/offlineQueue";
 
 const queryClient = new QueryClient();
@@ -55,7 +61,7 @@ function LoadingScreen() {
 // Hook to check if user has handler role
 function useUserRole() {
   const { user, loading: authLoading } = useAuth();
-  const [role, setRole] = useState<"user" | "handler" | "admin" | null>(null);
+  const [role, setRole] = useState<"user" | "handler" | "admin" | "buyer" | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
@@ -71,6 +77,7 @@ function useUserRole() {
       const roles = (data || []).map((r: any) => r.role);
       if (roles.includes("admin")) setRole("admin");
       else if (roles.includes("handler")) setRole("handler");
+      else if (roles.includes("buyer")) setRole("buyer");
       else setRole("user");
       setRoleLoading(false);
     };
@@ -87,8 +94,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading || roleLoading) return <LoadingScreen />;
   if (!user && !isPreview) return <Navigate to="/" replace />;
-  // Handlers cannot access farmer dashboard pages
   if (role === "handler" && !isPreview) return <Navigate to="/handlers" replace />;
+  // Buyers must NOT enter the farmer dashboard
+  if (role === "buyer" && !isPreview) return <Navigate to="/marketplace" replace />;
 
   return <AppLayout>{children}</AppLayout>;
 }
@@ -113,13 +121,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   if (loading || roleLoading) return <LoadingScreen />;
 
+  // Unauthenticated → landing page (NOT /admin → caused blank-page redirect loop)
   if (!user && !isPreview) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  // FIX: Non-admin users go to /dashboard, NOT back to /admin (which caused infinite loop)
+  // Authenticated non-admins → user dashboard
   if (role !== "admin" && !isPreview) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={role === "handler" ? "/handlers" : "/dashboard"} replace />;
   }
 
   return <AppLayout hideSidebar>{children}</AppLayout>;
@@ -158,6 +167,7 @@ function AppRoutes() {
   const getHomeRoute = () => {
     if (role === "admin") return "/admin";
     if (role === "handler") return "/handlers";
+    if (role === "buyer") return "/marketplace";
     return "/dashboard";
   };
 
@@ -169,6 +179,14 @@ function AppRoutes() {
       />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Public Marketplace (buyer-facing) — does NOT require auth to browse */}
+      <Route path="/marketplace" element={<MarketplaceHome />} />
+      <Route path="/marketplace/supply" element={<MarketplaceSupplyPage />} />
+      <Route path="/marketplace/orders" element={<MarketplaceOrderForm />} />
+      <Route path="/marketplace/order-listing" element={<MarketplaceOrderListing />} />
+      <Route path="/marketplace/auth" element={<MarketplaceAuth />} />
+      <Route path="/marketplace/inbox" element={<MarketplaceInbox />} />
 
       {/* Handler workspace */}
       <Route path="/handlers" element={<HandlerRoute><HandlerWorkspace /></HandlerRoute>} />
