@@ -88,7 +88,14 @@ export async function queueHarvest(
   const photo_keys: string[] = [];
   for (const f of files) {
     const key = `${entry.user_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    photos[key] = { key, user_id: entry.user_id, filename: f.name, type: f.type || "image/jpeg", data_url: await fileToDataUrl(f) };
+    const compressed = await compressImage(f);
+    photos[key] = {
+      key,
+      user_id: entry.user_id,
+      filename: (f.name || "photo.jpg").replace(/\.[^.]+$/, "") + ".jpg",
+      type: "image/jpeg",
+      data_url: await fileToDataUrl(compressed),
+    };
     photo_keys.push(key);
   }
   writePhotos(photos);
