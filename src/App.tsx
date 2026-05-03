@@ -30,6 +30,12 @@ import HandlerManagement from "./pages/HandlerManagement";
 import HandlerWorkspace from "./pages/HandlerWorkspace";
 import PostHarvestTracker from "./pages/PostHarvestTracker";
 import MarketLink from "./pages/MarketLink";
+import MarketplaceHome from "./pages/marketplace/MarketplaceHome";
+import MarketplaceSupplyPage from "./pages/marketplace/MarketplaceSupplyPage";
+import MarketplaceOrderForm from "./pages/marketplace/MarketplaceOrderForm";
+import MarketplaceOrderListing from "./pages/marketplace/MarketplaceOrderListing";
+import MarketplaceAuth from "./pages/marketplace/MarketplaceAuth";
+import MarketplaceInbox from "./pages/marketplace/MarketplaceInbox";
 import { installOfflineSync } from "@/lib/offlineQueue";
 
 const queryClient = new QueryClient();
