@@ -167,6 +167,7 @@ function AppRoutes() {
   const getHomeRoute = () => {
     if (role === "admin") return "/admin";
     if (role === "handler") return "/handlers";
+    if (role === "buyer") return "/marketplace";
     return "/dashboard";
   };
 
@@ -178,6 +179,14 @@ function AppRoutes() {
       />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Public Marketplace (buyer-facing) — does NOT require auth to browse */}
+      <Route path="/marketplace" element={<MarketplaceHome />} />
+      <Route path="/marketplace/supply" element={<MarketplaceSupplyPage />} />
+      <Route path="/marketplace/orders" element={<MarketplaceOrderForm />} />
+      <Route path="/marketplace/order-listing" element={<MarketplaceOrderListing />} />
+      <Route path="/marketplace/auth" element={<MarketplaceAuth />} />
+      <Route path="/marketplace/inbox" element={<MarketplaceInbox />} />
 
       {/* Handler workspace */}
       <Route path="/handlers" element={<HandlerRoute><HandlerWorkspace /></HandlerRoute>} />
