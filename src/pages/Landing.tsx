@@ -106,9 +106,16 @@ export default function Landing() {
         <div className="container mx-auto px-4 py-8 lg:py-16">
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
-                <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
+                  <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
+                </div>
+                <Link to="/marketplace">
+                  <Button size="sm" variant="outline" className="gap-1">
+                    🛒 Market Link
+                  </Button>
+                </Link>
               </div>
               <p className="text-xs font-semibold text-primary mb-2">AGC V1.0</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
