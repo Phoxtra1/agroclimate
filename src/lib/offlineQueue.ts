@@ -43,13 +43,36 @@ function writePhotos(photos: Record<string, CachedPhoto>) {
   localStorage.setItem(PHOTOS_KEY, JSON.stringify(photos));
 }
 
-function fileToDataUrl(file: File): Promise<string> {
+function fileToDataUrl(file: File | Blob): Promise<string> {
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(String(r.result));
     r.onerror = rej;
     r.readAsDataURL(file);
   });
+}
+
+// Downscale + JPEG-compress an image to reduce storage and upload time
+async function compressImage(file: File, maxEdge = 1280, quality = 0.7): Promise<Blob> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const dataUrl = await fileToDataUrl(file);
+    const img = new Image();
+    img.src = dataUrl;
+    await new Promise((r, j) => { img.onload = r; img.onerror = j; });
+    const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, "image/jpeg", quality));
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file;
+  }
 }
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
