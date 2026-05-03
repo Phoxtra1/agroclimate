@@ -259,6 +259,18 @@ export default function Landing() {
                 </Button>
               </Link>
             </div>
+
+            <div className="bg-gradient-to-br from-primary/15 to-accent/10 rounded-xl p-5 text-center border border-primary/20">
+              <h4 className="font-bold text-sm mb-1">🛒 Market Link</h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                Public agricultural trade access — discover supply, post demand, contact farmers directly.
+              </p>
+              <Link to="/marketplace">
+                <Button size="sm" variant="default">
+                  Open Market Link <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
 
