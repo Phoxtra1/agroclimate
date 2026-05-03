@@ -61,7 +61,7 @@ function LoadingScreen() {
 // Hook to check if user has handler role
 function useUserRole() {
   const { user, loading: authLoading } = useAuth();
-  const [role, setRole] = useState<"user" | "handler" | "admin" | null>(null);
+  const [role, setRole] = useState<"user" | "handler" | "admin" | "buyer" | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
@@ -77,6 +77,7 @@ function useUserRole() {
       const roles = (data || []).map((r: any) => r.role);
       if (roles.includes("admin")) setRole("admin");
       else if (roles.includes("handler")) setRole("handler");
+      else if (roles.includes("buyer")) setRole("buyer");
       else setRole("user");
       setRoleLoading(false);
     };
