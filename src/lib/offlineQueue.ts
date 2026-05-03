@@ -134,6 +134,24 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
 
     for (const item of queue) {
       try {
+        // CONFLICT-SAFE: skip if server already has a newer entry for this same
+        // user/crop/harvest_date that was created AFTER we queued it offline.
+        // This prevents an offline edit from clobbering newer server data.
+        const queuedAt = new Date(item.queued_at).toISOString();
+        const { data: newer } = await supabase
+          .from("post_harvest_entries" as any)
+          .select("id, updated_at")
+          .eq("user_id", item.user_id)
+          .eq("crop_name", item.crop_name)
+          .eq("harvest_date", item.harvest_date)
+          .gt("updated_at", queuedAt)
+          .limit(1);
+        if (newer && newer.length > 0) {
+          // Server has fresher data → drop this stale offline copy and free its photos
+          for (const k of item.photo_keys) delete photos[k];
+          continue;
+        }
+
         // Upload photos first
         const photoUrls: string[] = [];
         for (const k of item.photo_keys) {
