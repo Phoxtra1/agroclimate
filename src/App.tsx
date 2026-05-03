@@ -113,13 +113,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   if (loading || roleLoading) return <LoadingScreen />;
 
+  // Unauthenticated → landing page (NOT /admin → caused blank-page redirect loop)
   if (!user && !isPreview) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  // FIX: Non-admin users go to /dashboard, NOT back to /admin (which caused infinite loop)
+  // Authenticated non-admins → user dashboard
   if (role !== "admin" && !isPreview) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={role === "handler" ? "/handlers" : "/dashboard"} replace />;
   }
 
   return <AppLayout hideSidebar>{children}</AppLayout>;
