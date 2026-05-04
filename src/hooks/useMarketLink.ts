@@ -39,13 +39,6 @@ export interface BuyerOrder {
   delivery_end: string | null;
   status: "open" | "matched" | "fulfilled" | "cancelled";
   notes: string | null;
-  category?: string | null;
-  image_url?: string | null;
-  quality_grade?: string | null;
-  suggested_price?: number | null;
-  price_label?: string | null;
-  contact_email?: string | null;
-  contact_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,13 +58,6 @@ export interface MarketContract {
   state: "proposed" | "accepted" | "rejected" | "cancelled" | "completed";
   logistics_status: "pending" | "scheduled" | "in_transit" | "delivered";
   notes: string | null;
-  category?: string | null;
-  image_url?: string | null;
-  quality_grade?: string | null;
-  suggested_price?: number | null;
-  price_label?: string | null;
-  contact_email?: string | null;
-  contact_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
