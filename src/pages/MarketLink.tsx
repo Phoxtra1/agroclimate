@@ -13,7 +13,8 @@ import {
   Loader2, Image as ImageIcon, Inbox, Check, X, Send,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useMarketLink, suggestPrice, type PriceRow, makeThreadKey } from "@/hooks/useMarketLink";
+import { useMarketLink, suggestPrice, type PriceRow } from "@/hooks/useMarketLink";
+import { makeThreadKey } from "@/hooks/useMarketChat";
 import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
