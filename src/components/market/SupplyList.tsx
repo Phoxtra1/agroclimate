@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, MapPin, Calendar, BadgeCheck, Phone, Mail, MessageCircle, Pencil, Trash2, Save, Loader2, Handshake } from "lucide-react";
+import { Search, MapPin, Calendar, BadgeCheck, Phone, Mail, MessageCircle, Pencil, Trash2, Save, Loader2, Handshake, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ChatPanel } from "./ChatPanel";
 import { useAuth } from "@/hooks/useAuth";
