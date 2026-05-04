@@ -58,6 +58,18 @@ function LoadingScreen() {
   );
 }
 
+function AdminAccessFallback() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="max-w-md w-full rounded-lg border bg-card p-6 text-center shadow-sm">
+        <h1 className="text-xl font-bold mb-2">Admin Workspace</h1>
+        <p className="text-sm text-muted-foreground mb-4">Sign in with an admin account to open this workspace.</p>
+        <a href="/" className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">Go to sign in</a>
+      </div>
+    </div>
+  );
+}
+
 // Hook to check if user has handler role
 function useUserRole() {
   const { user, loading: authLoading } = useAuth();
@@ -123,12 +135,12 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   // Unauthenticated → landing page (NOT /admin → caused blank-page redirect loop)
   if (!user && !isPreview) {
-    return <Navigate to="/" replace />;
+    return <AdminAccessFallback />;
   }
 
-  // Authenticated non-admins → user dashboard
+  // Authenticated non-admins → correct workspace instead of a blank guarded route
   if (role !== "admin" && !isPreview) {
-    return <Navigate to={role === "handler" ? "/handlers" : "/dashboard"} replace />;
+    return <Navigate to={role === "handler" ? "/handlers" : role === "buyer" ? "/marketplace" : "/dashboard"} replace />;
   }
 
   return <AppLayout hideSidebar>{children}</AppLayout>;
