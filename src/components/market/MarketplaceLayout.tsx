@@ -29,7 +29,6 @@ export function MarketplaceLayout({ children }: { children: ReactNode }) {
             <NavLink to="/marketplace" end className={linkCls}><Home className="h-4 w-4" />Home</NavLink>
             <NavLink to="/marketplace/supply" className={linkCls}><Package className="h-4 w-4" />Supply Listings</NavLink>
             <NavLink to="/marketplace/orders" className={linkCls}><ListPlus className="h-4 w-4" />Place Order</NavLink>
-            <NavLink to="/marketplace/order-listing" className={linkCls}><Package className="h-4 w-4" />Order Listing</NavLink>
             {user && <NavLink to="/marketplace/inbox" className={linkCls}>Messages</NavLink>}
           </nav>
           <div className="ml-auto flex items-center gap-2">
@@ -47,7 +46,6 @@ export function MarketplaceLayout({ children }: { children: ReactNode }) {
           <NavLink to="/marketplace" end className={linkCls}>Home</NavLink>
           <NavLink to="/marketplace/supply" className={linkCls}>Supply</NavLink>
           <NavLink to="/marketplace/orders" className={linkCls}>Place Order</NavLink>
-          <NavLink to="/marketplace/order-listing" className={linkCls}>Orders</NavLink>
           {user && <NavLink to="/marketplace/inbox" className={linkCls}>Messages</NavLink>}
         </div>
       </header>

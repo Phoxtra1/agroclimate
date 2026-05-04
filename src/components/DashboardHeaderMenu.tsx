@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Bell, Sun, Moon, Settings, Lightbulb, BellRing, Check, Trash2, Store } from "lucide-react";
+import { Bell, Sun, Moon, Settings, Lightbulb, BellRing, Check, Trash2, Store, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -47,6 +47,12 @@ export function DashboardHeaderMenu({ unreadCount = 0, alerts = [], onMarkRead, 
         <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="Farm Business Hub">
           <Lightbulb className="h-4 w-4" />
           <span className="hidden sm:inline text-xs font-medium">Business</span>
+        </Button>
+      </Link>
+      <Link to="/post-harvest">
+        <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="Post-Harvest">
+          <Archive className="h-4 w-4" />
+          <span className="hidden sm:inline text-xs font-medium">Post-Harvest</span>
         </Button>
       </Link>
       <Link to="/market-link">
