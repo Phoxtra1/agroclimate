@@ -111,7 +111,7 @@ export default function Landing() {
                   <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
                   <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
                 </div>
-                <Link to="/marketplace">
+                <Link to="/marketplace/auth">
                   <Button size="sm" variant="outline" className="gap-1">
                     🛒 Market Link
                   </Button>

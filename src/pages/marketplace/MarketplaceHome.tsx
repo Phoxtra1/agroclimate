@@ -3,7 +3,7 @@ import { SupplyList } from "@/components/market/SupplyList";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { ArrowRight, Sprout, ShoppingBag, FileSignature } from "lucide-react";
+import { ArrowRight, Sprout, ShoppingBag } from "lucide-react";
 
 export default function MarketplaceHome() {
   return (
@@ -11,7 +11,7 @@ export default function MarketplaceHome() {
       <section className="text-center py-6">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Connect with African farmers, directly.</h1>
         <p className="text-muted-foreground mt-2 max-w-2xl mx-auto text-sm md:text-base">
-          Discover verified supply, post your demand, and coordinate trade — all in one place. AgroClimate keeps everything visible and fair.
+          Discover verified supply and post your demand while keeping trade coordination visible and fair.
         </p>
         <div className="flex justify-center gap-2 mt-4 flex-wrap">
           <Link to="/marketplace/supply"><Button>Browse Supply <ArrowRight className="h-4 w-4 ml-1" /></Button></Link>
@@ -23,7 +23,6 @@ export default function MarketplaceHome() {
         {[
           { icon: ShoppingBag, title: "Supply Listings", desc: "Real-time produce from verified farmers across regions." },
           { icon: Sprout, title: "Place Order", desc: "Post buyer demand — farmers respond directly." },
-          { icon: FileSignature, title: "Contracts", desc: "Lock in price, quantity, and delivery terms securely." },
         ].map((c) => (
           <Card key={c.title}><CardContent className="pt-5">
             <c.icon className="h-6 w-6 text-primary mb-2" />
