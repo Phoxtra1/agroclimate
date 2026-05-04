@@ -14,6 +14,13 @@ export interface FarmerInput {
   risk_level: "low" | "medium" | "high";
   status: "open" | "committed" | "fulfilled" | "cancelled";
   notes: string | null;
+  category?: string | null;
+  image_url?: string | null;
+  quality_grade?: string | null;
+  suggested_price?: number | null;
+  price_label?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,10 +34,18 @@ export interface BuyerOrder {
   quantity_needed: number;
   unit: string;
   target_price: number;
+  price_label?: string | null;
   delivery_start: string | null;
   delivery_end: string | null;
   status: "open" | "matched" | "fulfilled" | "cancelled";
   notes: string | null;
+  category?: string | null;
+  image_url?: string | null;
+  quality_grade?: string | null;
+  suggested_price?: number | null;
+  price_label?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,6 +65,13 @@ export interface MarketContract {
   state: "proposed" | "accepted" | "rejected" | "cancelled" | "completed";
   logistics_status: "pending" | "scheduled" | "in_transit" | "delivered";
   notes: string | null;
+  category?: string | null;
+  image_url?: string | null;
+  quality_grade?: string | null;
+  suggested_price?: number | null;
+  price_label?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -112,10 +134,12 @@ export function useMarketLink() {
     if (error) throw error;
   };
   const updateSupply = async (id: string, patch: Partial<FarmerInput>) => {
-    await supabase.from("farmer_inputs" as any).update(patch as any).eq("id", id);
+    const { error } = await supabase.from("farmer_inputs" as any).update(patch as any).eq("id", id);
+    if (error) throw error;
   };
   const deleteSupply = async (id: string) => {
-    await supabase.from("farmer_inputs" as any).delete().eq("id", id);
+    const { error } = await supabase.from("farmer_inputs" as any).delete().eq("id", id);
+    if (error) throw error;
   };
 
   // ---- Buyer order ops ----
@@ -128,10 +152,12 @@ export function useMarketLink() {
     if (error) throw error;
   };
   const updateOrder = async (id: string, patch: Partial<BuyerOrder>) => {
-    await supabase.from("buyer_orders" as any).update(patch as any).eq("id", id);
+    const { error } = await supabase.from("buyer_orders" as any).update(patch as any).eq("id", id);
+    if (error) throw error;
   };
   const deleteOrder = async (id: string) => {
-    await supabase.from("buyer_orders" as any).delete().eq("id", id);
+    const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", id);
+    if (error) throw error;
   };
 
   // ---- Contract ops ----
@@ -167,10 +193,12 @@ export function useMarketLink() {
     if (error) throw error;
   };
   const setContractState = async (id: string, state: MarketContract["state"]) => {
-    await supabase.from("market_contracts" as any).update({ state } as any).eq("id", id);
+    const { error } = await supabase.from("market_contracts" as any).update({ state } as any).eq("id", id);
+    if (error) throw error;
   };
   const setLogistics = async (id: string, logistics_status: MarketContract["logistics_status"]) => {
-    await supabase.from("market_contracts" as any).update({ logistics_status } as any).eq("id", id);
+    const { error } = await supabase.from("market_contracts" as any).update({ logistics_status } as any).eq("id", id);
+    if (error) throw error;
   };
 
   // ---- Derived insights ----
