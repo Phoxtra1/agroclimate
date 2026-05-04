@@ -28,6 +28,7 @@ export type Database = {
           id: string
           moisture: string | null
           notes: string | null
+          price_label: string | null
           quality: string | null
           quantity_needed: number
           region: string | null
@@ -49,6 +50,7 @@ export type Database = {
           id?: string
           moisture?: string | null
           notes?: string | null
+          price_label?: string | null
           quality?: string | null
           quantity_needed?: number
           region?: string | null
@@ -70,6 +72,7 @@ export type Database = {
           id?: string
           moisture?: string | null
           notes?: string | null
+          price_label?: string | null
           quality?: string | null
           quantity_needed?: number
           region?: string | null
@@ -232,6 +235,7 @@ export type Database = {
           id: string
           image_url: string | null
           notes: string | null
+          price_label: string | null
           quality_grade: string | null
           region: string | null
           risk_level: string
@@ -255,6 +259,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           notes?: string | null
+          price_label?: string | null
           quality_grade?: string | null
           region?: string | null
           risk_level?: string
@@ -278,6 +283,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           notes?: string | null
+          price_label?: string | null
           quality_grade?: string | null
           region?: string | null
           risk_level?: string
