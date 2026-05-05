@@ -80,7 +80,10 @@ export default function AIEngine() {
         <h2 className="text-xl font-bold">Odeneho AI Engine</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Manage datasets, training jobs, and API configuration for the Odeneho AI assistant. Changes here synchronize to the user dashboard.
+        Central AI Operations Center. Manage providers, prompts, training datasets and risk-engine controls.
+        Odeneho AI is wired through a provider abstraction (<code>src/lib/aiProviders</code>) and the
+        <code> odeneho-intelligence </code> edge function so swapping to proprietary or local models
+        requires no app changes. Risk Scoring Engine: <code>src/lib/riskEngine.ts</code>.
       </p>
 
       {/* AI API Configuration */}
