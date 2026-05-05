@@ -74,7 +74,8 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
   }, [items, q, cat, region, sort]);
 
   const openChat = () => {
-    if (!user && requireAuthForChat) { toast.info("Subscribe interest saved. Sign in later to continue live chat."); return; }
+    if (!user) { toast.error("Please sign in to start a live chat"); return; }
+    if (selected && selected.user_id === user.id) { toast.info("This is your own listing — open a buyer's listing to chat."); return; }
     setChatOpen(true);
   };
 
