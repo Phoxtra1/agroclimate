@@ -154,7 +154,7 @@ export default function AGNav() {
               {showWeather && today && (
                 <CircleMarker center={center} radius={Math.max(8, (today.rainProb || 0) / 5)}
                   pathOptions={{ color: "#0ea5e9", fillColor: "#0ea5e9", fillOpacity: 0.25 }}>
-                  <Popup>Rain {today.rainProb}% · {today.tempMin}–{today.tempMax}°C · {today.description}</Popup>
+                  <Popup>Rain {today.rainProb}% · {today.tempLow}–{today.tempHigh}°C · {today.description}</Popup>
                 </CircleMarker>
               )}
 
