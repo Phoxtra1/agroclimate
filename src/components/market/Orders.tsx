@@ -126,7 +126,8 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
   }), [items, q, region]);
 
   const openChat = () => {
-    if (!user && requireAuthForChat) { toast.info("Subscribe interest saved. Sign in later for live chat."); return; }
+    if (!user) { toast.error("Please sign in to start a live chat"); return; }
+    if (selected && selected.buyer_id === user.id) { toast.info("This is your own order — open another buyer's order to chat."); return; }
     setChatOpen(true);
   };
 
