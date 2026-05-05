@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Bell, Sun, Moon, Settings, Lightbulb, BellRing, Check, Trash2, Store, Archive } from "lucide-react";
+import { Bell, Sun, Moon, Settings, Lightbulb, BellRing, Check, Trash2, Store, Archive, Anchor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -59,6 +59,12 @@ export function DashboardHeaderMenu({ unreadCount = 0, alerts = [], onMarkRead, 
         <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="Market Link">
           <Store className="h-4 w-4" />
           <span className="hidden sm:inline text-xs font-medium">Market Link</span>
+        </Button>
+      </Link>
+      <Link to="/agnav">
+        <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="AGNav — Water Transport Navigator">
+          <Anchor className="h-4 w-4" />
+          <span className="hidden sm:inline text-xs font-medium">AGNav</span>
         </Button>
       </Link>
 

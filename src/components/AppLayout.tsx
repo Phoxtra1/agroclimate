@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users, Archive, Lightbulb } from "lucide-react";
+import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, Shield, BookOpen, Package, Users, Archive, Lightbulb, Anchor, Store } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNewTag } from "@/hooks/useNewTag";
@@ -16,6 +16,8 @@ const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
   { to: "/farm-business", icon: Lightbulb, label: "Business", id: "farm-business" },
   { to: "/post-harvest", icon: Archive, label: "Post-Harvest", id: "post-harvest", isNew: true },
+  { to: "/market-link", icon: Store, label: "Market Link", id: "market-link", isNew: true },
+  { to: "/agnav", icon: Anchor, label: "AGNav", id: "agnav", isNew: true },
   { to: "/odeneho", icon: Bot, label: "Odeneho", id: "odeneho" },
   { to: "/weather", icon: Cloud, label: "Weather", id: "weather" },
   { to: "/environment", icon: Leaf, label: "Environment", id: "environment" },
