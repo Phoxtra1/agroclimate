@@ -30,6 +30,7 @@ import HandlerManagement from "./pages/HandlerManagement";
 import HandlerWorkspace from "./pages/HandlerWorkspace";
 import PostHarvestTracker from "./pages/PostHarvestTracker";
 import MarketLink from "./pages/MarketLink";
+import AGNav from "./pages/AGNav";
 import MarketplaceHome from "./pages/marketplace/MarketplaceHome";
 import MarketplaceSupplyPage from "./pages/marketplace/MarketplaceSupplyPage";
 import MarketplaceOrderForm from "./pages/marketplace/MarketplaceOrderForm";
@@ -222,6 +223,7 @@ function AppRoutes() {
       <Route path="/handler-management" element={<ProtectedRoute><HandlerManagement /></ProtectedRoute>} />
       <Route path="/post-harvest" element={<ProtectedRoute><PostHarvestTracker /></ProtectedRoute>} />
       <Route path="/market-link" element={<ProtectedRoute><MarketLink /></ProtectedRoute>} />
+      <Route path="/agnav" element={<ProtectedRoute><AGNav /></ProtectedRoute>} />
       <Route
         path="/learning"
         element={
