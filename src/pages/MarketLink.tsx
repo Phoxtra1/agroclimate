@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Store, TrendingUp, TrendingDown, Minus, AlertTriangle, Truck, Handshake, Package,
-  Loader2, Image as ImageIcon, Inbox, Check, X, Send,
+  Loader2, Image as ImageIcon, Inbox, Check, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMarketLink, suggestPrice, type PriceRow } from "@/hooks/useMarketLink";
@@ -209,6 +209,18 @@ function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }
   );
 }
 
+/**
+ * MarketLink is the SUPPLIER-facing workspace inside the user dashboard.
+ *
+ * Order Listing here surfaces buyer demand. Suppliers viewing this tab
+ * MUST NOT be able to edit or delete buyer orders — those records belong
+ * to the buyer who posted them. We therefore force `allowOwnerActions={false}`
+ * on the OrderListing component so no edit / delete / save controls render
+ * inside the supplier dashboard, regardless of who owns each order row.
+ *
+ * Buyer-side editing of their own demand happens only on the public
+ * Marketplace order screen, where allowOwnerActions is enabled separately.
+ */
 export default function MarketLink() {
   const m = useMarketLink();
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -261,7 +273,18 @@ export default function MarketLink() {
         </TabsContent>
 
         <TabsContent value="order-listing" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">Buyer order listing</CardTitle></CardHeader><CardContent><OrderListing requireAuthForChat={false} allowOwnerActions /></CardContent></Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Buyer order listing</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Read-only — these orders are placed by buyers. Respond by chat, negotiate or pre-order. Editing and deletion are reserved for the buyer who posted the demand.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {/* allowOwnerActions hard-disabled here: suppliers must not edit / delete buyer demand. */}
+              <OrderListing requireAuthForChat={false} allowOwnerActions={false} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="contracts" className="mt-3">
@@ -283,7 +306,9 @@ export default function MarketLink() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={inboxOpen} onOpenChange={setInboxOpen}><DashboardMarketInbox /></Dialog>
+      <Dialog open={inboxOpen} onOpenChange={setInboxOpen}>
+        <DashboardMarketInbox />
+      </Dialog>
     </div>
   );
 }
