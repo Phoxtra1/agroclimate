@@ -311,6 +311,7 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
                       {/* Supplier branch — chat / negotiate / pre-order only. */}
                       <Button onClick={openChat}><MessageCircle className="h-4 w-4 mr-1" />Contact buyer</Button>
                       <Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
+                      <Button variant="outline" onClick={preOrderResponse}><Send className="h-4 w-4 mr-1" />Pre-Order</Button>
                       {!user && requireAuthForChat && (
                         <p className="w-full text-xs text-muted-foreground">
                           Sign in to chat live or negotiate. Subscription required to unlock direct messaging when paywall is active.
