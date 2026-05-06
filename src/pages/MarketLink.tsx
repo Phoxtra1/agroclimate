@@ -20,6 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { SupplyList } from "@/components/market/SupplyList";
 import { ChatPanel } from "@/components/market/ChatPanel";
+import { SupplyListing } from "@/components/market/SupplyListing";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
@@ -305,7 +306,7 @@ export default function MarketLink() {
               </p>
             </CardHeader>
             <CardContent>
-              <SupplierOrderListing requireAuthForChat={false} />
+              <SupplyListing requireAuthForChat={false} />
             </CardContent>
           </Card>
         </TabsContent>
