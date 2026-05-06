@@ -94,7 +94,17 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
   );
 }
 
-export function OrderListing({ requireAuthForChat = true, allowOwnerActions = false }: { requireAuthForChat?: boolean; allowOwnerActions?: boolean }) {
+export function OrderListing({
+  requireAuthForChat = true,
+  allowOwnerActions = false,
+  mode = "dashboard",
+}: {
+  requireAuthForChat?: boolean;
+  allowOwnerActions?: boolean;
+  /** "marketplace" = public Market Link homepage (buyer can edit/delete own orders).
+   *  "dashboard"   = AgroClimate user dashboard (NEVER show edit/delete). */
+  mode?: "marketplace" | "dashboard";
+}) {
   const [items, setItems] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -105,6 +115,9 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
   const [draft, setDraft] = useState<Partial<OrderRow>>({});
   const [saving, setSaving] = useState(false);
   const { user } = useAuth();
+
+  // HARD GATE: edit/delete only on the marketplace homepage, by the buyer who owns the row.
+  const canManageOwn = mode === "marketplace" && allowOwnerActions;
 
   const load = async () => {
     setLoading(true);
@@ -132,13 +145,13 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
   };
 
   const beginEdit = () => {
-    if (!selected) return;
+    if (!selected || !canManageOwn) return;
     setDraft({ ...selected, price_label: selected.price_label || String(selected.target_price || "") });
     setEditing(true);
   };
 
   const saveEdit = async () => {
-    if (!selected || selected.buyer_id !== user?.id) return;
+    if (!selected || !canManageOwn || selected.buyer_id !== user?.id) return;
     setSaving(true);
     try {
       const label = String(draft.price_label || "").trim();
@@ -168,7 +181,7 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
   };
 
   const deleteOrder = async () => {
-    if (!selected || selected.buyer_id !== user?.id) return;
+    if (!selected || !canManageOwn || selected.buyer_id !== user?.id) return;
     if (!window.confirm("Delete this buyer order?")) return;
     const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", selected.id).eq("buyer_id", user.id);
     if (error) { toast.error(error.message); return; }
@@ -179,7 +192,7 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
 
   const preOrderResponse = async () => {
     if (!selected) return;
-    if (!user) { toast.info("Subscription interest noted. Sign in later to create a live response."); return; }
+    if (!user) { toast.info("Sign in to propose a live response to this buyer."); return; }
     if (selected.buyer_id === user.id) { toast.info("This is your own order."); return; }
     const { error } = await supabase.from("market_contracts" as any).insert({
       farmer_id: user.id,
@@ -200,6 +213,8 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
     setChatOpen(true);
   };
 
+  const isOwnerViewer = !!user && !!selected && selected.buyer_id === user.id;
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2"><div className="md:col-span-2 relative"><Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search product or notes" value={q} onChange={(e) => setQ(e.target.value)} /></div><Input placeholder="Region filter" value={region} onChange={(e) => setRegion(e.target.value)} /></div>
@@ -211,7 +226,7 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selected && <>
             <DialogHeader><DialogTitle>{selected.crop_name} — buyer demand</DialogTitle></DialogHeader>
-            {editing ? (
+            {editing && canManageOwn ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label>Buyer name</Label><Input value={String(draft.buyer_name || "")} onChange={(e) => setDraft((d) => ({ ...d, buyer_name: e.target.value }))} /></div>
                 <div><Label>Product</Label><Input value={String(draft.crop_name || "")} onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} /></div>
@@ -229,8 +244,19 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
                 <div className="grid grid-cols-2 gap-3 text-sm"><I label="Buyer" v={selected.buyer_name || "Buyer"} /><I label="Quantity" v={`${Number(selected.quantity_needed).toLocaleString()} ${selected.unit}`} /><I label="Target price" v={formatMarketPrice(selected.target_price, selected.unit, selected.price_label)} /><I label="Region" v={selected.region || "—"} /><I label="Quality" v={selected.quality || "—"} /><I label="Grade" v={selected.grade || "—"} /><I label="Moisture" v={selected.moisture || "—"} /><I label="Delivery" v={`${selected.delivery_start || "?"} → ${selected.delivery_end || "?"}`} /></div>
                 {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                 <div className="border-t pt-2 space-y-1 text-xs">{selected.contact_email && <div>📧 <a className="text-primary hover:underline" href={`mailto:${selected.contact_email}`}>{selected.contact_email}</a></div>}{selected.contact_phone && <div>📞 <a className="text-primary hover:underline" href={`tel:${selected.contact_phone}`}>{selected.contact_phone}</a></div>}</div>
-                <div className="flex gap-2 flex-wrap"><Button onClick={openChat}><MessageCircle className="h-4 w-4 mr-1" />Contact buyer</Button><Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button><Button variant="outline" onClick={preOrderResponse}><Send className="h-4 w-4 mr-1" />Pre-Order</Button>{allowOwnerActions && selected.buyer_id === user?.id && <Button variant="outline" onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}{allowOwnerActions && selected.buyer_id === user?.id && <Button variant="ghost" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}</div>
-                {!user && requireAuthForChat && <p className="text-xs text-muted-foreground">Sign in to chat live or negotiate. Subscription required to unlock direct messaging when paywall is active.</p>}
+                <div className="flex gap-2 flex-wrap">
+                  <Button onClick={openChat}><MessageCircle className="h-4 w-4 mr-1" />Contact buyer</Button>
+                  <Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
+                  <Button variant="outline" onClick={preOrderResponse}><Send className="h-4 w-4 mr-1" />Pre-Order</Button>
+                  {canManageOwn && isOwnerViewer && <Button variant="outline" onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
+                  {canManageOwn && isOwnerViewer && <Button variant="ghost" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}
+                </div>
+                {!user && requireAuthForChat && <p className="text-xs text-muted-foreground">Sign in to chat live or negotiate terms with the buyer.</p>}
+                {mode === "dashboard" && isOwnerViewer && (
+                  <p className="text-[11px] text-muted-foreground border-t pt-2">
+                    Edit / delete of buyer orders is only available from the public Market Link homepage.
+                  </p>
+                )}
               </>
             )}
           </>}
