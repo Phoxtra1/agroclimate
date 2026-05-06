@@ -9,24 +9,26 @@ import SecurityPanel from "./SecurityPanel";
 import SubscriptionPanel from "./SubscriptionPanel";
 import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
 import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
+import AGNavEngine from "./AGNavEngine";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Bot, Plane, Settings, Users,
-  ShieldAlert, Menu, CreditCard, Archive, Store,
+  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor,
 } from "lucide-react";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
 type EngineKey =
   | "overview" | "alert" | "ai" | "flight" | "system"
-  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link";
+  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "Odeneho AI", icon: Bot },
   { key: "flight", label: "Flight Advisory", icon: Plane },
+  { key: "agnav", label: "AGNav Engine", icon: Anchor },
   { key: "post-harvest", label: "Post-Harvest", icon: Archive },
   { key: "market-link", label: "Market Link", icon: Store },
   { key: "subscriptions", label: "Subscriptions", icon: CreditCard },
@@ -223,6 +225,7 @@ export default function AdminDashboard() {
       case "subscriptions": return <SubscriptionPanel />;
       case "post-harvest": return <PostHarvestAdminPanel />;
       case "market-link": return <MarketLinkAdminPanel />;
+      case "agnav": return <AGNavEngine />;
       default: return <OverviewPanel />;
     }
   };
