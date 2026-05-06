@@ -210,19 +210,27 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
                     {allowOwnerActions && selected.user_id === user?.id && <Button variant="outline" onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
                     {allowOwnerActions && selected.user_id === user?.id && <Button variant="ghost" onClick={deleteListing}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}
                   </div>
-                  {chatOpen && user && selected.user_id !== user.id && <ChatPanel otherUserId={selected.user_id} otherName={`Supplier · ${selected.crop_name}`} relatedSupplyId={selected.id} />}
-                  {chatOpen && user && selected.user_id === user.id && <p className="text-xs text-muted-foreground">This is your own listing.</p>}
-                  {!user && requireAuthForChat && <p className="text-xs text-muted-foreground">Subscription interest can be recorded now; live chat unlocks after sign in.</p>}
+                  {!user && requireAuthForChat && <p className="text-xs text-muted-foreground">Sign in to chat live or negotiate. Subscription required to unlock direct messaging when paywall is active.</p>}
                 </>
               )}
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Dedicated chat dialog */}
+      <Dialog open={chatOpen && !!selected && !!user && selected?.user_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat — {selected?.crop_name}</DialogTitle></DialogHeader>
+          {selected && user && selected.user_id !== user.id && (
+            <ChatPanel otherUserId={selected.user_id} otherName={`Supplier · ${selected.crop_name}`} relatedSupplyId={selected.id} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
 
+}
 function Info({ label, value }: { label: string; value: string }) {
   return <div><div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div><div className="font-medium">{value}</div></div>;
 }

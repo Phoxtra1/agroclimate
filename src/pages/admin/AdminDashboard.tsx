@@ -34,35 +34,180 @@ const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "settings", label: "Admin Settings", icon: Users },
 ];
 
-function OverviewPanel() {
-  const [counts, setCounts] = useState({ users: 0, alerts: 0 });
+type Range = "today" | "7d" | "30d";
 
-  useEffect(() => {
-    Promise.all([
-      supabase.from("profiles").select("id").then(r => r),
-      supabase.from("disaster_alerts").select("id").then(r => r),
-    ]).then(([u, a]) => {
-      setCounts({
-        users: (u.data || []).length,
-        alerts: (a.data || []).length,
-      });
+function rangeStart(r: Range) {
+  const d = new Date();
+  if (r === "today") { d.setHours(0, 0, 0, 0); return d; }
+  if (r === "7d") { d.setDate(d.getDate() - 7); return d; }
+  d.setDate(d.getDate() - 30);
+  return d;
+}
+
+function OverviewPanel() {
+  const [range, setRange] = useState<Range>("today");
+  const [counts, setCounts] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    alertsTotal: 0,
+    alertsToday: 0,
+    contracts: 0,
+    supply: 0,
+    demand: 0,
+    farms: 0,
+    handlers: 0,
+    sos: 0,
+  });
+  const [byType, setByType] = useState<Record<string, number>>({});
+  const [bySeverity, setBySeverity] = useState<Record<string, number>>({});
+  const [byFarmerType, setByFarmerType] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    const since = rangeStart(range).toISOString();
+    const todayStart = rangeStart("today").toISOString();
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const [profiles, alerts, alertsRange, alertsToday, activeWindow, contracts, supply, demand, farms, handlers, sos] = await Promise.all([
+      supabase.from("profiles").select("id, farmer_type"),
+      supabase.from("disaster_alerts").select("id, alert_type, severity, created_at"),
+      supabase.from("disaster_alerts").select("id, alert_type, severity").gte("created_at", since),
+      supabase.from("disaster_alerts").select("id").gte("created_at", todayStart),
+      supabase.from("market_presence").select("user_id, last_seen").gte("last_seen", last24h),
+      supabase.from("market_contracts").select("id").gte("created_at", since),
+      supabase.from("farmer_inputs").select("id").gte("created_at", since),
+      supabase.from("buyer_orders").select("id").gte("created_at", since),
+      supabase.from("farm_qr_codes").select("id"),
+      supabase.from("handlers").select("id"),
+      supabase.from("disaster_alerts").select("id").eq("alert_type", "sos").gte("created_at", since),
+    ]);
+
+    const fType: Record<string, number> = {};
+    (profiles.data || []).forEach((p: any) => { fType[p.farmer_type || "smallholder"] = (fType[p.farmer_type || "smallholder"] || 0) + 1; });
+
+    const at: Record<string, number> = {}; const sv: Record<string, number> = {};
+    (alertsRange.data || []).forEach((a: any) => {
+      at[a.alert_type || "other"] = (at[a.alert_type || "other"] || 0) + 1;
+      sv[a.severity || "info"] = (sv[a.severity || "info"] || 0) + 1;
     });
-  }, []);
+
+    setByFarmerType(fType);
+    setByType(at);
+    setBySeverity(sv);
+    setCounts({
+      totalUsers: (profiles.data || []).length,
+      activeUsers: (activeWindow.data || []).length,
+      alertsTotal: (alerts.data || []).length,
+      alertsToday: (alertsToday.data || []).length,
+      contracts: (contracts.data || []).length,
+      supply: (supply.data || []).length,
+      demand: (demand.data || []).length,
+      farms: (farms.data || []).length,
+      handlers: (handlers.data || []).length,
+      sos: (sos.data || []).length,
+    });
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [range]);
+
+  // Realtime — refresh on alert/profile/contract changes
+  useEffect(() => {
+    const ch = supabase.channel("admin-overview-stream")
+      .on("postgres_changes", { event: "*", schema: "public", table: "disaster_alerts" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "market_contracts" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "market_presence" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 mb-6">
-        <Shield className="h-6 w-6 text-primary" />
-        <h1 className="text-xl font-bold">Admin Overview</h1>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Shield className="h-6 w-6 text-primary" />
+          <h1 className="text-xl font-bold">Admin Overview</h1>
+          {loading && <span className="text-xs text-muted-foreground">refreshing…</span>}
+        </div>
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 text-xs">
+          {(["today", "7d", "30d"] as Range[]).map((r) => (
+            <button key={r} onClick={() => setRange(r)} className={`px-3 py-1 rounded-md font-medium ${range === r ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
+              {r === "today" ? "Today" : r === "7d" ? "Last 7 days" : "Last 30 days"}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{counts.users}</p><p className="text-xs text-muted-foreground">Total Users</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{counts.alerts}</p><p className="text-xs text-muted-foreground">Active Alerts</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">Online</p><p className="text-xs text-muted-foreground">AI Status</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">—</p><p className="text-xs text-muted-foreground">Subscriptions</p></CardContent></Card>
+
+      {/* TOP METRICS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Metric label="Total Users" value={counts.totalUsers} />
+        <Metric label="Active (24h)" value={counts.activeUsers} />
+        <Metric label="Alerts Today" value={counts.alertsToday} />
+        <Metric label="Alerts Total" value={counts.alertsTotal} />
       </div>
-      <p className="text-sm text-muted-foreground mt-4">Select an engine from the sidebar to manage platform components.</p>
+
+      {/* USER BREAKDOWN */}
+      <Card>
+        <CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">User breakdown</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+            {Object.entries(byFarmerType).map(([k, v]) => (
+              <div key={k} className="border rounded-md p-2"><div className="text-[11px] text-muted-foreground capitalize">{k}</div><div className="font-bold">{v}</div></div>
+            ))}
+            {Object.keys(byFarmerType).length === 0 && <p className="text-xs text-muted-foreground">No user data yet.</p>}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ALERT PERFORMANCE */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card><CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">Alerts by type ({range})</p>
+          {Object.keys(byType).length === 0 ? <p className="text-xs text-muted-foreground">No alerts in range.</p> : (
+            <ul className="space-y-1 text-sm">
+              {Object.entries(byType).map(([k, v]) => <li key={k} className="flex justify-between"><span className="capitalize">{k}</span><span className="font-semibold">{v}</span></li>)}
+            </ul>
+          )}
+        </CardContent></Card>
+        <Card><CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">Alerts by severity ({range})</p>
+          {Object.keys(bySeverity).length === 0 ? <p className="text-xs text-muted-foreground">No alerts in range.</p> : (
+            <ul className="space-y-1 text-sm">
+              {Object.entries(bySeverity).map(([k, v]) => <li key={k} className="flex justify-between"><span className="capitalize">{k}</span><span className="font-semibold">{v}</span></li>)}
+            </ul>
+          )}
+        </CardContent></Card>
+      </div>
+
+      {/* ENGAGEMENT */}
+      <Card>
+        <CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">Engagement & activity ({range})</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+            <Metric label="New contracts" value={counts.contracts} small />
+            <Metric label="New supply listings" value={counts.supply} small />
+            <Metric label="New buyer orders" value={counts.demand} small />
+            <Metric label="SOS broadcasts" value={counts.sos} small />
+            <Metric label="Registered farms" value={counts.farms} small />
+            <Metric label="Handlers" value={counts.handlers} small />
+          </div>
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">Use the sidebar to manage individual engines (Alerts, AI, Flight, Market Link, Post-Harvest, Subscriptions, Security, System).</p>
     </div>
+  );
+}
+
+function Metric({ label, value, small }: { label: string; value: number; small?: boolean }) {
+  return (
+    <Card><CardContent className="pt-4 text-center">
+      <p className={small ? "text-xl font-bold" : "text-2xl font-bold"}>{value.toLocaleString()}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </CardContent></Card>
   );
 }
 

@@ -230,12 +230,20 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
                 {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                 <div className="border-t pt-2 space-y-1 text-xs">{selected.contact_email && <div>📧 <a className="text-primary hover:underline" href={`mailto:${selected.contact_email}`}>{selected.contact_email}</a></div>}{selected.contact_phone && <div>📞 <a className="text-primary hover:underline" href={`tel:${selected.contact_phone}`}>{selected.contact_phone}</a></div>}</div>
                 <div className="flex gap-2 flex-wrap"><Button onClick={openChat}><MessageCircle className="h-4 w-4 mr-1" />Contact buyer</Button><Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button><Button variant="outline" onClick={preOrderResponse}><Send className="h-4 w-4 mr-1" />Pre-Order</Button>{allowOwnerActions && selected.buyer_id === user?.id && <Button variant="outline" onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}{allowOwnerActions && selected.buyer_id === user?.id && <Button variant="ghost" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}</div>
-                {chatOpen && user && selected.buyer_id !== user.id && <ChatPanel otherUserId={selected.buyer_id} otherName={`Buyer · ${selected.buyer_name || selected.crop_name}`} relatedOrderId={selected.id} />}
-                {chatOpen && user && selected.buyer_id === user.id && <p className="text-xs text-muted-foreground">This is your own order.</p>}
-                {!user && requireAuthForChat && <p className="text-xs text-muted-foreground">Subscription interest can be recorded now; live chat unlocks after sign in.</p>}
+                {!user && requireAuthForChat && <p className="text-xs text-muted-foreground">Sign in to chat live or negotiate. Subscription required to unlock direct messaging when paywall is active.</p>}
               </>
             )}
           </>}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dedicated chat dialog */}
+      <Dialog open={chatOpen && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat — {selected?.crop_name}</DialogTitle></DialogHeader>
+          {selected && user && selected.buyer_id !== user.id && (
+            <ChatPanel otherUserId={selected.buyer_id} otherName={`Buyer · ${selected.buyer_name || selected.crop_name}`} relatedOrderId={selected.id} />
+          )}
         </DialogContent>
       </Dialog>
     </div>

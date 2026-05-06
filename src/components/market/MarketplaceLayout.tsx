@@ -1,13 +1,15 @@
 import { ReactNode } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, Navigate } from "react-router-dom";
 import { Store, Home, ListPlus, Package, LogIn, LogOut, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
-export function MarketplaceLayout({ children }: { children: ReactNode }) {
-  const { user, signOut } = useAuth();
+export function MarketplaceLayout({ children, requireAuth = false }: { children: ReactNode; requireAuth?: boolean }) {
+  const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
+
+  if (requireAuth && !loading && !user) return <Navigate to="/marketplace/auth" replace />;
 
   const linkCls = ({ isActive }: { isActive: boolean }) =>
     `px-3 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 ${
