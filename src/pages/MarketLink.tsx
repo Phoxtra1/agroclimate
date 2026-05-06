@@ -1,3 +1,4 @@
+here is the code, address it 
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -211,8 +212,7 @@ function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }
 
 /**
  * MarketLink is the SUPPLIER-facing workspace inside the user dashboard.
- *
-
+ */
 export default function MarketLink() {
   const m = useMarketLink();
   const [inboxOpen, setInboxOpen] = useState(false);
