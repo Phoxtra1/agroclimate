@@ -31,7 +31,7 @@ import {
   type RouteResult,
   type SosResponse,
   type RiskLevel,
-} from "./AGNavEngine";
+} from "../page/admin/AGNavEngine";
 
 // Fix Leaflet default marker icons in Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
