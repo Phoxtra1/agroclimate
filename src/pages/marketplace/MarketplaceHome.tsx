@@ -3,7 +3,7 @@ import { SupplyList } from "@/components/market/SupplyList";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, Navigate } from "react-router-dom";
-import { ArrowRight, Sprout, ShoppingBag, LogIn } from "lucide-react";
+import { ArrowRight, Sprout, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function MarketplaceHome() {
@@ -23,6 +23,7 @@ export default function MarketplaceHome() {
           Discover verified supply and post your demand while keeping trade coordination visible and fair.
         </p>
         <div className="flex justify-center gap-2 mt-4 flex-wrap">
+          {/* All CTAs stay inside /marketplace — buyers never land in /dashboard. */}
           <Link to="/marketplace/supply"><Button>Browse Supply <ArrowRight className="h-4 w-4 ml-1" /></Button></Link>
           <Link to="/marketplace/orders"><Button variant="outline">Place an Order</Button></Link>
         </div>
