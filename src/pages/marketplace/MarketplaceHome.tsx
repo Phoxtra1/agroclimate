@@ -1,3 +1,6 @@
+// NOTE: Place this file at src/pages/marketplace/MarketplaceHome.tsx in the
+// other project. There must be ONLY ONE `export default` and ONE
+// `function MarketplaceHome` declaration in the file.
 import { MarketplaceLayout } from "@/components/market/MarketplaceLayout";
 import { SupplyList } from "@/components/market/SupplyList";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +9,7 @@ import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, Sprout, ShoppingBag, Home } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
-function MarketplaceHome() {
+export default function MarketplaceHome() {
   const { user, loading } = useAuth();
 
   if (loading) return null;
@@ -76,5 +79,3 @@ function MarketplaceHome() {
     </MarketplaceLayout>
   );
 }
-
-export default MarketplaceHome;
