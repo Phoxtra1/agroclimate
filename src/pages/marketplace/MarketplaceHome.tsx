@@ -2,12 +2,21 @@ import { MarketplaceLayout } from "@/components/market/MarketplaceLayout";
 import { SupplyList } from "@/components/market/SupplyList";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import { ArrowRight, Sprout, ShoppingBag } from "lucide-react";
+import { Link, Navigate } from "react-router-dom";
+import { ArrowRight, Sprout, ShoppingBag, LogIn } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function MarketplaceHome() {
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
+  if (!user) {
+    // Strict gate — buyers must register / sign in before browsing the marketplace.
+    return <Navigate to="/marketplace/auth" replace />;
+  }
+
   return (
-    <MarketplaceLayout>
+    <MarketplaceLayout requireAuth>
       <section className="text-center py-6">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Connect with African farmers, directly.</h1>
         <p className="text-muted-foreground mt-2 max-w-2xl mx-auto text-sm md:text-base">
@@ -34,7 +43,7 @@ export default function MarketplaceHome() {
 
       <section className="mb-3">
         <h2 className="text-lg font-bold mb-2">Latest supply</h2>
-        <SupplyList />
+        <SupplyList requireAuthForChat />
       </section>
     </MarketplaceLayout>
   );
