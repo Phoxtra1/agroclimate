@@ -230,6 +230,7 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
     </div>
   );
 
+}
 function Info({ label, value }: { label: string; value: string }) {
   return <div><div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div><div className="font-medium">{value}</div></div>;
 }
