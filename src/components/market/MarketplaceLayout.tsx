@@ -1,11 +1,17 @@
 import { ReactNode } from "react";
 import { Link, NavLink, useNavigate, Navigate } from "react-router-dom";
-import { Store, Home, ListPlus, Package, LogIn, LogOut, ArrowLeft } from "lucide-react";
+import { Store, Home, ListPlus, Package, LogIn, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
-export function MarketplaceLayout({ children, requireAuth = false }: { children: ReactNode; requireAuth?: boolean }) {
+export function MarketplaceLayout({
+  children,
+  requireAuth = false,
+}: {
+  children: ReactNode;
+  requireAuth?: boolean;
+}) {
   const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -20,10 +26,13 @@ export function MarketplaceLayout({ children, requireAuth = false }: { children:
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b bg-card sticky top-0 z-30">
         <div className="container mx-auto px-3 py-2 flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-2 mr-2">
+          {/* Logo links to Market Link home — never to the AgroClimate user dashboard */}
+          <Link to="/marketplace" className="flex items-center gap-2 mr-2">
             <img src={aminevaLogo} alt="" className="h-8 w-8 rounded-full" />
             <div className="leading-tight">
-              <div className="font-bold text-sm flex items-center gap-1"><Store className="h-3.5 w-3.5 text-primary" /> Market Link</div>
+              <div className="font-bold text-sm flex items-center gap-1">
+                <Store className="h-3.5 w-3.5 text-primary" /> Market Link
+              </div>
               <div className="text-[10px] text-muted-foreground">Powered by AgroClimate</div>
             </div>
           </Link>
@@ -34,13 +43,20 @@ export function MarketplaceLayout({ children, requireAuth = false }: { children:
             {user && <NavLink to="/marketplace/inbox" className={linkCls}>Messages</NavLink>}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/")}><ArrowLeft className="h-3.5 w-3.5 mr-1" />Home</Button>
+            {/* Buyers signed in via Market Link must NOT have a back-door to the user dashboard.
+                Sign-out keeps them inside /marketplace. */}
             {user ? (
-              <Button variant="outline" size="sm" onClick={() => { signOut(); navigate("/marketplace"); }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => { await signOut(); navigate("/marketplace"); }}
+              >
                 <LogOut className="h-3.5 w-3.5 mr-1" /> Sign out
               </Button>
             ) : (
-              <Button size="sm" onClick={() => navigate("/marketplace/auth")}><LogIn className="h-3.5 w-3.5 mr-1" />Sign in</Button>
+              <Button size="sm" onClick={() => navigate("/marketplace/auth")}>
+                <LogIn className="h-3.5 w-3.5 mr-1" />Sign in
+              </Button>
             )}
           </div>
         </div>
