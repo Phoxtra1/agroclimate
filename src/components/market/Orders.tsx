@@ -243,6 +243,7 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
           <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat — {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && selected.buyer_id !== user.id && (
             <ChatPanel otherUserId={selected.buyer_id} otherName={`Buyer · ${selected.buyer_name || selected.crop_name}`} relatedOrderId={selected.id} />
+          )}
         </DialogContent>
       </Dialog>
     </div>
