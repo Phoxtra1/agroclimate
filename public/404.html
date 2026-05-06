@@ -5,9 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AgroClimate</title>
     <script>
+      // SPA fallback for static hosts: stash deep-link path and bounce to /
+      // index.html will restore the URL with history.replaceState so React Router can render it.
       (function () {
-        var path = window.location.pathname + window.location.search + window.location.hash;
-        window.location.replace('/?redirect=' + encodeURIComponent(path));
+        try {
+          var path = window.location.pathname + window.location.search + window.location.hash;
+          if (path && path !== "/") {
+            sessionStorage.setItem("__spa_redirect", path);
+          }
+        } catch (e) {}
+        window.location.replace("/");
       })();
     </script>
   </head>
