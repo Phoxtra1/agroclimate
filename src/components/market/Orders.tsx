@@ -299,12 +299,11 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
                       <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
                       <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
                       <p className="w-full text-[11px] text-muted-foreground">
-                        You posted this order. Suppliers will contact you to chat, negotiate or pre-order.
+                        You posted this order. Suppliers will contact you for negotiation or pre-order.
                       </p>
                     </>
                   ) : isOwner ? (
                     <p className="text-[11px] text-muted-foreground">
-                      You posted this order. Edit and delete are available from your buyer dashboard.
                     </p>
                   ) : (
                     <>
