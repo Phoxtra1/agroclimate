@@ -19,11 +19,10 @@ import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { SupplyList } from "@/components/market/SupplyList";
-import { SupplierOrderListing } from "@/components/market/SupplierOrderListing";
 import { ChatPanel } from "@/components/market/ChatPanel";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
 
-const CATEGORIES = ["Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
+const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
 function trendIcon(t: string) {
   if (t === "rising") return <TrendingUp className="h-3.5 w-3.5 text-green-600" />;
