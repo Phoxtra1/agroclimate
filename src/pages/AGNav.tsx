@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, CircleMarker, Circle, LayersControl, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, CircleMarker, Circle, LayersControl, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,9 +9,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import {
   Anchor, AlertTriangle, MapPin, Navigation, LifeBuoy, Layers, Loader2, Cloud,
   Route as RouteIcon, Search, Mic, MicOff, Volume2, VolumeX, Crosshair, Wind, Waves,
+  Save, Ship, Phone, MessageCircle, Send,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -25,12 +27,22 @@ import {
   triggerSOS as engineTriggerSOS,
   flushSOSQueue,
   subscribeSOSEvent,
-  subscribeRescueUnit,
+  subscribeVesselLocation,
+  subscribeIncomingSOS,
+  subscribeVesselMessages,
+  sendVesselMessage,
+  acceptSOS,
+  resolveSOS,
+  registerVessel,
+  generateVesselId,
+  saveFarm,
+  listFarms,
   segmentColour,
   scoreRisk,
   type RouteResult,
   type SosResponse,
   type RiskLevel,
+  type OperatorType,
 } from "./admin/AGNavEngine";
 
 // Fix Leaflet default marker icons in Vite
@@ -51,7 +63,6 @@ const FLOOD_ZONES: { name: string; coords: [number, number][]; centre: [number, 
   { name: "Black Volta floodplain", coords: [[9.0, -2.6], [8.4, -2.3], [8.2, -2.9], [8.8, -3.0], [9.0, -2.6]], centre: [8.6, -2.7] },
 ];
 
-// Static current-flow hints for the basin (lat,lon -> direction degrees, magnitude 0-1).
 const RIVER_CURRENTS: { lat: number; lon: number; dir: number; mag: number }[] = [
   { lat: 6.2, lon: 0.0, dir: 200, mag: 0.7 },
   { lat: 7.5, lon: -0.6, dir: 180, mag: 0.5 },
@@ -62,6 +73,11 @@ const RIVER_CURRENTS: { lat: number; lon: number; dir: number; mag: number }[] =
 function FlyTo({ lat, lon, zoom = 8 }: { lat: number; lon: number; zoom?: number }) {
   const map = useMap();
   useEffect(() => { map.flyTo([lat, lon], zoom, { duration: 1.2 }); }, [lat, lon, zoom, map]);
+  return null;
+}
+
+function MapClickPicker({ onPick }: { onPick: (lat: number, lon: number) => void }) {
+  useMapEvents({ click(e) { onPick(e.latlng.lat, e.latlng.lng); } });
   return null;
 }
 
@@ -134,6 +150,7 @@ function pointInPolygon(pt: [number, number], poly: [number, number][]): boolean
 }
 
 const VESSEL_ID_KEY = "agnav.vessel_id";
+const VESSEL_REGISTERED_KEY = "agnav.vessel_registered";
 
 export default function AGNav() {
   const { user } = useAuth();
@@ -153,17 +170,30 @@ export default function AGNav() {
   // Data
   const [farms, setFarms] = useState<FarmPoint[]>([]);
   const [boatTrail, setBoatTrail] = useState<[number, number][]>([]);
-  const [routeFarmId, setRouteFarmId] = useState<string>("");
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
 
-  // SOS state
+  // Farm GPS input (replaces dropdown)
+  const [farmGpsText, setFarmGpsText] = useState("");
+  const [farmTarget, setFarmTarget] = useState<{ lat: number; lon: number } | null>(null);
+  const [pickOnMap, setPickOnMap] = useState(false);
+  const [savedFarmId, setSavedFarmId] = useState<string>("");
+  const [saveFarmName, setSaveFarmName] = useState("");
+  const [savingFarm, setSavingFarm] = useState(false);
+
+  // SOS
   const [sosBusy, setSosBusy] = useState(false);
   const [sosStatus, setSosStatus] = useState<SosResponse | null>(null);
   const [rescuePos, setRescuePos] = useState<{ lat: number; lon: number } | null>(null);
   const [blink, setBlink] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ from: string; body: string; ts: string }[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
 
-  // Search
+  // Incoming SOS (decentralized — any vessel can accept)
+  const [incomingSos, setIncomingSos] = useState<any | null>(null);
+
+  // Search / destination
   const [destination, setDestination] = useState<Destination | null>(null);
   const [searchText, setSearchText] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
@@ -172,18 +202,31 @@ export default function AGNav() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [listening, setListening] = useState(false);
 
-  // Load (passengers / cargo)
+  // Load
   const [passengers, setPassengers] = useState<number>(1);
   const [cargoKg, setCargoKg] = useState<number>(0);
 
-  // Vessel id (PXT). Persisted locally; admin can register in vessels table.
-  const [vesselId] = useState<string>(() => {
+  // Vessel ID (PXT)
+  const [vesselId, setVesselId] = useState<string>(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(VESSEL_ID_KEY) : null;
     if (stored) return stored;
-    const id = `PXT-VSL-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const id = generateVesselId();
     if (typeof window !== "undefined") localStorage.setItem(VESSEL_ID_KEY, id);
     return id;
   });
+  const [registered, setRegistered] = useState<boolean>(() => typeof window !== "undefined" && localStorage.getItem(VESSEL_REGISTERED_KEY) === "1");
+  const [regOpen, setRegOpen] = useState(false);
+
+  // Vessel registration form
+  const [regName, setRegName] = useState("");
+  const [regOperator, setRegOperator] = useState("");
+  const [regOperatorType, setRegOperatorType] = useState<OperatorType>("private");
+  const [regPhone, setRegPhone] = useState("");
+  const [regHomeText, setRegHomeText] = useState("");
+  const [regMaxCap, setRegMaxCap] = useState<number>(10);
+  const [regCargoCap, setRegCargoCap] = useState<number>(500);
+  const [regRescue, setRegRescue] = useState(false);
+  const [regBusy, setRegBusy] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -193,29 +236,33 @@ export default function AGNav() {
   const today = forecast?.[0];
   const fr = floodRisk({ rainProb: today?.rainProb, humidity: today?.humidity, riverLevelPct: 60 });
 
-  // Load farms (destination presets)
-  useEffect(() => {
-    supabase.from("farm_qr_codes").select("id,farm_name,farm_location").limit(100).then(({ data }) => {
-      const items = (data || []).flatMap((r: any) => {
-        const loc = String(r.farm_location || "");
-        const m = loc.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
-        if (!m) return [];
-        return [{ id: r.id, name: r.farm_name, lat: parseFloat(m[1]), lon: parseFloat(m[2]) }];
-      });
-      setFarms(items);
-    });
-    flushSOSQueue();
-  }, []);
+  // Load saved farms (per user)
+  const reloadFarms = async () => {
+    const items = await listFarms(user?.id);
+    setFarms(items.map((r: any) => ({ id: r.id, name: r.name, lat: Number(r.lat), lon: Number(r.lon) })));
+  };
+  useEffect(() => { reloadFarms(); flushSOSQueue(); }, [user?.id]);
 
-  // LIVE TRACKING — GPS watch + 3-5s push to engine
+  // Subscribe to incoming SOS broadcasts from other vessels (decentralized rescue)
+  useEffect(() => {
+    if (!registered) return;
+    const unsub = subscribeIncomingSOS((row) => {
+      if (row.vessel_id === vesselId) return; // ignore own
+      setIncomingSos(row);
+      toast.warning(`Emergency nearby — ${row.vessel_id}`, { duration: 12000 });
+      speak(`Emergency nearby. Vessel ${row.vessel_id}. Tap to accept rescue.`, voiceOn);
+      beep();
+    });
+    return unsub;
+  }, [registered, vesselId, voiceOn]);
+
+  // LIVE TRACKING
   useEffect(() => {
     if (!showLiveTrack || !navigator.geolocation) return;
     watchIdRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
         const p: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setBoatTrail((t) => [...t.slice(-200), p]);
-
-        // Throttle to 1 push every 4s
         const now = Date.now();
         if (now - lastPushRef.current > 4000) {
           lastPushRef.current = now;
@@ -225,8 +272,6 @@ export default function AGNav() {
             speed_kn: pos.coords.speed ? pos.coords.speed * 1.94384 : undefined,
             heading: pos.coords.heading ?? undefined, risk_level: level,
           }).catch(() => {});
-
-          // Alerts: danger zone
           for (let i = 0; i < FLOOD_ZONES.length; i++) {
             if (pointInPolygon(p, FLOOD_ZONES[i].coords)) {
               if (!lastWarnRef.current.zone || now - lastWarnRef.current.zone > 30000) {
@@ -236,7 +281,6 @@ export default function AGNav() {
               }
             }
           }
-          // Weather spike
           if ((today?.rainProb || 0) >= 80 && (!lastWarnRef.current.weather || now - lastWarnRef.current.weather > 60000)) {
             lastWarnRef.current.weather = now;
             toast.warning(`Weather spike: rain ${today?.rainProb}%`);
@@ -250,7 +294,6 @@ export default function AGNav() {
     return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); };
   }, [showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, voiceOn]);
 
-  // Overload alert (load > 1000 kg or > 20 passengers as soft default)
   useEffect(() => {
     if (passengers > 20 || cargoKg > 1000) {
       const now = Date.now();
@@ -262,29 +305,6 @@ export default function AGNav() {
     }
   }, [passengers, cargoKg, voiceOn]);
 
-  // Adaptive re-routing every 8s while moving with active route
-  useEffect(() => {
-    if (!showLiveTrack || !routeResult || !destination || !position.lat) return;
-    const t = setInterval(async () => {
-      try {
-        const next = await engineComputeRoute({
-          start: { lat: position.lat, lon: position.lon },
-          end: { lat: destination.lat, lon: destination.lon },
-          vessel_id: vesselId, user_id: user?.id,
-          load: { passengers, cargo_kg: cargoKg },
-          rainProb: today?.rainProb,
-        });
-        if (next.risk_score + 0.05 < routeResult.risk_score) {
-          setRouteResult(next);
-          toast.success("Safer route found — switching");
-          speak("Safer route found. Switching now.", voiceOn);
-        }
-      } catch { /* ignore transient */ }
-    }, 8000);
-    return () => clearInterval(t);
-  }, [showLiveTrack, routeResult, destination, position.lat, position.lon, vesselId, user?.id, passengers, cargoKg, today?.rainProb, voiceOn]);
-
-  // Blink for active SOS
   useEffect(() => {
     if (!sosStatus || sosStatus.status === "RESOLVED") return;
     const t = setInterval(() => setBlink(b => !b), 600);
@@ -296,6 +316,7 @@ export default function AGNav() {
     [forecast, position.lat, position.lon],
   );
 
+  // ----- Destination geocode (place names) -----
   const geocode = async (text: string): Promise<Destination | null> => {
     const c = parseCoords(text);
     if (c) return { ...c, label: `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}` };
@@ -312,31 +333,23 @@ export default function AGNav() {
     setSearchBusy(true);
     try {
       const dest = await geocode(text);
-      if (!dest) { toast.error("No place found"); speak("No matching destination found", voiceOn); return; }
-      setDestination(dest);
-      setRouteResult(null);
+      if (!dest) { toast.error("No place found"); return; }
+      setDestination(dest); setRouteResult(null);
       toast.success(`Destination set: ${dest.label}`);
-      speak(`Destination set. ${dest.label.split(",")[0]}.`, voiceOn);
-    } catch (err: any) {
-      toast.error(err.message || "Search failed");
-    } finally { setSearchBusy(false); }
+    } catch (err: any) { toast.error(err.message || "Search failed"); }
+    finally { setSearchBusy(false); }
   };
 
   const toggleVoiceInput = () => {
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { toast.error("Voice input not supported in this browser"); return; }
+    if (!SR) { toast.error("Voice input not supported"); return; }
     if (listening) { recognitionRef.current?.stop(); setListening(false); return; }
     const rec = new SR();
-    rec.lang = "en-US"; rec.interimResults = false; rec.maxAlternatives = 1;
-    rec.onresult = (e: any) => {
-      const t = e.results[0][0].transcript;
-      setSearchText(t); setListening(false); handleSearch(t);
-    };
+    rec.lang = "en-US"; rec.interimResults = false;
+    rec.onresult = (e: any) => { const t = e.results[0][0].transcript; setSearchText(t); setListening(false); handleSearch(t); };
     rec.onerror = () => { setListening(false); toast.error("Voice input failed"); };
     rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
-    rec.start(); setListening(true);
-    speak("Listening for destination", voiceOn);
+    recognitionRef.current = rec; rec.start(); setListening(true);
   };
 
   const useCurrentAsDestination = () => {
@@ -344,13 +357,42 @@ export default function AGNav() {
     setSearchText(`${position.lat.toFixed(5)}, ${position.lon.toFixed(5)}`);
   };
 
+  // ----- Farm GPS input handlers (replaces dropdown) -----
+  const applyFarmGpsText = () => {
+    const c = parseCoords(farmGpsText);
+    if (!c) { toast.error("Invalid GPS. Use format: 6.5244, 0.1234"); return; }
+    setFarmTarget(c);
+    toast.success(`Farm target set: ${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`);
+  };
+  const onMapPick = (lat: number, lon: number) => {
+    setFarmTarget({ lat, lon });
+    setFarmGpsText(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+    setPickOnMap(false);
+    toast.success("Farm location selected from map");
+  };
+  const pickSavedFarm = (id: string) => {
+    setSavedFarmId(id);
+    const f = farms.find(x => x.id === id);
+    if (f) { setFarmTarget({ lat: f.lat, lon: f.lon }); setFarmGpsText(`${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}`); }
+  };
+  const handleSaveFarm = async () => {
+    if (!farmTarget) { toast.error("Enter or pick a GPS location first"); return; }
+    if (!saveFarmName.trim()) { toast.error("Give the farm a name"); return; }
+    setSavingFarm(true);
+    try {
+      await saveFarm({ name: saveFarmName.trim(), location: farmTarget, user_id: user?.id });
+      toast.success("Farm saved");
+      setSaveFarmName("");
+      await reloadFarms();
+    } catch (err: any) { toast.error(err.message || "Could not save farm"); }
+    finally { setSavingFarm(false); }
+  };
+
+  // ----- Route -----
   const computeRoute = async () => {
     let target: { lat: number; lon: number; label: string } | null = destination;
-    if (!target && routeFarmId) {
-      const farm = farms.find((f) => f.id === routeFarmId);
-      if (farm) target = { lat: farm.lat, lon: farm.lon, label: farm.name };
-    }
-    if (!target) { toast.error("Search a place or pick a destination farm first"); return; }
+    if (!target && farmTarget) target = { ...farmTarget, label: `Farm ${farmTarget.lat.toFixed(4)}, ${farmTarget.lon.toFixed(4)}` };
+    if (!target) { toast.error("Enter a farm GPS, pick on map, or search a destination"); return; }
     if (!position.lat || !position.lon) { toast.error("Current location unavailable"); return; }
     setRouteBusy(true);
     try {
@@ -366,15 +408,15 @@ export default function AGNav() {
       const min = (result.duration_s / 60).toFixed(0);
       toast.success(`Route ${km} km · ${min} min · risk ${result.risk_level}`);
       speak(`Route ready. ${km} kilometres. About ${min} minutes. Risk ${result.risk_level}.`, voiceOn);
-    } catch (err: any) {
-      toast.error(err.message || "Routing failed");
-      speak("Route could not be computed", voiceOn);
-    } finally { setRouteBusy(false); }
+    } catch (err: any) { toast.error(err.message || "Routing failed"); }
+    finally { setRouteBusy(false); }
   };
 
+  // ----- Decentralized SOS -----
   const triggerSOS = async () => {
     if (!user) { toast.error("Sign in to send SOS"); return; }
-    if (!confirm("Confirm SOS — broadcast distress signal to admin?")) return;
+    if (!registered) { toast.error("Register your vessel before sending SOS"); setRegOpen(true); return; }
+    if (!confirm("Confirm SOS — broadcast distress signal to nearby vessels and rescue authorities?")) return;
     setSosBusy(true);
     navigator.geolocation.getCurrentPosition(async (pos) => {
       try {
@@ -384,85 +426,203 @@ export default function AGNav() {
           risk_level: (routeResult?.risk_level || fr.level) as RiskLevel,
         });
         setSosStatus(resp);
-        toast.success(resp.status === "DISPATCHED" ? `Rescue on the way · ETA ${resp.rescue_unit?.eta} min` : "SOS received by admin");
-        speak(resp.status === "DISPATCHED" ? `Rescue on the way. Estimated time, ${resp.rescue_unit?.eta} minutes.` : "S O S received. Stand by.", voiceOn);
+        toast.success(`SOS broadcast → ${resp.notified_vessels.length} vessels, ${resp.notified_responders.length} responders`);
+        speak(`S O S broadcast to ${resp.notified_vessels.length} vessels and ${resp.notified_responders.length} rescue authorities. Stand by.`, voiceOn);
         beep();
-        if (resp.rescue_unit?.lat != null) setRescuePos({ lat: resp.rescue_unit.lat, lon: resp.rescue_unit.lon });
 
-        // Subscribe to live updates on the SOS event + rescue unit
         const unsubEv = subscribeSOSEvent(resp.event_id, (row) => {
-          setSosStatus({
-            status: row.status, event_id: row.id,
-            rescue_unit: row.rescue_unit_id ? { id: row.rescue_unit_id, eta: row.eta_minutes ?? 0 } : undefined,
-          });
+          setSosStatus((s) => s ? { ...s, status: row.status, accepted_by: row.accepted_by_vessel_id ? { vessel_id: row.accepted_by_vessel_id, eta: row.eta_minutes ?? 0 } : s.accepted_by } : s);
+          if (row.status === "ACCEPTED" && row.accepted_by_vessel_id) {
+            toast.success(`Rescue accepted by ${row.accepted_by_vessel_id} · ETA ${row.eta_minutes} min`);
+            speak(`Rescue accepted by vessel ${row.accepted_by_vessel_id}. ETA ${row.eta_minutes} minutes.`, voiceOn);
+            subscribeVesselLocation(row.accepted_by_vessel_id, (loc) => {
+              if (loc.lat != null && loc.lon != null) setRescuePos({ lat: loc.lat, lon: loc.lon });
+            });
+          }
           if (row.status === "RESOLVED") { toast.success("SOS resolved"); setRescuePos(null); }
         });
-        let unsubUnit: (() => void) | null = null;
-        if (resp.rescue_unit?.id) {
-          unsubUnit = subscribeRescueUnit(resp.rescue_unit.id, (row) => {
-            if (row.lat != null && row.lon != null) setRescuePos({ lat: row.lat, lon: row.lon });
-          });
-        }
-        // Cleanup is tied to component unmount via window event
-        window.addEventListener("beforeunload", () => { unsubEv(); unsubUnit?.(); }, { once: true });
+        const unsubMsg = subscribeVesselMessages(resp.event_id, (m) => {
+          setChatMessages((cs) => [...cs, { from: m.from_vessel_id, body: m.body, ts: m.created_at }]);
+        });
+        window.addEventListener("beforeunload", () => { unsubEv(); unsubMsg(); }, { once: true });
       } catch (err: any) {
-        toast.error(`SOS queued offline — will retry. ${err?.message || ""}`);
+        toast.error(`SOS queued offline (SMS fallback) — ${err?.message || ""}`);
       } finally { setSosBusy(false); }
     }, () => { toast.error("Location unavailable"); setSosBusy(false); });
   };
 
+  const acceptIncoming = async () => {
+    if (!incomingSos) return;
+    if (!position.lat || !position.lon) { toast.error("Your location unavailable"); return; }
+    try {
+      const { eta } = await acceptSOS({
+        event_id: incomingSos.id, rescuer_vessel_id: vesselId,
+        rescuer_location: { lat: position.lat, lon: position.lon },
+        victim_location: { lat: incomingSos.lat, lon: incomingSos.lon },
+      });
+      toast.success(`You are the rescuer — ETA ${eta} min`);
+      speak(`Rescue accepted. ETA ${eta} minutes.`, voiceOn);
+      setDestination({ lat: incomingSos.lat, lon: incomingSos.lon, label: `Rescue → ${incomingSos.vessel_id}` });
+      setIncomingSos(null);
+      setShowLiveTrack(true);
+    } catch (err: any) {
+      toast.error(err.message || "Could not accept");
+      setIncomingSos(null);
+    }
+  };
+
+  const sendChat = async () => {
+    if (!sosStatus || !chatDraft.trim()) return;
+    await sendVesselMessage({
+      sos_event_id: sosStatus.event_id, from_vessel_id: vesselId,
+      to_vessel_id: sosStatus.accepted_by?.vessel_id, body: chatDraft.trim(),
+    });
+    setChatDraft("");
+  };
+
+  const handleRegisterVessel = async () => {
+    const home = parseCoords(regHomeText) || (position.lat ? { lat: position.lat, lon: position.lon } : null);
+    if (!home) { toast.error("Provide home base GPS (e.g. 6.52, 0.12) or enable location"); return; }
+    if (!regName.trim() || !regOperator.trim() || !regPhone.trim()) { toast.error("Fill all required fields"); return; }
+    setRegBusy(true);
+    try {
+      const { vessel_id } = await registerVessel({
+        vessel_name: regName.trim(), operator_name: regOperator.trim(),
+        operator_type: regOperatorType, phone_number: regPhone.trim(),
+        home_location: home, max_capacity: regMaxCap, cargo_capacity_kg: regCargoCap,
+        has_rescue_capability: regRescue, user_id: user?.id,
+      });
+      localStorage.setItem(VESSEL_ID_KEY, vessel_id);
+      localStorage.setItem(VESSEL_REGISTERED_KEY, "1");
+      setVesselId(vessel_id); setRegistered(true); setRegOpen(false);
+      toast.success(`Vessel registered: ${vessel_id}`);
+    } catch (err: any) { toast.error(err.message || "Registration failed"); }
+    finally { setRegBusy(false); }
+  };
+
   const center: [number, number] = destination
     ? [destination.lat, destination.lon]
+    : farmTarget ? [farmTarget.lat, farmTarget.lon]
     : [position.lat || 7.95, position.lon || -1.03];
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Anchor className="h-6 w-6 text-primary" /> AGNav — Water Transport Navigator</h1>
-          <p className="text-sm text-muted-foreground">Vessel <span className="font-mono">{vesselId}</span> · live admin-powered routing & rescue.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Anchor className="h-6 w-6 text-primary" /> AGNav — Decentralized Water Navigator</h1>
+          <p className="text-sm text-muted-foreground">
+            Vessel <span className="font-mono">{vesselId}</span>
+            {registered ? <Badge variant="outline" className="ml-2 text-xs">Registered</Badge> : <Badge variant="destructive" className="ml-2 text-xs">Unregistered</Badge>}
+            {" "}· peer-to-peer SOS · live routing
+          </p>
         </div>
-        <Badge variant={fr.level === "critical" || fr.level === "high" ? "destructive" : "outline"} className="capitalize">
-          <AlertTriangle className="h-3 w-3 mr-1" /> Flood risk today: {fr.level} ({fr.score})
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={fr.level === "critical" || fr.level === "high" ? "destructive" : "outline"} className="capitalize">
+            <AlertTriangle className="h-3 w-3 mr-1" /> Flood: {fr.level} ({fr.score})
+          </Badge>
+          <Dialog open={regOpen} onOpenChange={setRegOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant={registered ? "outline" : "default"}><Ship className="h-4 w-4 mr-1" />{registered ? "Vessel" : "Register vessel"}</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader><DialogTitle>Register vessel</DialogTitle></DialogHeader>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2"><Label className="text-xs">Vessel name</Label><Input value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="e.g. Volta Star" /></div>
+                <div><Label className="text-xs">Operator name</Label><Input value={regOperator} onChange={(e) => setRegOperator(e.target.value)} /></div>
+                <div>
+                  <Label className="text-xs">Operator type</Label>
+                  <Select value={regOperatorType} onValueChange={(v) => setRegOperatorType(v as OperatorType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="private">Private Boat Operator</SelectItem>
+                      <SelectItem value="commercial">Commercial Transport</SelectItem>
+                      <SelectItem value="rescue_team">Rescue Team</SelectItem>
+                      <SelectItem value="navy">Navy / Marine Police</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2"><Label className="text-xs">Phone</Label><Input value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="+233..." /></div>
+                <div className="col-span-2"><Label className="text-xs">Home base GPS (lat, lon)</Label><Input value={regHomeText} onChange={(e) => setRegHomeText(e.target.value)} placeholder={position.lat ? `${position.lat.toFixed(5)}, ${position.lon.toFixed(5)}` : "6.5244, 0.1234"} /></div>
+                <div><Label className="text-xs">Max capacity (passengers)</Label><Input type="number" value={regMaxCap} onChange={(e) => setRegMaxCap(Number(e.target.value) || 0)} /></div>
+                <div><Label className="text-xs">Cargo capacity (kg)</Label><Input type="number" value={regCargoCap} onChange={(e) => setRegCargoCap(Number(e.target.value) || 0)} /></div>
+                <div className="col-span-2 flex items-center gap-2"><Switch checked={regRescue} onCheckedChange={setRegRescue} id="rescuecap" /><Label htmlFor="rescuecap" className="text-xs flex items-center gap-1"><LifeBuoy className="h-3.5 w-3.5" /> Rescue-capable vessel</Label></div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleRegisterVessel} disabled={regBusy}>{regBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Register"}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* SOS status banner */}
-      {sosStatus && sosStatus.status !== "RESOLVED" && (
+      {/* Incoming SOS banner (decentralized — any vessel can accept) */}
+      {incomingSos && (
         <Card className="border-destructive">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <LifeBuoy className={`h-5 w-5 text-destructive ${blink ? "opacity-30" : "opacity-100"}`} />
-            <span className="font-semibold">{sosStatus.status === "DISPATCHED" ? "Rescue on the way" : "SOS received — awaiting dispatch"}</span>
-            {sosStatus.rescue_unit?.eta != null && <span>ETA {sosStatus.rescue_unit.eta} min</span>}
+          <CardContent className="p-3 flex items-center gap-3 text-sm flex-wrap">
+            <LifeBuoy className="h-5 w-5 text-destructive" />
+            <span className="font-semibold">Emergency nearby — {incomingSos.vessel_id}</span>
+            <span className="text-xs text-muted-foreground">{Number(incomingSos.lat).toFixed(4)}, {Number(incomingSos.lon).toFixed(4)} · risk {incomingSos.risk_level}</span>
+            <div className="ml-auto flex gap-2">
+              <Button size="sm" variant="destructive" onClick={acceptIncoming}>Accept rescue</Button>
+              <Button size="sm" variant="ghost" onClick={() => setIncomingSos(null)}>Dismiss</Button>
+            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* SOS status banner (for victim) */}
+      {sosStatus && sosStatus.status !== "RESOLVED" && (
+        <Card className="border-destructive">
+          <CardContent className="p-3 flex items-center gap-3 text-sm flex-wrap">
+            <LifeBuoy className={`h-5 w-5 text-destructive ${blink ? "opacity-30" : "opacity-100"}`} />
+            <span className="font-semibold">
+              {sosStatus.status === "ACCEPTED" ? `Rescue on the way — ${sosStatus.accepted_by?.vessel_id}` : `SOS broadcast — ${sosStatus.notified_vessels.length} vessels notified`}
+            </span>
+            {sosStatus.accepted_by?.eta != null && <span>ETA {sosStatus.accepted_by.eta} min</span>}
+            <div className="ml-auto flex gap-2">
+              {sosStatus.status === "ACCEPTED" && (
+                <Button size="sm" variant="outline" onClick={() => setChatOpen(true)}><MessageCircle className="h-3.5 w-3.5 mr-1" />Chat</Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={async () => { await resolveSOS(sosStatus.event_id, sosStatus.accepted_by?.vessel_id); setSosStatus({ ...sosStatus, status: "RESOLVED" }); }}>Mark resolved</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Chat dialog */}
+      <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Rescue communication</DialogTitle></DialogHeader>
+          <div className="space-y-1 max-h-64 overflow-auto border rounded p-2 text-sm">
+            {chatMessages.length === 0 ? <p className="text-xs text-muted-foreground">No messages yet.</p> : chatMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.from === vesselId ? "justify-end" : "justify-start"}`}>
+                <div className={`px-2 py-1 rounded-md ${m.from === vesselId ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  <div className="text-[10px] opacity-70">{m.from}</div>{m.body}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input value={chatDraft} onChange={(e) => setChatDraft(e.target.value)} placeholder="Type message…" onKeyDown={(e) => e.key === "Enter" && sendChat()} />
+            <Button onClick={sendChat}><Send className="h-4 w-4" /></Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Falls back to SMS if your device goes offline.</p>
+        </DialogContent>
+      </Dialog>
 
       {/* Destination search */}
       <Card><CardContent className="p-3 space-y-2">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+            <Input value={searchText} onChange={(e) => setSearchText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-              placeholder="Where to? Place name, address, or GPS"
-              className="pl-9 h-11"
-            />
+              placeholder="Where to? Place, address, or GPS" className="pl-9 h-11" />
           </div>
-          <Button onClick={() => handleSearch()} disabled={searchBusy} className="h-11">
-            {searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
-          </Button>
-          <Button variant="outline" onClick={toggleVoiceInput} className="h-11" title="Voice input">
-            {listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}
-          </Button>
-          <Button variant="outline" onClick={() => setVoiceOn((v) => !v)} className="h-11" title="Voice cues">
-            {voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </Button>
-          <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11" title="Use current GPS">
-            <Crosshair className="h-4 w-4" />
-          </Button>
+          <Button onClick={() => handleSearch()} disabled={searchBusy} className="h-11">{searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}</Button>
+          <Button variant="outline" onClick={toggleVoiceInput} className="h-11">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
+          <Button variant="outline" onClick={() => setVoiceOn((v) => !v)} className="h-11">{voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
+          <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11"><Crosshair className="h-4 w-4" /></Button>
         </div>
         {destination && (
           <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
@@ -477,21 +637,60 @@ export default function AGNav() {
         )}
       </CardContent></Card>
 
+      {/* FARM GPS INPUT (replaces dropdown) */}
+      <Card><CardContent className="p-3 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <RouteIcon className="h-4 w-4 text-primary" />
+          <Label className="text-xs font-semibold">Farm GPS</Label>
+          <Input
+            value={farmGpsText}
+            onChange={(e) => setFarmGpsText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") applyFarmGpsText(); }}
+            placeholder="Enter farm GPS (e.g. 6.5244, 0.1234) or search location"
+            className="h-9 flex-1 min-w-[260px]"
+          />
+          <Button size="sm" onClick={applyFarmGpsText}>Use GPS</Button>
+          <Button size="sm" variant={pickOnMap ? "destructive" : "outline"} onClick={() => setPickOnMap(p => !p)}>
+            <MapPin className="h-3.5 w-3.5 mr-1" />{pickOnMap ? "Click map…" : "Pick on map"}
+          </Button>
+          {farms.length > 0 && (
+            <Select value={savedFarmId} onValueChange={pickSavedFarm}>
+              <SelectTrigger className="h-9 w-56"><SelectValue placeholder="Saved farms" /></SelectTrigger>
+              <SelectContent>
+                {farms.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Button size="sm" onClick={computeRoute} disabled={routeBusy || (!farmTarget && !destination)}>
+            {routeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Compute route"}
+          </Button>
+        </div>
+        {farmTarget && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 text-primary" />
+            <span className="text-foreground font-mono">{farmTarget.lat.toFixed(5)}, {farmTarget.lon.toFixed(5)}</span>
+            <Input value={saveFarmName} onChange={(e) => setSaveFarmName(e.target.value)} placeholder="Name to save as farm" className="h-8 w-56 ml-auto" />
+            <Button size="sm" variant="outline" onClick={handleSaveFarm} disabled={savingFarm}>
+              {savingFarm ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" />Save as Farm</>}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setFarmTarget(null); setFarmGpsText(""); }}>Clear</Button>
+          </div>
+        )}
+        {routeResult && (
+          <div className="text-xs text-muted-foreground">≈ {(routeResult.distance_m / 1000).toFixed(1)} km · {(routeResult.duration_s / 60).toFixed(0)} min · risk {routeResult.risk_level}</div>
+        )}
+      </CardContent></Card>
+
       {/* Load input */}
       <Card><CardContent className="p-3">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col">
-            <Label className="text-xs mb-1">Passengers</Label>
-            <Input type="number" min={0} value={passengers} onChange={(e) => setPassengers(Number(e.target.value) || 0)} className="h-9 w-28" />
-          </div>
-          <div className="flex flex-col">
-            <Label className="text-xs mb-1">Cargo (kg)</Label>
-            <Input type="number" min={0} value={cargoKg} onChange={(e) => setCargoKg(Number(e.target.value) || 0)} className="h-9 w-32" />
-          </div>
+          <div className="flex flex-col"><Label className="text-xs mb-1">Passengers</Label><Input type="number" min={0} value={passengers} onChange={(e) => setPassengers(Number(e.target.value) || 0)} className="h-9 w-28" /></div>
+          <div className="flex flex-col"><Label className="text-xs mb-1">Cargo (kg)</Label><Input type="number" min={0} value={cargoKg} onChange={(e) => setCargoKg(Number(e.target.value) || 0)} className="h-9 w-32" /></div>
           <span className="text-xs text-muted-foreground">Load is included in route risk scoring.</span>
         </div>
       </CardContent></Card>
 
+      {/* Map */}
       <Card><CardContent className="p-3">
         <div className="flex flex-wrap items-center gap-4 mb-3">
           <div className="flex items-center gap-2"><Switch checked={showWeather} onCheckedChange={setShowWeather} id="w" /><Label htmlFor="w" className="text-xs flex items-center gap-1"><Cloud className="h-3.5 w-3.5" /> Weather</Label></div>
@@ -517,39 +716,14 @@ export default function AGNav() {
           <div className="flex items-center gap-2 ml-auto"><Layers className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs text-muted-foreground">Toggle base layer top-right</span></div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <RouteIcon className="h-4 w-4 text-primary" />
-          <Label className="text-xs">Or route to registered farm</Label>
-          <Select value={routeFarmId} onValueChange={(v) => { setRouteFarmId(v); setDestination(null); }}>
-            <SelectTrigger className="h-8 w-64"><SelectValue placeholder={farms.length ? "Pick a farm" : "No farms with GPS"} /></SelectTrigger>
-            <SelectContent>
-              {farms.map((f) => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button size="sm" onClick={computeRoute} disabled={routeBusy || (!routeFarmId && !destination)}>
-            {routeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Compute route"}
-          </Button>
-          {routeResult && (
-            <span className="text-xs text-muted-foreground">
-              ≈ {(routeResult.distance_m / 1000).toFixed(1)} km · {(routeResult.duration_s / 60).toFixed(0)} min · risk {routeResult.risk_level}
-            </span>
-          )}
-          {routeResult && <Button size="sm" variant="ghost" onClick={() => setRouteResult(null)}>Clear route</Button>}
-        </div>
-
         <div className="rounded-lg overflow-hidden border" style={{ height: "62vh", minHeight: 420 }}>
-          <MapContainer center={center} zoom={destination ? 11 : 7} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
-            <FlyTo lat={center[0]} lon={center[1]} zoom={destination ? 11 : 7} />
+          <MapContainer center={center} zoom={destination || farmTarget ? 11 : 7} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
+            <FlyTo lat={center[0]} lon={center[1]} zoom={destination || farmTarget ? 11 : 7} />
+            {pickOnMap && <MapClickPicker onPick={onMapPick} />}
             <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="Streets">
-                <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              </LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="Satellite">
-                <TileLayer attribution="Tiles © Esri" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-              </LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="AGNav (terrain)">
-                <TileLayer attribution="© OpenTopoMap" url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" />
-              </LayersControl.BaseLayer>
+              <LayersControl.BaseLayer checked name="Streets"><TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="Satellite"><TileLayer attribution="Tiles © Esri" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="AGNav (terrain)"><TileLayer attribution="© OpenTopoMap" url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
             </LayersControl>
 
             <Polygon positions={VOLTA_BASIN} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.05 }} />
@@ -565,7 +739,6 @@ export default function AGNav() {
                 pathOptions={{ color: heatColor(p.intensity), fillColor: heatColor(p.intensity), fillOpacity: 0.18 + p.intensity * 0.25, weight: 0 }} />
             ))}
 
-            {/* Wind layer — direction arrows from forecast */}
             {showWind && today && (
               <CircleMarker center={[position.lat || 7.95, position.lon || -1.03]} radius={Math.max(6, ((today as any).windSpeed || 4))}
                 pathOptions={{ color: "#0891b2", fillColor: "#0891b2", fillOpacity: 0.4 }}>
@@ -573,7 +746,6 @@ export default function AGNav() {
               </CircleMarker>
             )}
 
-            {/* River current arrows */}
             {showCurrent && RIVER_CURRENTS.map((c, i) => {
               const len = 0.25 * c.mag;
               const rad = (c.dir * Math.PI) / 180;
@@ -599,35 +771,30 @@ export default function AGNav() {
               <Popup>You · {vesselId}</Popup>
             </CircleMarker>
 
-            {destination && (
-              <Marker position={[destination.lat, destination.lon]}>
-                <Popup>Destination · {destination.label}</Popup>
+            {destination && <Marker position={[destination.lat, destination.lon]}><Popup>Destination · {destination.label}</Popup></Marker>}
+            {farmTarget && (
+              <Marker position={[farmTarget.lat, farmTarget.lon]}>
+                <Popup>Farm target · {farmTarget.lat.toFixed(5)}, {farmTarget.lon.toFixed(5)}</Popup>
               </Marker>
             )}
 
-            {showFarms && farms.map((f) => (
-              <Marker key={f.id} position={[f.lat, f.lon]}><Popup>{f.name}</Popup></Marker>
-            ))}
+            {showFarms && farms.map((f) => (<Marker key={f.id} position={[f.lat, f.lon]}><Popup>{f.name}</Popup></Marker>))}
 
             {showLiveTrack && boatTrail.length > 1 && (
               <Polyline positions={boatTrail} pathOptions={{ color: "#16a34a", weight: 3, dashArray: "4 6" }} />
             )}
 
-            {/* Risk-coloured route segments */}
             {routeResult && routeResult.risk_segments.map((s, i) => (
               <Polyline key={`seg-${i}`} positions={s.coords} pathOptions={{ color: segmentColour(s.level), weight: 6, opacity: 0.9 }} />
             ))}
-
-            {/* Alternatives in muted blue */}
             {routeResult && routeResult.alternatives.map((a, i) => (
               <Polyline key={`alt-${i}`} positions={a} pathOptions={{ color: "#94a3b8", weight: 3, opacity: 0.6, dashArray: "6 6" }} />
             ))}
 
-            {/* Rescue unit marker */}
             {rescuePos && (
               <CircleMarker center={[rescuePos.lat, rescuePos.lon]} radius={10}
                 pathOptions={{ color: "#16a34a", fillColor: "#16a34a", fillOpacity: 0.85 }}>
-                <Popup>Rescue unit en route</Popup>
+                <Popup>Rescue vessel en route</Popup>
               </CircleMarker>
             )}
             {rescuePos && position.lat && (
