@@ -182,7 +182,7 @@ function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }
     catch (err: any) { toast.error(err.message || "Failed to update contract"); }
   };
 
-  if (rows.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">No agreed or proposed contracts yet.</p>;
+  if (rows.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">No agreed contract yet.</p>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -212,15 +212,7 @@ function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }
 /**
  * MarketLink is the SUPPLIER-facing workspace inside the user dashboard.
  *
- * Order Listing here surfaces buyer demand. Suppliers viewing this tab
- * MUST NOT be able to edit or delete buyer orders — those records belong
- * to the buyer who posted them. We therefore force `allowOwnerActions={false}`
- * on the OrderListing component so no edit / delete / save controls render
- * inside the supplier dashboard, regardless of who owns each order row.
- *
- * Buyer-side editing of their own demand happens only on the public
- * Marketplace order screen, where allowOwnerActions is enabled separately.
- */
+
 export default function MarketLink() {
   const m = useMarketLink();
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -288,11 +280,11 @@ export default function MarketLink() {
         </TabsContent>
 
         <TabsContent value="contracts" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">Contracts — agreed and proposed</CardTitle></CardHeader><CardContent><ContractsPanel market={m} /></CardContent></Card>
+          <Card><CardHeader><CardTitle className="text-base">Contracts agreed</CardTitle></CardHeader><CardContent><ContractsPanel market={m} /></CardContent></Card>
         </TabsContent>
 
         <TabsContent value="prices" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">System proposed prices from demand</CardTitle></CardHeader><CardContent>
+          <Card><CardHeader><CardTitle className="text-base">System proposed prices based on demand</CardTitle></CardHeader><CardContent>
             {computedPrices.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No price data yet.</p> : (
               <div className="space-y-2">{computedPrices.map((p) => (
                 <div key={p.crop} className="border rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
