@@ -7,11 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, Search, MessageCircle, MapPin, Calendar, Pencil, Trash2, Save, Send, Handshake } from "lucide-react";
+import { Loader2, Search, MapPin, Calendar, Pencil, Trash2, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { ChatPanel } from "./ChatPanel";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
 
 export interface OrderRow {
@@ -23,6 +22,9 @@ export interface OrderRow {
   notes: string | null; created_at: string;
 }
 
+/* -------------------------------------------------------------- */
+/*  PlaceOrderForm — buyer submits demand                          */
+/* -------------------------------------------------------------- */
 export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
   const { user } = useAuth();
   const [product, setProduct] = useState("");
@@ -94,46 +96,48 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
   );
 }
 
-/**
- * OrderListing
- * ------------
- * Buyer demand board. Action-button visibility is strictly role-aware:
- *
- *   OWNER  (selected.buyer_id === user.id)
- *     • Edit, Save, Delete  → ALWAYS available when allowOwnerActions=true.
- *     • NO Chat / Negotiate / Pre-Order — buyers do not chat with themselves
- *       and cannot negotiate against their own demand. Suppliers initiate.
- *
- *   SUPPLIER (any other authenticated user)
- *     • Chat with buyer, Negotiate, Pre-Order  → always shown.
- *     • Cannot edit, save, or delete the buyer's order.
- */
-export function OrderListing({ requireAuthForChat = true, allowOwnerActions = false }: { requireAuthForChat?: boolean; allowOwnerActions?: boolean }) {
+/* -------------------------------------------------------------- */
+/*  OrderListing — BUYER-OWN orders only                           */
+/*  Strict role: only the signed-in buyer sees their own rows.     */
+/*  Actions: Edit · Save · Delete (no chat / negotiate / supplier) */
+/* -------------------------------------------------------------- */
+export function OrderListing() {
+  const { user } = useAuth();
   const [items, setItems] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
   const [selected, setSelected] = useState<OrderRow | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Partial<OrderRow>>({});
   const [saving, setSaving] = useState(false);
-  const { user } = useAuth();
-
-  const isOwner = !!(selected && user && selected.buyer_id === user.id);
 
   const load = async () => {
+    if (!user) { setItems([]); setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase.from("buyer_orders" as any).select("*").neq("status", "cancelled").order("created_at", { ascending: false }).limit(200);
+    const { data } = await supabase
+      .from("buyer_orders" as any)
+      .select("*")
+      .eq("buyer_id", user.id)               // STRICT: own orders only
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(200);
     setItems((data as any) || []);
     setLoading(false);
   };
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("orders-public-stream").on("postgres_changes", { event: "*", schema: "public", table: "buyer_orders" }, load).subscribe();
+    if (!user) return;
+    const ch = supabase
+      .channel("buyer-own-orders-stream")
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "buyer_orders", filter: `buyer_id=eq.${user.id}` },
+        load)
+      .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const filtered = useMemo(() => items.filter((o) => {
     if (q && !`${o.crop_name} ${o.notes || ""} ${o.region || ""}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -141,20 +145,14 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
     return true;
   }), [items, q, region]);
 
-  const openChat = () => {
-    if (!user) { toast.error("Please sign in to start a live chat"); return; }
-    if (isOwner) { toast.info("Buyers cannot chat on their own order — suppliers will reach out."); return; }
-    setChatOpen(true);
-  };
-
   const beginEdit = () => {
-    if (!selected || !isOwner) return;
+    if (!selected) return;
     setDraft({ ...selected, price_label: selected.price_label || String(selected.target_price || "") });
     setEditing(true);
   };
 
   const saveEdit = async () => {
-    if (!selected || !isOwner) return;
+    if (!selected || !user) return;
     setSaving(true);
     try {
       const label = String(draft.price_label || "").trim();
@@ -173,9 +171,13 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
         contact_phone: draft.contact_phone || null,
         notes: draft.notes || null,
       };
-      const { error } = await supabase.from("buyer_orders" as any).update(patch as any).eq("id", selected.id).eq("buyer_id", user!.id);
+      const { error } = await supabase
+        .from("buyer_orders" as any)
+        .update(patch as any)
+        .eq("id", selected.id)
+        .eq("buyer_id", user.id);
       if (error) throw error;
-      toast.success("Order listing saved");
+      toast.success("Order saved");
       setEditing(false);
       setSelected({ ...selected, ...patch } as OrderRow);
       load();
@@ -184,80 +186,63 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
   };
 
   const deleteOrder = async () => {
-    if (!selected || !isOwner) return;
-    if (!window.confirm("Delete this buyer order?")) return;
-    const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", selected.id).eq("buyer_id", user!.id);
+    if (!selected || !user) return;
+    if (!window.confirm("Delete this order?")) return;
+    const { error } = await supabase
+      .from("buyer_orders" as any)
+      .delete()
+      .eq("id", selected.id)
+      .eq("buyer_id", user.id);
     if (error) { toast.error(error.message); return; }
-    toast.success("Order listing deleted");
+    toast.success("Order deleted");
     setSelected(null);
     load();
   };
 
-  // Pre-order is a SUPPLIER action — proposing to fulfil the buyer's demand.
-  // Owners (buyers) can never pre-order against themselves.
-  const preOrderResponse = async () => {
-    if (!selected) return;
-    if (!user) { toast.info("Sign in to send a supplier response."); return; }
-    if (isOwner) { toast.info("Buyers cannot pre-order on their own demand."); return; }
-    const { error } = await supabase.from("market_contracts" as any).insert({
-      farmer_id: user.id,
-      buyer_id: selected.buyer_id,
-      buyer_order_id: selected.id,
-      crop_name: selected.crop_name,
-      quantity: Number(selected.quantity_needed || 1),
-      unit: selected.unit,
-      locked_price: Number(selected.target_price || 0),
-      delivery_start: selected.delivery_start,
-      delivery_end: selected.delivery_end,
-      state: "proposed",
-      logistics_status: "pending",
-      notes: `Farmer response to buyer demand for ${selected.crop_name}`,
-    } as any);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Response proposed. Continue in chat to negotiate terms.");
-    setChatOpen(true);
-  };
+  if (!user) {
+    return <p className="text-sm text-muted-foreground py-6 text-center">Sign in to view your orders.</p>;
+  }
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <div className="md:col-span-2 relative">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search product or notes" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="pl-9" placeholder="Search your orders" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <Input placeholder="Region filter" value={region} onChange={(e) => setRegion(e.target.value)} />
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
-        : filtered.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No active buyer demand.</p>
+        : filtered.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">You have not placed any orders yet.</p>
         : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((o) => (
-            <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setEditing(false); setChatOpen(false); }}>
+            <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setEditing(false); }}>
               <CardContent className="p-3 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-semibold truncate">{o.crop_name}</div>
                   <div className="text-sm font-semibold text-primary whitespace-nowrap">{formatMarketPrice(o.target_price, o.unit, o.price_label)}</div>
                 </div>
-                <div className="text-xs text-muted-foreground">{o.buyer_name || "Buyer"} needs {Number(o.quantity_needed).toLocaleString()} {o.unit}</div>
+                <div className="text-xs text-muted-foreground">Need {Number(o.quantity_needed).toLocaleString()} {o.unit}</div>
                 <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{o.region || "Anywhere"}</div>
                 <div className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />Deliver {o.delivery_start || "?"} → {o.delivery_end || "?"}</div>
                 <div className="flex flex-wrap gap-1 pt-1">
                   {o.grade && <Badge variant="outline" className="text-[10px]">Grade {o.grade}</Badge>}
                   {o.quality && <Badge variant="outline" className="text-[10px]">{o.quality}</Badge>}
                   {o.moisture && <Badge variant="outline" className="text-[10px]">{o.moisture}</Badge>}
-                  {user && o.buyer_id === user.id && <Badge className="text-[10px]">Your order</Badge>}
+                  <Badge className="text-[10px]">Your order</Badge>
                 </div>
               </CardContent>
             </Card>
           ))}</div>}
 
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setChatOpen(false); setEditing(false); } }}>
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setEditing(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selected && <>
             <DialogHeader>
-              <DialogTitle>{selected.crop_name} — buyer demand</DialogTitle>
+              <DialogTitle>{selected.crop_name} — your order</DialogTitle>
             </DialogHeader>
 
-            {editing && isOwner && allowOwnerActions ? (
+            {editing ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label>Buyer name</Label><Input value={String(draft.buyer_name || "")} onChange={(e) => setDraft((d) => ({ ...d, buyer_name: e.target.value }))} /></div>
                 <div><Label>Product</Label><Input value={String(draft.crop_name || "")} onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} /></div>
@@ -287,54 +272,22 @@ export function OrderListing({ requireAuthForChat = true, allowOwnerActions = fa
                 </div>
                 {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                 <div className="border-t pt-2 space-y-1 text-xs">
-                  {selected.contact_email && <div>📧 <a className="text-primary hover:underline" href={`mailto:${selected.contact_email}`}>{selected.contact_email}</a></div>}
-                  {selected.contact_phone && <div>📞 <a className="text-primary hover:underline" href={`tel:${selected.contact_phone}`}>{selected.contact_phone}</a></div>}
+                  {selected.contact_email && <div>📧 {selected.contact_email}</div>}
+                  {selected.contact_phone && <div>📞 {selected.contact_phone}</div>}
                 </div>
 
+                {/* OWNER-ONLY ACTIONS — Edit / Save / Delete. No chat, no negotiate. */}
                 <div className="flex gap-2 flex-wrap pt-2">
-                  {/* Owner branch — only edit/save/delete, never chat/negotiate/pre-order. */}
-                  {isOwner && allowOwnerActions ? (
-                    <>
-                      <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
-                      <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
-                      <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
-                      <p className="w-full text-[11px] text-muted-foreground">
-                        You posted this order. Suppliers will contact you to chat, negotiate or pre-order.
-                      </p>
-                    </>
-                  ) : isOwner ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      .
-                    </p>
-                  ) : (
-                    <>
-                      {/* Supplier branch — chat / negotiate / pre-order only. */}
-                      <Button onClick={openChat}><MessageCircle className="h-4 w-4 mr-1" />Contact buyer</Button>
-                      <Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
-                      <Button variant="outline" onClick={preOrderResponse}><Send className="h-4 w-4 mr-1" />Pre-Order</Button>
-                      {!user && requireAuthForChat && (
-                        <p className="w-full text-xs text-muted-foreground">
-                          Sign in to chat live or negotiate. Subscription required to unlock direct messaging when paywall is active.
-                        </p>
-                      )}
-                    </>
-                  )}
+                  <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
+                  <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
+                  <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
+                  <p className="w-full text-[11px] text-muted-foreground">
+                    Suppliers will reach out to you from the Market Link supplier view.
+                  </p>
                 </div>
               </>
             )}
           </>}
-        </DialogContent>
-      </Dialog>
-
-      {/* Dedicated chat dialog — never opens for the order owner. */}
-      <Dialog open={chatOpen && !!selected && !!user && !isOwner} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat — {selected?.crop_name}</DialogTitle>
-          </DialogHeader>
-          {selected && user && !isOwner && (
-            <ChatPanel otherUserId={selected.buyer_id} otherName={`Buyer · ${selected.buyer_name || selected.crop_name}`} relatedOrderId={selected.id} />
-          )}
         </DialogContent>
       </Dialog>
     </div>
