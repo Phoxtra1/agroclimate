@@ -19,7 +19,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { SupplyList } from "@/components/market/SupplyList";
-import { OrderListing } from "@/components/market/Orders";
+import { SupplierOrderListing } from "@/components/market/SupplierOrderListing";
 import { ChatPanel } from "@/components/market/ChatPanel";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
 
@@ -127,7 +127,6 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
 
 interface ThreadSummary { other: string; lastBody: string; unread: number; lastAt: string; }
 
-/** Resolve a user's public display name (full name → company → email) for trust in chat. */
 function useDisplayNames(userIds: string[]) {
   const [names, setNames] = useState<Record<string, string>>({});
   const key = userIds.slice().sort().join(",");
@@ -240,9 +239,6 @@ function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }
   );
 }
 
-/**
- * MarketLink is the SUPPLIER-facing workspace inside the user dashboard.
- */
 export default function MarketLink() {
   const m = useMarketLink();
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -294,19 +290,26 @@ export default function MarketLink() {
           <Card><CardHeader><CardTitle className="text-base">All supply listings</CardTitle></CardHeader><CardContent><SupplyList requireAuthForChat={false} allowOwnerActions compact /></CardContent></Card>
         </TabsContent>
 
+        {/*
+          SUPPLIER ORDER LISTING
+          ----------------------
+          Shows ALL buyer orders. Allowed actions: Contact Buyer / Negotiate
+          (each opens Live Chat). Edit/Save/Delete are NEVER rendered here —
+          they live exclusively in the buyer's Orders.tsx workspace.
+        */}
         <TabsContent value="order-listing" className="mt-3">
-     <Card>
-    <CardHeader>
-      <CardTitle className="text-base">Buyer order listing</CardTitle>
-      <p className="text-xs text-muted-foreground">
-        Respond by chat or negotiate.
-      </p>
-    </CardHeader>
-    <CardContent>
-      <OrderListing requireAuthForChat={false} allowOwnerActions={false} />
-    </CardContent>
-  </Card>
-</TabsContent>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Buyer order listing</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Browse all buyer demand. Use Contact Buyer or Negotiate to open a live chat.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <SupplierOrderListing requireAuthForChat={false} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="contracts" className="mt-3">
           <Card><CardHeader><CardTitle className="text-base">Contracts agreed</CardTitle></CardHeader><CardContent><ContractsPanel market={m} /></CardContent></Card>
