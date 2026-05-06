@@ -265,19 +265,18 @@ export default function MarketLink() {
         </TabsContent>
 
         <TabsContent value="order-listing" className="mt-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Buyer order listing</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Read-only — these orders are placed by buyers. Respond by chat, negotiate or pre-order. Editing and deletion are reserved for the buyer who posted the demand.
-              </p>
-            </CardHeader>
-            <CardContent>
-              {/* allowOwnerActions hard-disabled here: suppliers must not edit / delete buyer demand. */}
-              <OrderListing requireAuthForChat={false} allowOwnerActions={false} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+     <Card>
+    <CardHeader>
+      <CardTitle className="text-base">Buyer order listing</CardTitle>
+      <p className="text-xs text-muted-foreground">
+        Respond by chat or negotiate.
+      </p>
+    </CardHeader>
+    <CardContent>
+      <OrderListing requireAuthForChat={false} allowOwnerActions={false} />
+    </CardContent>
+  </Card>
+</TabsContent>
 
         <TabsContent value="contracts" className="mt-3">
           <Card><CardHeader><CardTitle className="text-base">Contracts agreed</CardTitle></CardHeader><CardContent><ContractsPanel market={m} /></CardContent></Card>
