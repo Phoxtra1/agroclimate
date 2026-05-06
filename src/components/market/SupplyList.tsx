@@ -54,8 +54,41 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("supply-public-stream")
-      .on("postgres_changes", { event: "*", schema: "public", table: "farmer_inputs" }, load)
+    // Real-time stream — apply INSERT/UPDATE/DELETE locally so new
+    // listings appear instantly without re-fetching the whole table.
+    const ch = supabase
+      .channel("supply-public-stream")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "farmer_inputs" },
+        (payload: any) => {
+          const row = payload.new as SupplyRow;
+          if (!row || row.status === "cancelled") return;
+          setItems((prev) => (prev.some((p) => p.id === row.id) ? prev : [row, ...prev]));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "farmer_inputs" },
+        (payload: any) => {
+          const row = payload.new as SupplyRow;
+          if (!row) return;
+          setItems((prev) => {
+            if (row.status === "cancelled") return prev.filter((p) => p.id !== row.id);
+            const exists = prev.some((p) => p.id === row.id);
+            return exists ? prev.map((p) => (p.id === row.id ? row : p)) : [row, ...prev];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "farmer_inputs" },
+        (payload: any) => {
+          const row = payload.old as SupplyRow;
+          if (!row) return;
+          setItems((prev) => prev.filter((p) => p.id !== row.id));
+        }
+      )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
