@@ -105,9 +105,13 @@ export function ChatPanel({ otherUserId, otherName, relatedSupplyId, relatedOrde
         ) : (
           messages.map((m) => {
             const mine = m.sender_id === user?.id;
+            const meta: any = user?.user_metadata || {};
+            const myName = meta.company_name || meta.full_name || meta.name || user?.email || "You";
+            const senderName = mine ? myName : otherName;
             return (
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${mine ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  <div className="text-[10px] font-semibold mb-0.5 opacity-80">{senderName}</div>
                   {m.body}
                   <div className="text-[10px] mt-1 opacity-70">
                     {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
