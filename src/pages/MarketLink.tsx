@@ -306,7 +306,7 @@ export default function MarketLink() {
               </p>
             </CardHeader>
             <CardContent>
-              <SupplyListing requireAuthForChat={false} />
+              <SupplyList requireAuthForChat={false} />
             </CardContent>
           </Card>
         </TabsContent>
