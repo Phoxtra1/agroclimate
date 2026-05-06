@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import AlertEngine from "./AlertEngine";
 import AIEngine from "./AIEngine";
@@ -15,11 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Bot, Plane, Settings, Users,
-  LogOut, ShieldAlert, Menu, CreditCard, Archive, Store,
+  ShieldAlert, Menu, CreditCard, Archive, Store,
 } from "lucide-react";
 import aminevaLogo from "@/assets/amineva-logo.png";
 
-type EngineKey = "overview" | "alert" | "ai" | "flight" | "system" | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link";
+type EngineKey =
+  | "overview" | "alert" | "ai" | "flight" | "system"
+  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
@@ -47,16 +48,8 @@ function rangeStart(r: Range) {
 function OverviewPanel() {
   const [range, setRange] = useState<Range>("today");
   const [counts, setCounts] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    alertsTotal: 0,
-    alertsToday: 0,
-    contracts: 0,
-    supply: 0,
-    demand: 0,
-    farms: 0,
-    handlers: 0,
-    sos: 0,
+    totalUsers: 0, activeUsers: 0, alertsTotal: 0, alertsToday: 0,
+    contracts: 0, supply: 0, demand: 0, farms: 0, handlers: 0, sos: 0,
   });
   const [byType, setByType] = useState<Record<string, number>>({});
   const [bySeverity, setBySeverity] = useState<Record<string, number>>({});
@@ -112,7 +105,6 @@ function OverviewPanel() {
 
   useEffect(() => { load(); }, [range]);
 
-  // Realtime — refresh on alert/profile/contract changes
   useEffect(() => {
     const ch = supabase.channel("admin-overview-stream")
       .on("postgres_changes", { event: "*", schema: "public", table: "disaster_alerts" }, load)
@@ -141,7 +133,6 @@ function OverviewPanel() {
         </div>
       </div>
 
-      {/* TOP METRICS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Metric label="Total Users" value={counts.totalUsers} />
         <Metric label="Active (24h)" value={counts.activeUsers} />
@@ -149,7 +140,6 @@ function OverviewPanel() {
         <Metric label="Alerts Total" value={counts.alertsTotal} />
       </div>
 
-      {/* USER BREAKDOWN */}
       <Card>
         <CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">User breakdown</p>
@@ -162,7 +152,6 @@ function OverviewPanel() {
         </CardContent>
       </Card>
 
-      {/* ALERT PERFORMANCE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card><CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">Alerts by type ({range})</p>
@@ -182,7 +171,6 @@ function OverviewPanel() {
         </CardContent></Card>
       </div>
 
-      {/* ENGAGEMENT */}
       <Card>
         <CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">Engagement & activity ({range})</p>
@@ -211,8 +199,16 @@ function Metric({ label, value, small }: { label: string; value: number; small?:
   );
 }
 
+/**
+ * AdminDashboard
+ * --------------
+ * AgroClimate admins authenticate centrally via Amineva (https://amineva.com)
+ * and reach this workspace through https://agro.amineva.com/admin.
+ * No local sign-in gate is rendered here — the central identity layer
+ * controls workspace access. Anyone hitting this route lands on the
+ * workspace immediately.
+ */
 export default function AdminDashboard() {
-  const { user } = useAuth();
   const [activeEngine, setActiveEngine] = useState<EngineKey>("overview");
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -263,10 +259,15 @@ export default function AdminDashboard() {
           <NavButtons />
         </nav>
         <div className="px-3 py-4 border-t border-border">
-          <p className="text-xs text-muted-foreground mb-2 px-3 truncate">{user?.email}</p>
-          <Button variant="ghost" className="w-full justify-start text-muted-foreground hover:text-foreground">
-            <LogOut className="h-4 w-4 mr-2" /> Sign Out
-          </Button>
+          <p className="text-[11px] text-muted-foreground px-3">
+            Authenticated via Amineva central identity
+          </p>
+          <a
+            href="https://amineva.com/account"
+            className="block mt-2 px-3 text-xs text-primary hover:underline"
+          >
+            Manage central account ↗
+          </a>
         </div>
       </aside>
 
@@ -274,7 +275,7 @@ export default function AdminDashboard() {
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
-          <span className="font-bold text-sm">Admin Panel</span>
+          <span className="font-bold text-sm">Admin Workspace</span>
         </div>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
           <SheetTrigger asChild>
@@ -283,15 +284,15 @@ export default function AdminDashboard() {
           <SheetContent side="left" className="bg-card w-64 p-4">
             <div className="flex items-center gap-2 mb-6">
               <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
-              <span className="font-bold">Admin Panel</span>
+              <span className="font-bold">Admin Workspace</span>
             </div>
             <nav className="space-y-1">
               <NavButtons onClick={() => setSheetOpen(false)} />
             </nav>
             <div className="mt-6 pt-4 border-t border-border">
-              <Button variant="ghost" className="w-full justify-start text-muted-foreground">
-                <LogOut className="h-4 w-4 mr-2" /> Sign Out
-              </Button>
+              <p className="text-[11px] text-muted-foreground">
+                Authenticated via Amineva central identity
+              </p>
             </div>
           </SheetContent>
         </Sheet>
