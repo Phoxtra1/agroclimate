@@ -237,9 +237,7 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
                   {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                   <div className="border-t pt-3 space-y-1 text-sm"><div className="font-semibold">Supplier contact</div>{selected.contact_email && <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /><a className="text-primary hover:underline" href={`mailto:${selected.contact_email}`}>{selected.contact_email}</a></div>}{selected.contact_phone && <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" /><a className="text-primary hover:underline" href={`tel:${selected.contact_phone}`}>{selected.contact_phone}</a></div>}{!selected.contact_email && !selected.contact_phone && <div className="text-muted-foreground text-xs">No public contact — use chat.</div>}</div>
                   <div className="flex gap-2 flex-wrap">
-                    <Button onClick={openChat}><MessageCircle className="h-4 w-4 mr-1" />Contact Supplier</Button>
                     <Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
-                    <Button variant="outline" onClick={preOrder}><Send className="h-4 w-4 mr-1" />Pre-Order</Button>
                     {allowOwnerActions && selected.user_id === user?.id && <Button variant="outline" onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
                     {allowOwnerActions && selected.user_id === user?.id && <Button variant="ghost" onClick={deleteListing}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}
                   </div>
