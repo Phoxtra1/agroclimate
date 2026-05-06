@@ -2,9 +2,14 @@ import { MarketplaceLayout } from "@/components/market/MarketplaceLayout";
 import { SupplyList } from "@/components/market/SupplyList";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { ArrowRight, Sprout, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+
+export default function MarketplaceHome() {
+  // Strict redirect — Home tab always goes to the main app homepage.
+  return <Navigate to="/" replace />;
+}
 
 export default function MarketplaceHome() {
   const { user, loading } = useAuth();
