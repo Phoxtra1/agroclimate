@@ -335,7 +335,7 @@ export function OrderListing() {
                       <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
                       <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
                       <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
-                      <p className="w-full text-[11px] text-muted-foreground">Decline keeps this order active for other suppliers.</p>
+                      <p className="w-full text-[11px] text-muted-foreground">Suppliers can negotiate, accept or decline from Order Listing.</p>
                     </>
                   )}
                 </div>
