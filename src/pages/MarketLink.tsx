@@ -7,332 +7,232 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Store, TrendingUp, TrendingDown, Minus, AlertTriangle, Truck, Handshake, Package,
-  Loader2, Image as ImageIcon, Inbox, Check, X,
+  Store, TrendingUp, TrendingDown, Minus, Package, Loader2, Inbox, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useMarketLink, suggestPrice, type PriceRow } from "@/hooks/useMarketLink";
-import { makeThreadKey } from "@/hooks/useMarketChat";
-import { useProfile } from "@/hooks/useProfile";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { SupplyList } from "@/components/market/SupplyList";
-import { ChatPanel } from "@/components/market/ChatPanel";
-import { SupplyList } from "@/components/market/SupplyList";
+import { OrderListing } from "@/components/market/Orders";
+import Agreement from "@/components/market/Agreement";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
+import {
+  estimateMarketPrice, type SupplyLike, type DemandLike,
+} from "@/lib/pricingEngine";
 
-const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
+const CATEGORIES = ["Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
-function trendIcon(t: string) {
-  if (t === "rising") return <TrendingUp className="h-3.5 w-3.5 text-green-600" />;
-  if (t === "falling") return <TrendingDown className="h-3.5 w-3.5 text-red-500" />;
-  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
-}
+export default function MarketLink() {
+  const { user } = useAuth();
+  const [supplyRows, setSupplyRows] = useState<SupplyLike[]>([]);
+  const [demandRows, setDemandRows] = useState<DemandLike[]>([]);
 
-function OverviewCards({ totalSupply, totalDemand, activeContracts, balance }: { totalSupply: number; totalDemand: number; activeContracts: number; balance: string }) {
+  // Pull a small slice of recent rows so the pricing engine has signal.
+  useEffect(() => {
+    (async () => {
+      const [{ data: s }, { data: d }] = await Promise.all([
+        supabase.from("farmer_inputs" as any).select("crop_name,region,category,expected_quantity,unit,suggested_price,status").neq("status", "cancelled").limit(500),
+        supabase.from("buyer_orders"  as any).select("crop_name,region,quantity_needed,unit,target_price,status").neq("status", "cancelled").limit(500),
+      ]);
+      setSupplyRows((s as any) || []);
+      setDemandRows((d as any) || []);
+    })();
+  }, []);
+
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <Card><CardContent className="pt-4"><div className="flex items-center gap-2 text-xs text-muted-foreground"><Package className="h-4 w-4" /> Expected supply</div><p className="text-2xl font-bold mt-1">{totalSupply.toLocaleString()}</p></CardContent></Card>
-      <Card><CardContent className="pt-4"><div className="flex items-center gap-2 text-xs text-muted-foreground"><Handshake className="h-4 w-4" /> Active demand</div><p className="text-2xl font-bold mt-1">{totalDemand.toLocaleString()}</p></CardContent></Card>
-      <Card><CardContent className="pt-4"><div className="flex items-center gap-2 text-xs text-muted-foreground"><Truck className="h-4 w-4" /> Contracts</div><p className="text-2xl font-bold mt-1">{activeContracts}</p></CardContent></Card>
-      <Card><CardContent className="pt-4"><div className="flex items-center gap-2 text-xs text-muted-foreground"><AlertTriangle className="h-4 w-4" /> Balance</div><p className={`text-base font-bold mt-1 capitalize ${balance === "shortage" ? "text-red-500" : balance === "surplus" ? "text-yellow-600" : "text-green-600"}`}>{balance}</p></CardContent></Card>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Store className="h-5 w-5 text-primary" />
+        <h2 className="text-xl font-bold">Market Link</h2>
+      </div>
+
+      <Tabs defaultValue="supply" className="w-full">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="supply">Supply</TabsTrigger>
+          <TabsTrigger value="price">Price</TabsTrigger>
+          <TabsTrigger value="orders">Order Listings</TabsTrigger>
+          <TabsTrigger value="agreements">Agreements</TabsTrigger>
+        </TabsList>
+
+        {/* ---------------- OVERVIEW ---------------- */}
+        <TabsContent value="overview">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KPI icon={Package} label="Listings" value={supplyRows.length} />
+            <KPI icon={Inbox}   label="Active demand" value={demandRows.length} />
+            <KPI icon={TrendingUp} label="Hot products" value={Math.min(demandRows.length, 5)} />
+            <KPI icon={Store} label="Status" value={user ? "Connected" : "Sign in"} />
+          </div>
+        </TabsContent>
+
+        {/* ---------------- SUPPLY ----------------- */}
+        <TabsContent value="supply">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Publish a supply listing</CardTitle></CardHeader>
+            <CardContent>
+              <SupplyForm supplyRows={supplyRows} demandRows={demandRows} />
+            </CardContent>
+          </Card>
+
+          <div className="mt-4">
+            <h3 className="font-semibold mb-2">My listings</h3>
+            {/* Owner-only: Edit / Delete / View Responses. NO Negotiate. */}
+            <SupplyList ownerOnly allowOwnerActions requireAuthForChat={false} compact />
+          </div>
+        </TabsContent>
+
+        {/* ---------------- PRICE ------------------ */}
+        <TabsContent value="price">
+          <PricePanel supplyRows={supplyRows} demandRows={demandRows} />
+        </TabsContent>
+
+        {/* ---------------- ORDER LISTINGS --------- */}
+        <TabsContent value="orders">
+          {/* Buyer-created orders. Role-aware row actions handled inside. */}
+          <OrderListing />
+        </TabsContent>
+
+        {/* ---------------- AGREEMENTS ------------- */}
+        <TabsContent value="agreements">
+          <Agreement role="both" />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
 
-function SupplyForm({ onAdded }: { onAdded: () => void }) {
+/* ============================================================== */
+/*  SupplyForm — supplier publishes + sees live price estimate.    */
+/* ============================================================== */
+function SupplyForm({ supplyRows, demandRows }: { supplyRows: SupplyLike[]; demandRows: DemandLike[] }) {
   const { user } = useAuth();
-  const { profile } = useProfile();
-  const [product, setProduct] = useState("");
-  const [category, setCategory] = useState("Other");
-  const [region, setRegion] = useState(profile?.region || "");
+  const [crop, setCrop] = useState("");
+  const [category, setCategory] = useState("Cereal");
+  const [region, setRegion] = useState("");
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState("kg");
-  const [grade, setGrade] = useState("A");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [delivery, setDelivery] = useState("");
   const [price, setPrice] = useState("");
-  const [risk, setRisk] = useState<"low" | "medium" | "high">("low");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState(profile?.phone || "");
   const [notes, setNotes] = useState("");
-  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const estimate = useMemo(() => {
+    if (!crop.trim()) return null;
+    return estimateMarketPrice({
+      cropName: crop, region, category,
+      quantity: Number(qty || 0), unit,
+      existingSupply: supplyRows, activeBuyerRequests: demandRows,
+    });
+  }, [crop, region, category, qty, unit, supplyRows, demandRows]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) { toast.error("Sign in first"); return; }
-    if (!product.trim() || !qty) { toast.error("Product and quantity required"); return; }
+    if (!user) { toast.error("Sign in to publish"); return; }
+    if (!crop.trim() || !qty) { toast.error("Product and quantity required"); return; }
     setBusy(true);
     try {
-      let image_url: string | null = null;
-      if (file) {
-        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-        const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("supply-images").upload(path, file, { contentType: file.type, upsert: false });
-        if (upErr) throw upErr;
-        image_url = supabase.storage.from("supply-images").getPublicUrl(path).data.publicUrl;
-      }
+      const finalPrice = price.trim() ? parseMarketPrice(price) : (estimate?.estimatedPrice || 0);
       const { error } = await supabase.from("farmer_inputs" as any).insert({
         user_id: user.id,
-        crop_name: product.trim(),
-        category,
-        region: region || null,
-        expected_quantity: Number(qty),
-        unit,
-        quality_grade: grade,
-        harvest_start: start || null,
-        harvest_end: end || null,
-        delivery_timeline: delivery || null,
-        suggested_price: parseMarketPrice(price),
-        price_label: price.trim() || null,
-        risk_level: risk,
-        image_url,
-        contact_email: email || user.email || null,
-        contact_phone: phone || null,
+        crop_name: crop.trim(),
+        category, region: region || null,
+        expected_quantity: Number(qty), unit,
+        suggested_price: finalPrice,
+        price_label: price.trim() || (estimate?.priceLabel ?? null),
+        estimated_price: estimate?.estimatedPrice ?? null,
+        demand_level: estimate?.demandLevel ?? null,
+        listing_status: "active",
         notes: notes || null,
+        status: "active",
       } as any);
       if (error) throw error;
       toast.success("Supply listing published");
-      setProduct(""); setQty(""); setStart(""); setEnd(""); setNotes(""); setFile(null); setPrice("");
-      onAdded();
-    } catch (err: any) { toast.error(err.message || "Failed"); }
+      setCrop(""); setQty(""); setPrice(""); setNotes("");
+    } catch (err: any) { toast.error(err.message || "Failed to publish"); }
     finally { setBusy(false); }
   };
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div><Label>Product</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Crop, livestock, fish, mineral, raw/refined material" required /></div>
+    <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div><Label>Product</Label><Input value={crop} onChange={(e) => setCrop(e.target.value)} placeholder="Maize, cassava, tilapia…" required /></div>
       <div><Label>Category</Label><Select value={category} onValueChange={setCategory}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Quantity</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
+      <div><Label>Region</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
+      <div><Label>Quantity</Label><Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
       <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Quality grade</Label><Select value={grade} onValueChange={setGrade}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="A">A — Premium</SelectItem><SelectItem value="B">B — Standard</SelectItem><SelectItem value="C">C — Economy</SelectItem></SelectContent></Select></div>
-      <div><Label>Price / {unit}</Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="GHS 250, USD 40, ₦15000" /></div>
-      <div><Label>Region / location</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
-      <div><Label>Delivery timeline</Label><Input value={delivery} onChange={(e) => setDelivery(e.target.value)} placeholder="e.g. within 14 days" /></div>
-      <div><Label>Availability start</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
-      <div><Label>Availability end</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
-      <div><Label>Climate/handling risk</Label><Select value={risk} onValueChange={(v) => setRisk(v as any)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent></Select></div>
-      <div><Label>Contact email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={user?.email || ""} /></div>
-      <div><Label>Contact phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-      <div className="sm:col-span-2"><Label>Description / notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
-      <div className="sm:col-span-2"><Label className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Product image</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></div>
-      <div className="sm:col-span-2"><Button type="submit" disabled={busy} className="w-full h-11">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish supply listing"}</Button></div>
+      <div><Label>Price (optional — auto-estimated)</Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={estimate?.priceLabel || "GHS 4,500"} /></div>
+      <div className="md:col-span-2"><Label>Notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
+
+      {estimate && (
+        <div className="md:col-span-2 rounded-lg border bg-muted/40 p-3 flex items-center gap-3 flex-wrap">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <div className="text-sm">
+            <span className="font-semibold">Estimated Market Price:</span> {estimate.priceLabel}
+          </div>
+          <Badge variant="secondary">Demand: {estimate.demandLevel}</Badge>
+          <Badge variant="outline">Activity: {estimate.marketActivity}</Badge>
+          <span className="text-xs text-muted-foreground">{estimate.explain}</span>
+        </div>
+      )}
+
+      <div className="md:col-span-2"><Button type="submit" disabled={busy} className="w-full h-10">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish to Market Link"}</Button></div>
     </form>
   );
 }
 
-interface ThreadSummary { other: string; lastBody: string; unread: number; lastAt: string; }
+/* ============================================================== */
+/*  PricePanel — read-only estimated market price browser.         */
+/* ============================================================== */
+function PricePanel({ supplyRows, demandRows }: { supplyRows: SupplyLike[]; demandRows: DemandLike[] }) {
+  const [crop, setCrop] = useState("");
+  const [region, setRegion] = useState("");
+  const [unit, setUnit] = useState("kg");
 
-function useDisplayNames(userIds: string[]) {
-  const [names, setNames] = useState<Record<string, string>>({});
-  const key = userIds.slice().sort().join(",");
-  useEffect(() => {
-    if (!userIds.length) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("profiles" as any)
-        .select("id, full_name, company_name, email")
-        .in("id", userIds);
-      if (cancelled) return;
-      const map: Record<string, string> = {};
-      (data as any[] | null)?.forEach((p) => {
-        map[p.id] = (p.full_name?.trim() || p.company_name?.trim() || p.email?.split("@")[0] || `User · ${String(p.id).slice(0, 8)}`);
-      });
-      userIds.forEach((id) => { if (!map[id]) map[id] = `User · ${id.slice(0, 8)}`; });
-      setNames(map);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-  return names;
-}
-
-function DashboardMarketInbox() {
-  const { user } = useAuth();
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [active, setActive] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    const load = async () => {
-      const { data } = await supabase
-        .from("market_messages" as any)
-        .select("*")
-        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
-        .order("created_at", { ascending: false })
-        .limit(500);
-      const map = new Map<string, ThreadSummary>();
-      (data as any[] | null)?.forEach((m) => {
-        const other = m.sender_id === user.id ? m.recipient_id : m.sender_id;
-        const key = makeThreadKey(user.id, other);
-        if (!map.has(key)) map.set(key, { other, lastBody: m.body, unread: 0, lastAt: m.created_at });
-        if (m.recipient_id === user.id && !m.read_at) map.get(key)!.unread += 1;
-      });
-      setThreads(Array.from(map.values()));
-    };
-    load();
-    const ch = supabase.channel("dashboard-market-inbox").on("postgres_changes", { event: "*", schema: "public", table: "market_messages" }, load).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [user]);
-
-  const names = useDisplayNames(threads.map((t) => t.other));
+  const est = useMemo(() => crop.trim() ? estimateMarketPrice({
+    cropName: crop, region, unit,
+    existingSupply: supplyRows, activeBuyerRequests: demandRows,
+  }) : null, [crop, region, unit, supplyRows, demandRows]);
 
   return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader><DialogTitle>Market Link Messages</DialogTitle></DialogHeader>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card><CardContent className="p-2 space-y-1">
-          {threads.length === 0 && <p className="text-xs text-muted-foreground p-3">No market conversations yet.</p>}
-          {threads.map((t) => {
-            const displayName = names[t.other] || `User · ${t.other.slice(0, 8)}`;
-            return (
-              <button key={t.other} onClick={() => setActive(t.other)} className={`w-full text-left p-2 rounded-md hover:bg-accent ${active === t.other ? "bg-accent" : ""}`}>
-                <div className="flex items-center justify-between text-sm font-medium"><span>{displayName}</span>{t.unread > 0 && <Badge>{t.unread}</Badge>}</div>
-                <div className="text-[11px] text-muted-foreground truncate">{t.lastBody}</div>
-              </button>
-            );
-          })}
-        </CardContent></Card>
-        <div className="md:col-span-2">{active ? <ChatPanel otherUserId={active} otherName={names[active] || `User · ${active.slice(0, 8)}`} /> : <p className="text-sm text-muted-foreground p-6 text-center">Select a message thread.</p>}</div>
-      </div>
-    </DialogContent>
-  );
-}
-
-function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }) {
-  const { user } = useAuth();
-  const rows = market.contracts.filter((c) => c.state !== "rejected" && c.state !== "cancelled");
-  const updateState = async (id: string, state: any) => {
-    try { await market.setContractState(id, state); toast.success("Contract updated"); market.refresh(); }
-    catch (err: any) { toast.error(err.message || "Failed to update contract"); }
-  };
-
-  if (rows.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">No agreed contract yet.</p>;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {rows.map((c) => {
-        const isBuyer = c.buyer_id === user?.id;
-        const isFarmer = c.farmer_id === user?.id;
-        return (
-          <Card key={c.id}><CardContent className="p-3 space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div><div className="font-semibold">{c.crop_name}</div><p className="text-xs text-muted-foreground">{Number(c.quantity).toLocaleString()} {c.unit} · {formatMarketPrice(c.locked_price, c.unit)}</p></div>
-              <Badge variant={c.state === "accepted" ? "default" : "outline"}>{c.state}</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">Delivery {c.delivery_start || "?"} → {c.delivery_end || "?"} · Logistics {c.logistics_status}</p>
-            {c.notes && <p className="text-xs border-t pt-2 text-muted-foreground">{c.notes}</p>}
-            <div className="flex flex-wrap gap-2">
-              {c.state === "proposed" && (isBuyer || isFarmer) && <Button size="sm" onClick={() => updateState(c.id, "accepted")}><Check className="h-3.5 w-3.5 mr-1" />Accept</Button>}
-              {c.state === "accepted" && (isBuyer || isFarmer) && <Button size="sm" variant="outline" onClick={() => updateState(c.id, "completed")}>Complete</Button>}
-              {(isBuyer || isFarmer) && <Button size="sm" variant="ghost" onClick={() => updateState(c.id, "cancelled")}><X className="h-3.5 w-3.5 mr-1" />Cancel</Button>}
-            </div>
-          </CardContent></Card>
-        );
-      })}
-    </div>
-  );
-}
-
-export default function MarketLink() {
-  const m = useMarketLink();
-  const [inboxOpen, setInboxOpen] = useState(false);
-
-  const computedPrices = useMemo(() => {
-    const grouped: Record<string, { price: PriceRow | undefined; supply: number; demand: number; unit?: string }> = {};
-    m.prices.forEach((p) => { grouped[p.crop_name] = { price: p, supply: 0, demand: 0, unit: p.unit }; });
-    m.supply.forEach((s: any) => {
-      if (!grouped[s.crop_name]) grouped[s.crop_name] = { price: undefined, supply: 0, demand: 0, unit: s.unit };
-      grouped[s.crop_name].supply += Number(s.expected_quantity || 0);
-      grouped[s.crop_name].unit ||= s.unit;
-    });
-    m.orders.forEach((o) => {
-      if (!grouped[o.crop_name]) grouped[o.crop_name] = { price: undefined, supply: 0, demand: 0, unit: o.unit };
-      grouped[o.crop_name].demand += Number(o.quantity_needed || 0);
-      grouped[o.crop_name].unit ||= o.unit;
-    });
-    return Object.entries(grouped).map(([crop, v]) => {
-      const current = v.price?.current_price || 0;
-      const trend: PriceRow["trend"] = v.price?.trend || (v.demand > v.supply * 1.1 ? "rising" : v.supply > v.demand * 1.1 ? "falling" : "stable");
-      const risk = m.supply.some((s) => s.crop_name === crop && s.risk_level === "high") ? 0.1 : 0;
-      const suggested = v.price?.suggested_price || suggestPrice(current, v.supply, v.demand, risk);
-      return { crop, current, suggested, trend, supply: v.supply, demand: v.demand, unit: v.price?.unit || v.unit || "kg" };
-    }).filter((r) => r.supply || r.demand || r.current);
-  }, [m.prices, m.supply, m.orders]);
-
-  return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Store className="h-6 w-6 text-primary" /> Market Link</h1>
-          <p className="text-sm text-muted-foreground">Coordinate supply, demand, contracts and live trade discussions inside AgroClimate.</p>
+    <Card>
+      <CardHeader><CardTitle className="text-base">Estimated market price</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <Input placeholder="Product (e.g. Maize)" value={crop} onChange={(e) => setCrop(e.target.value)} />
+          <Input placeholder="Region (optional)" value={region} onChange={(e) => setRegion(e.target.value)} />
+          <Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setInboxOpen(true)}><Inbox className="h-4 w-4 mr-1" />Messages</Button>
-      </div>
 
-      <OverviewCards totalSupply={m.totalSupply} totalDemand={m.totalDemand} activeContracts={m.activeContracts} balance={m.balance} />
-
-      <Tabs defaultValue="supply" className="w-full">
-        <TabsList className="grid grid-cols-4 w-full">
-          <TabsTrigger value="supply">Supply</TabsTrigger>
-          <TabsTrigger value="order-listing">Order Listing</TabsTrigger>
-          <TabsTrigger value="contracts">Contracts</TabsTrigger>
-          <TabsTrigger value="prices">Prices</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="supply" className="mt-3 space-y-4">
-          <Card><CardHeader><CardTitle className="text-base">Publish a supply listing</CardTitle></CardHeader><CardContent><SupplyForm onAdded={m.refresh} /></CardContent></Card>
-          <Card><CardHeader><CardTitle className="text-base">All supply listings</CardTitle></CardHeader><CardContent><SupplyList requireAuthForChat={false} allowOwnerActions compact /></CardContent></Card>
-        </TabsContent>
-
-        {/*
-          SUPPLIER ORDER LISTING
-          ----------------------
-          Shows ALL buyer orders. Allowed actions: Contact Buyer / Negotiate
-          (each opens Live Chat). Edit/Save/Delete are NEVER rendered here —
-          they live exclusively in the buyer's Orders.tsx workspace.
-        */}
-        <TabsContent value="order-listing" className="mt-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Buyer order listing</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Browse all buyer demand. Use Contact Buyer or Negotiate to open a live chat.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <SupplyList requireAuthForChat={false} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="contracts" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">Contracts agreed</CardTitle></CardHeader><CardContent><ContractsPanel market={m} /></CardContent></Card>
-        </TabsContent>
-
-        <TabsContent value="prices" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">System proposed prices based on demand</CardTitle></CardHeader><CardContent>
-            {computedPrices.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No price data yet.</p> : (
-              <div className="space-y-2">{computedPrices.map((p) => (
-                <div key={p.crop} className="border rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
-                  <div><div className="font-semibold flex items-center gap-2">{p.crop} {trendIcon(p.trend)} <span className="text-xs text-muted-foreground capitalize">{p.trend}</span></div><p className="text-xs text-muted-foreground">Supply {p.supply.toLocaleString()} {p.unit} · Demand {p.demand.toLocaleString()} {p.unit}</p></div>
-                  <div className="text-right"><p className="text-xs text-muted-foreground">Current avg</p><p className="font-semibold">{formatMarketPrice(p.current, p.unit)}</p></div>
-                  <div className="text-right"><p className="text-xs text-muted-foreground">Suggested</p><p className="font-semibold text-primary">{formatMarketPrice(p.suggested, p.unit)}</p></div>
-                </div>
-              ))}</div>
-            )}
-          </CardContent></Card>
-        </TabsContent>
-      </Tabs>
-
-      <Dialog open={inboxOpen} onOpenChange={setInboxOpen}>
-        <DashboardMarketInbox />
-      </Dialog>
-    </div>
+        {est ? (
+          <div className="rounded-lg border p-4 space-y-1">
+            <div className="text-2xl font-bold">{est.priceLabel}</div>
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <Badge variant="secondary">Demand: {est.demandLevel}</Badge>
+              <Badge variant="outline">Activity: {est.marketActivity}</Badge>
+              <span className="text-xs text-muted-foreground">{est.explain}</span>
+            </div>
+            <div className="text-xs text-muted-foreground">Supply samples: {est.supplyCount} · Buyer requests: {est.demandCount}</div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Enter a product to see the estimated market price.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
+
+function KPI({ icon: Icon, label, value }: { icon: any; label: string; value: any }) {
+  return (
+    <Card><CardContent className="pt-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground"><Icon className="h-4 w-4" /> {label}</div>
+      <p className="text-2xl font-bold mt-1">{typeof value === "number" ? value.toLocaleString() : value}</p>
+    </CardContent></Card>
+  );
+}
+
+/* Helpers re-exported in case other dashboards want trend pills. */
+export function trendIcon(t: string) {
+  if (t === "rising") return <TrendingUp className="h-3.5 w-3.5 text-green-600" />;
+  if (t === "falling") return <TrendingDown className="h-3.5 w-3.5 text-red-500" />;
+  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+}
+export { formatMarketPrice };
