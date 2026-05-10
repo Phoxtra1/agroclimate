@@ -1,4 +1,5 @@
-export type PriceCurrency = "GHS" | "NGN" | "USD" | "KES" | "XOF" | "EUR" | "USD" | string;
+
+export type PriceCurrency = "GHS" | "NGN" | "USD" | "KES" | "XOF" | "EUR" | "USD"  (string & {});
 
 export interface SupplyLike {
   crop_name: string;
