@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Store, TrendingUp, TrendingDown, Minus, AlertTriangle, Truck, Handshake, Package,
-  Loader2, Image as ImageIcon, Inbox, Check, X,
+  Loader2, Image as ImageIcon, Inbox,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMarketLink, suggestPrice, type PriceRow } from "@/hooks/useMarketLink";
@@ -20,8 +20,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { SupplyList } from "@/components/market/SupplyList";
 import { ChatPanel } from "@/components/market/ChatPanel";
-import { SupplyList } from "@/components/market/SupplyList";
+import { OrderListing } from "@/components/market/Orders";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
+import { estimateMarketPrice } from "@/lib/pricingEngine";
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
@@ -42,6 +43,11 @@ function OverviewCards({ totalSupply, totalDemand, activeContracts, balance }: {
   );
 }
 
+/* ============================================================== */
+/*  SupplyForm — supplier publishes a new listing.                 */
+/*  Auto-runs pricingEngine on submit so the estimated price is    */
+/*  saved alongside the listing.                                   */
+/* ============================================================== */
 function SupplyForm({ onAdded }: { onAdded: () => void }) {
   const { user } = useAuth();
   const { profile } = useProfile();
@@ -76,6 +82,26 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
         if (upErr) throw upErr;
         image_url = supabase.storage.from("supply-images").getPublicUrl(path).data.publicUrl;
       }
+
+      // --- pull market context for the pricing engine ---
+      const [{ data: supplyCtx }, { data: demandCtx }] = await Promise.all([
+        supabase.from("farmer_inputs" as any).select("crop_name,region,category,suggested_price,unit,status").neq("status", "cancelled").limit(500),
+        supabase.from("buyer_orders" as any).select("crop_name,region,target_price,unit,status").neq("status", "cancelled").limit(500),
+      ]);
+      const est = estimateMarketPrice({
+        cropName: product.trim(),
+        region: region || null,
+        category,
+        quantity: Number(qty),
+        unit,
+        existingSupply: (supplyCtx as any) || [],
+        activeBuyerRequests: (demandCtx as any) || [],
+        currency: "GHS",
+      });
+      // Prefer supplier's own price if entered, otherwise use the estimate.
+      const finalPrice = price.trim() ? parseMarketPrice(price) : est.estimatedPrice;
+      const finalLabel = price.trim() || est.priceLabel;
+
       const { error } = await supabase.from("farmer_inputs" as any).insert({
         user_id: user.id,
         crop_name: product.trim(),
@@ -87,8 +113,11 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
         harvest_start: start || null,
         harvest_end: end || null,
         delivery_timeline: delivery || null,
-        suggested_price: parseMarketPrice(price),
-        price_label: price.trim() || null,
+        suggested_price: finalPrice,
+        price_label: finalLabel,
+        estimated_price: est.estimatedPrice,
+        demand_level: est.demandLevel,
+        listing_status: "active",
         risk_level: risk,
         image_url,
         contact_email: email || user.email || null,
@@ -96,7 +125,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
         notes: notes || null,
       } as any);
       if (error) throw error;
-      toast.success("Supply listing published");
+      toast.success(`Published — estimated ${est.priceLabel} · demand ${est.demandLevel}`);
       setProduct(""); setQty(""); setStart(""); setEnd(""); setNotes(""); setFile(null); setPrice("");
       onAdded();
     } catch (err: any) { toast.error(err.message || "Failed"); }
@@ -110,7 +139,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
       <div><Label>Quantity</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
       <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
       <div><Label>Quality grade</Label><Select value={grade} onValueChange={setGrade}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="A">A — Premium</SelectItem><SelectItem value="B">B — Standard</SelectItem><SelectItem value="C">C — Economy</SelectItem></SelectContent></Select></div>
-      <div><Label>Price / {unit}</Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="GHS 250, USD 40, ₦15000" /></div>
+      <div><Label>Price / {unit} <span className="text-[10px] text-muted-foreground">(leave blank to auto-estimate)</span></Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="GHS 250, USD 40, ₦15000" /></div>
       <div><Label>Region / location</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
       <div><Label>Delivery timeline</Label><Input value={delivery} onChange={(e) => setDelivery(e.target.value)} placeholder="e.g. within 14 days" /></div>
       <div><Label>Availability start</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
@@ -176,8 +205,11 @@ function DashboardMarketInbox() {
       setThreads(Array.from(map.values()));
     };
     load();
-    const ch = supabase.channel("dashboard-market-inbox").on("postgres_changes", { event: "*", schema: "public", table: "market_messages" }, load).subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const ch = supabase
+      .channel(`dashboard-market-inbox-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "market_messages" }, load)
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
   }, [user]);
 
   const names = useDisplayNames(threads.map((t) => t.other));
@@ -204,34 +236,54 @@ function DashboardMarketInbox() {
   );
 }
 
-function ContractsPanel({ market }: { market: ReturnType<typeof useMarketLink> }) {
+/* ============================================================== */
+/*  ContractsPanel — READ-ONLY agreement summary cards.            */
+/*  No accept/decline/cancel here. Those happen on Order Listing.  */
+/* ============================================================== */
+function ContractsPanel() {
   const { user } = useAuth();
-  const rows = market.contracts.filter((c) => c.state !== "rejected" && c.state !== "cancelled");
-  const updateState = async (id: string, state: any) => {
-    try { await market.setContractState(id, state); toast.success("Contract updated"); market.refresh(); }
-    catch (err: any) { toast.error(err.message || "Failed to update contract"); }
-  };
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (rows.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">No agreed contract yet.</p>;
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+    const load = async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from("agreements" as any)
+        .select("*")
+        .or(`buyer_id.eq.${user.id},supplier_id.eq.${user.id}`)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      setRows((data as any) || []);
+      setLoading(false);
+    };
+    load();
+    const ch = supabase
+      .channel(`agreements-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agreements" }, load)
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [user?.id]);
+
+  if (loading) return <p className="text-sm text-muted-foreground py-6 text-center">Loading agreements…</p>;
+  if (!rows.length) return <p className="text-sm text-muted-foreground py-6 text-center">No completed agreements yet. Accept a negotiation from Order Listing to generate one.</p>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      {rows.map((c) => {
-        const isBuyer = c.buyer_id === user?.id;
-        const isFarmer = c.farmer_id === user?.id;
+      {rows.map((a) => {
+        const role = a.buyer_id === user?.id ? "Buyer" : "Supplier";
         return (
-          <Card key={c.id}><CardContent className="p-3 space-y-2">
+          <Card key={a.id}><CardContent className="p-3 space-y-1">
             <div className="flex items-start justify-between gap-2">
-              <div><div className="font-semibold">{c.crop_name}</div><p className="text-xs text-muted-foreground">{Number(c.quantity).toLocaleString()} {c.unit} · {formatMarketPrice(c.locked_price, c.unit)}</p></div>
-              <Badge variant={c.state === "accepted" ? "default" : "outline"}>{c.state}</Badge>
+              <div>
+                <div className="font-semibold">Agreement · {role}</div>
+                <p className="text-xs text-muted-foreground">{Number(a.agreed_quantity).toLocaleString()} {a.unit} · {formatMarketPrice(a.agreed_price, a.unit)}</p>
+              </div>
+              <Badge variant={a.agreement_status === "active" ? "default" : "outline"} className="capitalize">{a.agreement_status || "active"}</Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Delivery {c.delivery_start || "?"} → {c.delivery_end || "?"} · Logistics {c.logistics_status}</p>
-            {c.notes && <p className="text-xs border-t pt-2 text-muted-foreground">{c.notes}</p>}
-            <div className="flex flex-wrap gap-2">
-              {c.state === "proposed" && (isBuyer || isFarmer) && <Button size="sm" onClick={() => updateState(c.id, "accepted")}><Check className="h-3.5 w-3.5 mr-1" />Accept</Button>}
-              {c.state === "accepted" && (isBuyer || isFarmer) && <Button size="sm" variant="outline" onClick={() => updateState(c.id, "completed")}>Complete</Button>}
-              {(isBuyer || isFarmer) && <Button size="sm" variant="ghost" onClick={() => updateState(c.id, "cancelled")}><X className="h-3.5 w-3.5 mr-1" />Cancel</Button>}
-            </div>
+            {a.delivery_terms && <p className="text-xs text-muted-foreground">Terms: {a.delivery_terms}</p>}
+            <p className="text-[11px] text-muted-foreground">Created {new Date(a.created_at).toLocaleDateString()}</p>
           </CardContent></Card>
         );
       })}
@@ -244,24 +296,31 @@ export default function MarketLink() {
   const [inboxOpen, setInboxOpen] = useState(false);
 
   const computedPrices = useMemo(() => {
-    const grouped: Record<string, { price: PriceRow | undefined; supply: number; demand: number; unit?: string }> = {};
-    m.prices.forEach((p) => { grouped[p.crop_name] = { price: p, supply: 0, demand: 0, unit: p.unit }; });
+    const grouped: Record<string, { price: PriceRow | undefined; supply: number; demand: number; unit?: string; supplyCount: number; demandCount: number }> = {};
+    m.prices.forEach((p) => { grouped[p.crop_name] = { price: p, supply: 0, demand: 0, unit: p.unit, supplyCount: 0, demandCount: 0 }; });
     m.supply.forEach((s: any) => {
-      if (!grouped[s.crop_name]) grouped[s.crop_name] = { price: undefined, supply: 0, demand: 0, unit: s.unit };
+      if (!grouped[s.crop_name]) grouped[s.crop_name] = { price: undefined, supply: 0, demand: 0, unit: s.unit, supplyCount: 0, demandCount: 0 };
       grouped[s.crop_name].supply += Number(s.expected_quantity || 0);
+      grouped[s.crop_name].supplyCount += 1;
       grouped[s.crop_name].unit ||= s.unit;
     });
     m.orders.forEach((o) => {
-      if (!grouped[o.crop_name]) grouped[o.crop_name] = { price: undefined, supply: 0, demand: 0, unit: o.unit };
+      if (!grouped[o.crop_name]) grouped[o.crop_name] = { price: undefined, supply: 0, demand: 0, unit: o.unit, supplyCount: 0, demandCount: 0 };
       grouped[o.crop_name].demand += Number(o.quantity_needed || 0);
+      grouped[o.crop_name].demandCount += 1;
       grouped[o.crop_name].unit ||= o.unit;
     });
     return Object.entries(grouped).map(([crop, v]) => {
       const current = v.price?.current_price || 0;
       const trend: PriceRow["trend"] = v.price?.trend || (v.demand > v.supply * 1.1 ? "rising" : v.supply > v.demand * 1.1 ? "falling" : "stable");
       const risk = m.supply.some((s) => s.crop_name === crop && s.risk_level === "high") ? 0.1 : 0;
-      const suggested = v.price?.suggested_price || suggestPrice(current, v.supply, v.demand, risk);
-      return { crop, current, suggested, trend, supply: v.supply, demand: v.demand, unit: v.price?.unit || v.unit || "kg" };
+      const est = estimateMarketPrice({
+        cropName: crop,
+        existingSupply: m.supply.filter((s: any) => s.crop_name === crop) as any,
+        activeBuyerRequests: m.orders.filter((o) => o.crop_name === crop) as any,
+      });
+      const suggested = v.price?.suggested_price || est.estimatedPrice || suggestPrice(current, v.supply, v.demand, risk);
+      return { crop, current, suggested, trend, supply: v.supply, demand: v.demand, unit: v.price?.unit || v.unit || "kg", demandLevel: est.demandLevel, marketActivity: est.marketActivity };
     }).filter((r) => r.supply || r.demand || r.current);
   }, [m.prices, m.supply, m.orders]);
 
@@ -285,44 +344,71 @@ export default function MarketLink() {
           <TabsTrigger value="prices">Prices</TabsTrigger>
         </TabsList>
 
+        {/*
+          SUPPLIER SUPPLY WORKSPACE
+          -------------------------
+          Form on top, supplier's OWN listings below. Owner-only actions:
+          Edit / Delete / View Responses. Negotiate is NEVER rendered here —
+          a supplier cannot negotiate with their own product.
+        */}
         <TabsContent value="supply" className="mt-3 space-y-4">
           <Card><CardHeader><CardTitle className="text-base">Publish a supply listing</CardTitle></CardHeader><CardContent><SupplyForm onAdded={m.refresh} /></CardContent></Card>
-          <Card><CardHeader><CardTitle className="text-base">All supply listings</CardTitle></CardHeader><CardContent><SupplyList requireAuthForChat={false} allowOwnerActions compact /></CardContent></Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Your supply listings</CardTitle>
+              <p className="text-xs text-muted-foreground">Edit, delete or view buyer responses. Buyers negotiate from the public Market Link homepage.</p>
+            </CardHeader>
+            <CardContent>
+              <SupplyList requireAuthForChat={false} allowOwnerActions ownerOnly compact />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/*
-          SUPPLIER ORDER LISTING
-          ----------------------
-          Shows ALL buyer orders. Allowed actions: Contact Buyer / Negotiate
-          (each opens Live Chat). Edit/Save/Delete are NEVER rendered here —
-          they live exclusively in the buyer's Orders.tsx workspace.
+          BUYER ORDER LISTING (role-aware via Orders.tsx)
+          -----------------------------------------------
+          • Buyer-owned row    → Edit / Save / Delete
+          • Other (supplier)   → Negotiate / Accept / Decline
         */}
         <TabsContent value="order-listing" className="mt-3">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Buyer order listing</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Browse all buyer demand. Use Contact Buyer or Negotiate to open a live chat.
+                Suppliers: open an order to Negotiate, Accept or Decline. Buyers: edit or delete your own orders.
               </p>
             </CardHeader>
             <CardContent>
-              <SupplyList requireAuthForChat={false} />
+              <OrderListing />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="contracts" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">Contracts agreed</CardTitle></CardHeader><CardContent><ContractsPanel market={m} /></CardContent></Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Completed agreements</CardTitle>
+              <p className="text-xs text-muted-foreground">Read-only summary of accepted negotiations. Accept / decline happens on Order Listing.</p>
+            </CardHeader>
+            <CardContent><ContractsPanel /></CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="prices" className="mt-3">
-          <Card><CardHeader><CardTitle className="text-base">System proposed prices based on demand</CardTitle></CardHeader><CardContent>
+          <Card><CardHeader><CardTitle className="text-base">System estimated prices · demand · activity</CardTitle></CardHeader><CardContent>
             {computedPrices.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No price data yet.</p> : (
               <div className="space-y-2">{computedPrices.map((p) => (
                 <div key={p.crop} className="border rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
-                  <div><div className="font-semibold flex items-center gap-2">{p.crop} {trendIcon(p.trend)} <span className="text-xs text-muted-foreground capitalize">{p.trend}</span></div><p className="text-xs text-muted-foreground">Supply {p.supply.toLocaleString()} {p.unit} · Demand {p.demand.toLocaleString()} {p.unit}</p></div>
+                  <div>
+                    <div className="font-semibold flex items-center gap-2">{p.crop} {trendIcon(p.trend)} <span className="text-xs text-muted-foreground capitalize">{p.trend}</span></div>
+                    <p className="text-xs text-muted-foreground">Supply {p.supply.toLocaleString()} {p.unit} · Demand {p.demand.toLocaleString()} {p.unit}</p>
+                    <div className="flex gap-2 mt-1">
+                      <Badge variant="secondary" className="text-[10px]">Demand: {p.demandLevel}</Badge>
+                      <Badge variant="outline" className="text-[10px]">Market: {p.marketActivity}</Badge>
+                    </div>
+                  </div>
                   <div className="text-right"><p className="text-xs text-muted-foreground">Current avg</p><p className="font-semibold">{formatMarketPrice(p.current, p.unit)}</p></div>
-                  <div className="text-right"><p className="text-xs text-muted-foreground">Suggested</p><p className="font-semibold text-primary">{formatMarketPrice(p.suggested, p.unit)}</p></div>
+                  <div className="text-right"><p className="text-xs text-muted-foreground">Estimated</p><p className="font-semibold text-primary">{formatMarketPrice(p.suggested, p.unit)}</p></div>
                 </div>
               ))}</div>
             )}
