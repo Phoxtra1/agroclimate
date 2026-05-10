@@ -328,14 +328,14 @@ export function OrderListing() {
                       <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
                       <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
                       <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
-                      <p className="w-full text-[11px] text-muted-foreground">Suppliers can negotiate, accept or decline from Order Listing.</p>
+                      <p className="w-full text-[11px] text-muted-foreground">Suppliers can negotiate, accept or decline from their dashboard.</p>
                     </>
                   ) : (
                     <>
-                      <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
-                      <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
-                      <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
-                      <p className="w-full text-[11px] text-muted-foreground">Suppliers can negotiate, accept or decline from Order Listing.</p>
+                      <Button variant="outline" onClick={openNegotiate}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
+                      <Button onClick={acceptOrder} disabled={busy}><CheckCircle2 className="h-4 w-4 mr-1" />Accept</Button>
+                      <Button variant="destructive" onClick={declineOrder} disabled={busy}><XCircle className="h-4 w-4 mr-1" />Decline</Button>
+                      <p className="w-full text-[11px] text-muted-foreground">Decline keeps this order active for other suppliers.</p>
                     </>
                   )}
                 </div>
