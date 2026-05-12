@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Loader2, Search, MapPin, Calendar, Pencil, Trash2, Save,
-  Handshake, CheckCircle2, XCircle, MessageCircle,
+  Handshake, CheckCircle2, XCircle, MessageCircle, X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -108,11 +108,14 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
 }
 
 /* ============================================================== */
-/*  Shared query hook used by supplier + buyer order listings.      */
-/*  scope="own" => ONLY current buyer rows.                         */
-/*  scope="all" => marketplace demand EXCLUDING current user's rows. */
+/*  Shared query hook.                                              */
+/*  scope="marketplace" → demand from OTHER buyers (supplier view). */
+/*  scope="mine"        → ONLY current buyer's own orders.          */
+/*  scope="all"         → mixed feed (buyer's place-order page).    */
 /* ============================================================== */
-function useOrders(scope: "all" | "own") {
+type Scope = "marketplace" | "mine" | "all";
+
+function useOrders(scope: Scope) {
   const { user } = useAuth();
   const [items, setItems] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,16 +129,10 @@ function useOrders(scope: "all" | "own") {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (scope === "own") {
-      if (!user) {
-        setItems([]);
-        setLoading(false);
-        return;
-      }
+    if (scope === "mine") {
+      if (!user) { setItems([]); setLoading(false); return; }
       query = query.eq("buyer_id", user.id);
-    }
-
-    if (scope === "all" && user) {
+    } else if (scope === "marketplace" && user) {
       query = query.neq("buyer_id", user.id);
     }
     const { data } = await query;
@@ -157,18 +154,39 @@ function useOrders(scope: "all" | "own") {
 }
 
 /* ============================================================== */
-/*  OrderListing — SUPPLIER marketplace dashboard view              */
-/*  Shows buyer demand only; excludes the signed-in buyer's rows.   */
-/*  Allowed actions: Negotiate / Accept / Decline only.             */
+/*  OrderListing — ownership-aware single component.                */
+/*    • scope="marketplace" (default) → dashboard supplier view.    */
+/*        Modal: Negotiate / Accept / Decline (read-only).          */
+/*    • scope="mine"  → buyer's Place Order page (only own orders). */
+/*        Modal: Edit / Save / Delete.                              */
+/*    • scope="all"   → mixed feed; per-card modal decides by       */
+/*        comparing buyer_id with the current user.                 */
 /* ============================================================== */
-export function OrderListing() {
+export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) {
   const { user } = useAuth();
-  const { items, loading, reload } = useOrders("all");
+  const { items, loading, reload } = useOrders(scope);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
   const [selected, setSelected] = useState<OrderRow | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Edit-mode state for owner modal
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<Partial<OrderRow>>({});
+
+  const isOwner = !!user && !!selected && selected.buyer_id === user.id;
+
+  // Reset edit state whenever the modal opens/closes or selection changes.
+  useEffect(() => {
+    if (selected) {
+      setEditing(false);
+      setDraft({ ...selected, price_label: selected.price_label || String(selected.target_price || "") });
+    } else {
+      setEditing(false);
+    }
+  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => items.filter((o) => {
     if (q && !`${o.crop_name} ${o.notes || ""} ${o.region || ""}`.toLowerCase().includes(q.toLowerCase())) return false;
@@ -176,6 +194,7 @@ export function OrderListing() {
     return true;
   }), [items, q, region]);
 
+  /* ---------- Supplier actions (non-owner) ---------- */
   const openNegotiate = () => {
     if (!selected || !user) { toast.error("Sign in to negotiate"); return; }
     setChatOpen(true);
@@ -216,6 +235,48 @@ export function OrderListing() {
     finally { setBusy(false); }
   };
 
+  /* ---------- Owner actions (buyer of this order) ---------- */
+  const saveOwnerEdit = async () => {
+    if (!user || !selected) return;
+    setSaving(true);
+    try {
+      const label = String(draft.price_label || "").trim();
+      const patch = {
+        crop_name: String(draft.crop_name || "").trim(),
+        region: draft.region || null,
+        quantity_needed: Number(draft.quantity_needed || 0),
+        unit: draft.unit || "kg",
+        target_price: parseMarketPrice(label),
+        price_label: label || null,
+        quality: draft.quality || null,
+        grade: draft.grade || null,
+        moisture: draft.moisture || null,
+        delivery_start: draft.delivery_start || null,
+        delivery_end: draft.delivery_end || null,
+        notes: draft.notes || null,
+      };
+      const { error } = await supabase.from("buyer_orders" as any)
+        .update(patch as any).eq("id", selected.id).eq("buyer_id", user.id);
+      if (error) throw error;
+      toast.success("Order updated");
+      setEditing(false);
+      reload();
+      setSelected(null);
+    } catch (e: any) { toast.error(e?.message || "Failed to save"); }
+    finally { setSaving(false); }
+  };
+
+  const deleteOwn = async () => {
+    if (!user || !selected) return;
+    if (!window.confirm("Delete this order? This cannot be undone.")) return;
+    const { error } = await supabase.from("buyer_orders" as any)
+      .delete().eq("id", selected.id).eq("buyer_id", user.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Order deleted");
+    reload();
+    setSelected(null);
+  };
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -228,30 +289,133 @@ export function OrderListing() {
 
       {loading ? <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
         : filtered.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No buyer orders yet.</p>
-        : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((o) => (
-            <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setChatOpen(false); }}>
-              <CardContent className="p-3 space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-semibold truncate">{o.crop_name}</div>
-                  <div className="text-sm font-semibold text-primary whitespace-nowrap">{formatMarketPrice(o.target_price, o.unit, o.price_label)}</div>
-                </div>
-                <div className="text-xs text-muted-foreground">Need {Number(o.quantity_needed).toLocaleString()} {o.unit}</div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{o.region || "Anywhere"}</div>
-                <div className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />Deliver {o.delivery_start || "?"} → {o.delivery_end || "?"}</div>
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {o.grade && <Badge variant="outline" className="text-[10px]">Grade {o.grade}</Badge>}
-                  {o.quality && <Badge variant="outline" className="text-[10px]">{o.quality}</Badge>}
-                  <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>
-                  {o.negotiation_status && <Badge variant="outline" className="text-[10px] capitalize">{o.negotiation_status}</Badge>}
-                </div>
-              </CardContent>
-            </Card>
-          ))}</div>}
+        : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((o) => {
+            const mine = !!user && o.buyer_id === user.id;
+            return (
+              <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setChatOpen(false); }}>
+                <CardContent className="p-3 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold truncate">{o.crop_name}</div>
+                    <div className="text-sm font-semibold text-primary whitespace-nowrap">{formatMarketPrice(o.target_price, o.unit, o.price_label)}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">Need {Number(o.quantity_needed).toLocaleString()} {o.unit}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{o.region || "Anywhere"}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />Deliver {o.delivery_start || "?"} → {o.delivery_end || "?"}</div>
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {o.grade && <Badge variant="outline" className="text-[10px]">Grade {o.grade}</Badge>}
+                    {o.quality && <Badge variant="outline" className="text-[10px]">{o.quality}</Badge>}
+                    {mine
+                      ? <Badge className="text-[10px]">Your order</Badge>
+                      : <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>}
+                    {o.negotiation_status && <Badge variant="outline" className="text-[10px] capitalize">{o.negotiation_status}</Badge>}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}</div>}
 
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setChatOpen(false); } }}>
+      {/* ============================================================
+          UNIFIED MODAL — branches by ownership.
+          Owner   → Edit / Save / Delete (becomes editable form).
+          Visitor → Negotiate / Accept / Decline (read-only).
+          ============================================================ */}
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setChatOpen(false); setEditing(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selected && <>
-            <DialogHeader><DialogTitle>{selected.crop_name} — buyer · {selected.buyer_name || "Buyer"}</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>
+                {selected.crop_name} — {isOwner ? "your order" : `buyer · ${selected.buyer_name || "Buyer"}`}
+              </DialogTitle>
+            </DialogHeader>
+
+            {/* ----- OWNER VIEW ----- */}
+            {isOwner ? (
+              editing ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2"><Label>Product</Label>
+                    <Input value={String(draft.crop_name || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} />
+                  </div>
+                  <div><Label>Quantity</Label>
+                    <Input type="number" value={String(draft.quantity_needed ?? "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, quantity_needed: Number(e.target.value) }))} />
+                  </div>
+                  <div><Label>Unit</Label>
+                    <Select value={String(draft.unit || "kg")} onValueChange={(v) => setDraft((d) => ({ ...d, unit: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>Target price</Label>
+                    <Input value={String(draft.price_label || "")} placeholder="GHS 150"
+                      onChange={(e) => setDraft((d) => ({ ...d, price_label: e.target.value }))} />
+                  </div>
+                  <div><Label>Region</Label>
+                    <Input value={String(draft.region || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, region: e.target.value }))} />
+                  </div>
+                  <div><Label>Quality</Label>
+                    <Input value={String(draft.quality || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, quality: e.target.value }))} />
+                  </div>
+                  <div><Label>Grade</Label>
+                    <Input value={String(draft.grade || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, grade: e.target.value }))} />
+                  </div>
+                  <div><Label>Moisture</Label>
+                    <Input value={String(draft.moisture || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, moisture: e.target.value }))} />
+                  </div>
+                  <div><Label>Delivery from</Label>
+                    <Input type="date" value={String(draft.delivery_start || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, delivery_start: e.target.value }))} />
+                  </div>
+                  <div><Label>Delivery to</Label>
+                    <Input type="date" value={String(draft.delivery_end || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, delivery_end: e.target.value }))} />
+                  </div>
+                  <div className="sm:col-span-2"><Label>Notes</Label>
+                    <Textarea rows={2} value={String(draft.notes || "")}
+                      onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} />
+                  </div>
+                  <div className="sm:col-span-2 flex gap-2 justify-end pt-1">
+                    <Button variant="outline" onClick={() => { setEditing(false); setDraft(selected); }}>
+                      <X className="h-4 w-4 mr-1" />Cancel
+                    </Button>
+                    <Button onClick={saveOwnerEdit} disabled={saving}>
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1" />Save</>}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <I label="Buyer" v={selected.buyer_name || "You"} />
+                    <I label="Quantity" v={`${Number(selected.quantity_needed).toLocaleString()} ${selected.unit}`} />
+                    <I label="Target price" v={formatMarketPrice(selected.target_price, selected.unit, selected.price_label)} />
+                    <I label="Region" v={selected.region || "—"} />
+                    <I label="Quality" v={selected.quality || "—"} />
+                    <I label="Grade" v={selected.grade || "—"} />
+                    <I label="Moisture" v={selected.moisture || "—"} />
+                    <I label="Delivery" v={`${selected.delivery_start || "?"} → ${selected.delivery_end || "?"}`} />
+                  </div>
+                  {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
+                  <div className="flex gap-2 flex-wrap pt-2">
+                    <Button variant="outline" onClick={() => setEditing(true)}>
+                      <Pencil className="h-4 w-4 mr-1" />Edit
+                    </Button>
+                    <Button variant="destructive" onClick={deleteOwn}>
+                      <Trash2 className="h-4 w-4 mr-1" />Delete
+                    </Button>
+                    <p className="w-full text-[11px] text-muted-foreground">
+                      You own this order. Suppliers will negotiate, accept or decline it from their dashboard.
+                    </p>
+                  </div>
+                </>
+              )
+            ) : (
+              /* ----- VISITOR (SUPPLIER) VIEW — read-only ----- */
+              <>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <I label="Buyer" v={selected.buyer_name || "Buyer"} />
                   <I label="Quantity" v={`${Number(selected.quantity_needed).toLocaleString()} ${selected.unit}`} />
@@ -263,18 +427,19 @@ export function OrderListing() {
                   <I label="Delivery" v={`${selected.delivery_start || "?"} → ${selected.delivery_end || "?"}`} />
                 </div>
                 {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
-
-                {/* SUPPLIER-ONLY ACTIONS — no Edit / Save / Delete here. */}
                 <div className="flex gap-2 flex-wrap pt-2">
                   <Button variant="outline" onClick={openNegotiate}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
                   <Button onClick={acceptOrder} disabled={busy}><CheckCircle2 className="h-4 w-4 mr-1" />Accept</Button>
                   <Button variant="destructive" onClick={declineOrder} disabled={busy}><XCircle className="h-4 w-4 mr-1" />Decline</Button>
                   <p className="w-full text-[11px] text-muted-foreground">Decline keeps this order active for other suppliers.</p>
                 </div>
+              </>
+            )}
           </>}
         </DialogContent>
       </Dialog>
 
+      {/* Negotiation chat — only valid when current user is NOT the buyer. */}
       <Dialog open={chatOpen && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate — {selected?.crop_name}</DialogTitle></DialogHeader>
@@ -296,115 +461,13 @@ export function OrderListing() {
 }
 
 /* ============================================================== */
-/*  OwnOrderListing — buyer's own orders, beside the Place Order   */
-/*  form on the Marketplace homepage. Edit / Save / Delete only.   */
+/*  OwnOrderListing — kept as a thin wrapper for back-compat.       */
+/*  Now simply renders OrderListing scoped to "mine".               */
 /* ============================================================== */
 export function OwnOrderListing() {
   const { user } = useAuth();
-  const { items, loading, reload } = useOrders("own");
-
   if (!user) return <p className="text-sm text-muted-foreground py-4 text-center">Sign in to view your orders.</p>;
-
-  return (
-    <div className="space-y-2">
-      <div className="text-xs font-semibold uppercase text-muted-foreground">Your orders</div>
-      {loading ? <p className="text-xs text-muted-foreground">Loading…</p>
-        : items.length === 0 ? <p className="text-xs text-muted-foreground">No orders yet.</p>
-        : items.map((o) => (
-          <OwnOrderCard key={o.id} order={o} onChanged={reload} />
-        ))}
-    </div>
-  );
-}
-
-/* ============================================================== */
-/*  OwnOrderCard — inline Edit / Delete / Save only.                */
-/* ============================================================== */
-function OwnOrderCard({ order, onChanged }: { order: OrderRow; onChanged: () => void }) {
-  const { user } = useAuth();
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<Partial<OrderRow>>(order);
-
-  useEffect(() => { setDraft(order); }, [order]);
-
-  const beginEdit = () => {
-    setDraft({ ...order, price_label: order.price_label || String(order.target_price || "") });
-    setEditing(true);
-  };
-
-  const saveEdit = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      const label = String(draft.price_label || "").trim();
-      const patch = {
-        crop_name: String(draft.crop_name || "").trim(),
-        region: draft.region || null,
-        quantity_needed: Number(draft.quantity_needed || 0),
-        unit: draft.unit || "kg",
-        target_price: parseMarketPrice(label),
-        price_label: label || null,
-        notes: draft.notes || null,
-      };
-      const { error } = await supabase.from("buyer_orders" as any)
-        .update(patch as any).eq("id", order.id).eq("buyer_id", user.id);
-      if (error) throw error;
-      toast.success("Order updated");
-      setEditing(false);
-      onChanged();
-    } catch (e: any) { toast.error(e?.message || "Failed to save"); }
-    finally { setSaving(false); }
-  };
-
-  const deleteOrder = async () => {
-    if (!user) return;
-    if (!window.confirm("Delete this order?")) return;
-    const { error } = await supabase.from("buyer_orders" as any)
-      .delete().eq("id", order.id).eq("buyer_id", user.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Order deleted");
-    onChanged();
-  };
-
-  return (
-    <Card>
-      <CardContent className="p-2.5 space-y-2">
-        {editing ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="sm:col-span-2"><Label className="text-[11px]">Product</Label><Input value={String(draft.crop_name || "")} onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} /></div>
-            <div><Label className="text-[11px]">Quantity</Label><Input type="number" value={String(draft.quantity_needed || "")} onChange={(e) => setDraft((d) => ({ ...d, quantity_needed: Number(e.target.value) }))} /></div>
-            <div><Label className="text-[11px]">Unit</Label><Select value={String(draft.unit || "kg")} onValueChange={(v) => setDraft((d) => ({ ...d, unit: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-            <div className="sm:col-span-2"><Label className="text-[11px]">Target price</Label><Input value={String(draft.price_label || "")} onChange={(e) => setDraft((d) => ({ ...d, price_label: e.target.value }))} /></div>
-            <div className="sm:col-span-2"><Label className="text-[11px]">Notes</Label><Textarea rows={2} value={String(draft.notes || "")} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} /></div>
-            <div className="sm:col-span-2 flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => { setEditing(false); setDraft(order); }}>Cancel</Button>
-              <Button size="sm" onClick={saveEdit} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1" />Save</>}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-medium text-sm truncate">{order.crop_name}</div>
-              <div className="text-[11px] text-muted-foreground truncate">
-                {Number(order.quantity_needed).toLocaleString()} {order.unit} · {formatMarketPrice(order.target_price, order.unit, order.price_label)}
-              </div>
-            </div>
-            <div className="flex gap-1.5 shrink-0">
-              <Button size="sm" variant="outline" onClick={beginEdit}>
-                <Pencil className="h-3.5 w-3.5 mr-1" />Edit
-              </Button>
-              <Button size="sm" variant="destructive" onClick={deleteOrder}>
-                <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+  return <OrderListing scope="mine" />;
 }
 
 function I({ label, v }: { label: string; v: string }) {
