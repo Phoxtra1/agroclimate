@@ -25,7 +25,7 @@ export interface OrderRow {
   region: string | null; quantity_needed: number; unit: string;
   target_price: number; price_label?: string | null;
   delivery_start: string | null; delivery_end: string | null;
-  status: string; order_status?: string | null; negotiation_status?: string | null;
+  status: string; order_status?: string | null;
   quality: string | null; grade: string | null; moisture: string | null;
   contact_email: string | null; contact_phone: string | null;
   notes: string | null; created_at: string;
@@ -76,7 +76,6 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
         contact_phone: phone || null,
         notes: notes || null,
         order_status: "active",
-        negotiation_status: "pending",
       } as any);
       if (error) throw error;
       toast.success("Order posted to Market Link");
@@ -111,7 +110,7 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
 /*  Shared query hook.                                              */
 /*  scope="marketplace" → demand from OTHER buyers (supplier view). */
 /*  scope="mine"        → ONLY current buyer's own orders.          */
-/*  scope="all"         → mixed feed (buyer's place-order page).    */
+/*  scope="all"         → legacy alias for mine; never mixed here.   */
 /* ============================================================== */
 type Scope = "marketplace" | "mine" | "all";
 
@@ -129,7 +128,7 @@ function useOrders(scope: Scope) {
       .order("created_at", { ascending: false })
       .limit(200);
 
-    if (scope === "mine") {
+    if (scope === "mine" || scope === "all") {
       if (!user) { setItems([]); setLoading(false); return; }
       query = query.eq("buyer_id", user.id);
     } else if (scope === "marketplace" && user) {
@@ -159,10 +158,9 @@ function useOrders(scope: Scope) {
 /*        Modal: Negotiate / Accept / Decline (read-only).          */
 /*    • scope="mine"  → buyer's Place Order page (only own orders). */
 /*        Modal: Edit / Save / Delete.                              */
-/*    • scope="all"   → mixed feed; per-card modal decides by       */
-/*        comparing buyer_id with the current user.                 */
+/*    • scope="all"   → legacy buyer page alias, treated as mine.  */
 /* ============================================================== */
-export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) {
+export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
   const { user } = useAuth();
   const { items, loading, reload } = useOrders(scope);
   const [q, setQ] = useState("");
@@ -177,6 +175,8 @@ export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) 
   const [draft, setDraft] = useState<Partial<OrderRow>>({});
 
   const isOwner = !!user && !!selected && selected.buyer_id === user.id;
+  const isBuyerManagementContext = scope === "mine" || scope === "all";
+  const showBuyerOwnerActions = isOwner || isBuyerManagementContext;
 
   // Reset edit state whenever the modal opens/closes or selection changes.
   useEffect(() => {
@@ -307,7 +307,6 @@ export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) 
                     {mine
                       ? <Badge className="text-[10px]">Your order</Badge>
                       : <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>}
-                    {o.negotiation_status && <Badge variant="outline" className="text-[10px] capitalize">{o.negotiation_status}</Badge>}
                   </div>
                 </CardContent>
               </Card>
@@ -316,20 +315,20 @@ export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) 
 
       {/* ============================================================
           UNIFIED MODAL — branches by ownership.
-          Owner   → Edit / Save / Delete (becomes editable form).
-          Visitor → Negotiate / Accept / Decline (read-only).
+          Buyer page / owner → Edit / Save / Delete.
+          Public listing     → Negotiate / Accept / Decline.
           ============================================================ */}
       <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setChatOpen(false); setEditing(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selected && <>
             <DialogHeader>
               <DialogTitle>
-                {selected.crop_name} — {isOwner ? "your order" : `buyer · ${selected.buyer_name || "Buyer"}`}
+                {selected.crop_name} — {showBuyerOwnerActions ? "your order" : `buyer · ${selected.buyer_name || "Buyer"}`}
               </DialogTitle>
             </DialogHeader>
 
             {/* ----- OWNER VIEW ----- */}
-            {isOwner ? (
+            {showBuyerOwnerActions ? (
               editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="sm:col-span-2"><Label>Product</Label>
@@ -439,8 +438,8 @@ export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) 
         </DialogContent>
       </Dialog>
 
-      {/* Negotiation chat — only valid when current user is NOT the buyer. */}
-      <Dialog open={chatOpen && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+      {/* Negotiation chat — only valid from the public supplier listing. */}
+      <Dialog open={chatOpen && scope === "marketplace" && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate — {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && selected.buyer_id !== user.id && (
