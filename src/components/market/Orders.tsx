@@ -58,7 +58,8 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
     if (!product.trim() || !qty || !price.trim()) { toast.error("Product, quantity and target price required"); return; }
     setBusy(true);
     try {
-      const { error } = await supabase.from("buyer_orders" as any).insert({
+      // Resilient insert — strips columns missing from the schema cache (PGRST204)
+      const payload: Record<string, any> = {
         buyer_id: user.id,
         buyer_name: name || user.email || null,
         crop_name: product.trim(),
@@ -76,7 +77,15 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
         contact_phone: phone || null,
         notes: notes || null,
         order_status: "active",
-      } as any);
+      };
+      let { error } = await supabase.from("buyer_orders" as any).insert(payload as any);
+      while (error && (error as any).code === "PGRST204") {
+        const m = /'([^']+)' column/.exec(error.message || "");
+        const missing = m?.[1];
+        if (!missing || !(missing in payload)) break;
+        delete payload[missing];
+        ({ error } = await supabase.from("buyer_orders" as any).insert(payload as any));
+      }
       if (error) throw error;
       toast.success("Order posted to Market Link");
       setProduct(""); setQty(""); setPrice(""); setNotes("");
@@ -107,10 +116,9 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
 }
 
 /* ============================================================== */
-/*  Shared query hook.                                              */
-/*  scope="marketplace" → demand from OTHER buyers (supplier view). */
-/*  scope="mine"        → ONLY current buyer's own orders.          */
-/*  scope="all"         → legacy alias for mine; never mixed here.   */
+/*  Shared query hook — strict, scope-only filtering.              */
+/*    scope="marketplace" → demand from OTHER buyers (supplier).   */
+/*    scope="mine" / "all" → ONLY the current buyer's own orders.  */
 /* ============================================================== */
 type Scope = "marketplace" | "mine" | "all";
 
@@ -131,8 +139,9 @@ function useOrders(scope: Scope) {
     if (scope === "mine" || scope === "all") {
       if (!user) { setItems([]); setLoading(false); return; }
       query = query.eq("buyer_id", user.id);
-    } else if (scope === "marketplace" && user) {
-      query = query.neq("buyer_id", user.id);
+    } else if (scope === "marketplace") {
+      // Supplier view never shows the viewer's own orders, even when signed-out filter would pass them through.
+      if (user) query = query.neq("buyer_id", user.id);
     }
     const { data } = await query;
     setItems((data as any) || []);
@@ -153,14 +162,20 @@ function useOrders(scope: Scope) {
 }
 
 /* ============================================================== */
-/*  OrderListing — ownership-aware single component.                */
-/*    • scope="marketplace" (default) → dashboard supplier view.    */
-/*        Modal: Negotiate / Accept / Decline (read-only).          */
-/*    • scope="mine"  → buyer's Place Order page (only own orders). */
-/*        Modal: Edit / Save / Delete.                              */
-/*    • scope="all"   → legacy buyer page alias, treated as mine.  */
+/*  OrderListing — STRICT scope-driven ownership rendering.        */
+/*                                                                  */
+/*  Mirrors <SupplyList allowOwnerActions ownerOnly /> vs the       */
+/*  public buyer view in MarketLink.tsx.                            */
+/*                                                                  */
+/*    scope="mine" / "all"  → owner workspace                       */
+/*        Modal: Edit / Save / Delete    (owner-only actions)       */
+/*        Negotiate / Accept / Decline are NEVER rendered here.     */
+/*                                                                  */
+/*    scope="marketplace"   → supplier workspace (dashboard)        */
+/*        Modal: Negotiate / Accept / Decline                       */
+/*        Edit / Save / Delete are NEVER rendered here.             */
 /* ============================================================== */
-export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
+export function OrderListing({ scope = "marketplace" }: { scope?: Scope } = {}) {
   const { user } = useAuth();
   const { items, loading, reload } = useOrders(scope);
   const [q, setQ] = useState("");
@@ -169,16 +184,17 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
   const [chatOpen, setChatOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Edit-mode state for owner modal
+  // Edit-mode state (owner workspace only).
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Partial<OrderRow>>({});
 
-  const isOwner = !!user && !!selected && selected.buyer_id === user.id;
-  const isBuyerManagementContext = scope === "mine" || scope === "all";
-  const showBuyerOwnerActions = isOwner || isBuyerManagementContext;
+  // Single source of truth: the scope decides which action group is rendered.
+  // No per-row ownership branching can leak owner actions into the supplier
+  // workspace, or supplier actions into the buyer's own Place Order page.
+  const isOwnerWorkspace    = scope === "mine" || scope === "all";
+  const isSupplierWorkspace = scope === "marketplace";
 
-  // Reset edit state whenever the modal opens/closes or selection changes.
   useEffect(() => {
     if (selected) {
       setEditing(false);
@@ -194,14 +210,17 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
     return true;
   }), [items, q, region]);
 
-  /* ---------- Supplier actions (non-owner) ---------- */
+  /* ---------- Supplier actions (marketplace only) ---------- */
   const openNegotiate = () => {
+    if (!isSupplierWorkspace) return;
     if (!selected || !user) { toast.error("Sign in to negotiate"); return; }
+    if (selected.buyer_id === user.id) { toast.error("You cannot negotiate on your own order"); return; }
     setChatOpen(true);
   };
 
   const acceptOrder = async () => {
-    if (!selected || !user) return;
+    if (!isSupplierWorkspace || !selected || !user) return;
+    if (selected.buyer_id === user.id) { toast.error("You cannot accept your own order"); return; }
     setBusy(true);
     try {
       const negotiation = await openNegotiation({
@@ -222,7 +241,8 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
   };
 
   const declineOrder = async () => {
-    if (!selected || !user) return;
+    if (!isSupplierWorkspace || !selected || !user) return;
+    if (selected.buyer_id === user.id) return;
     setBusy(true);
     try {
       const negotiation = await openNegotiation({
@@ -235,9 +255,9 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
     finally { setBusy(false); }
   };
 
-  /* ---------- Owner actions (buyer of this order) ---------- */
+  /* ---------- Owner actions (mine only) ---------- */
   const saveOwnerEdit = async () => {
-    if (!user || !selected) return;
+    if (!isOwnerWorkspace || !user || !selected) return;
     setSaving(true);
     try {
       const label = String(draft.price_label || "").trim();
@@ -267,7 +287,7 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
   };
 
   const deleteOwn = async () => {
-    if (!user || !selected) return;
+    if (!isOwnerWorkspace || !user || !selected) return;
     if (!window.confirm("Delete this order? This cannot be undone.")) return;
     const { error } = await supabase.from("buyer_orders" as any)
       .delete().eq("id", selected.id).eq("buyer_id", user.id);
@@ -288,47 +308,48 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
-        : filtered.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No buyer orders yet.</p>
-        : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((o) => {
-            const mine = !!user && o.buyer_id === user.id;
-            return (
-              <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setChatOpen(false); }}>
-                <CardContent className="p-3 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold truncate">{o.crop_name}</div>
-                    <div className="text-sm font-semibold text-primary whitespace-nowrap">{formatMarketPrice(o.target_price, o.unit, o.price_label)}</div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Need {Number(o.quantity_needed).toLocaleString()} {o.unit}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{o.region || "Anywhere"}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />Deliver {o.delivery_start || "?"} → {o.delivery_end || "?"}</div>
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    {o.grade && <Badge variant="outline" className="text-[10px]">Grade {o.grade}</Badge>}
-                    {o.quality && <Badge variant="outline" className="text-[10px]">{o.quality}</Badge>}
-                    {mine
-                      ? <Badge className="text-[10px]">Your order</Badge>
-                      : <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}</div>}
+        : filtered.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">
+            {isOwnerWorkspace ? "You have no orders yet." : "No buyer orders yet."}
+          </p>
+        : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((o) => (
+            <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setChatOpen(false); }}>
+              <CardContent className="p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold truncate">{o.crop_name}</div>
+                  <div className="text-sm font-semibold text-primary whitespace-nowrap">{formatMarketPrice(o.target_price, o.unit, o.price_label)}</div>
+                </div>
+                <div className="text-xs text-muted-foreground">Need {Number(o.quantity_needed).toLocaleString()} {o.unit}</div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{o.region || "Anywhere"}</div>
+                <div className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" />Deliver {o.delivery_start || "?"} → {o.delivery_end || "?"}</div>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {o.grade && <Badge variant="outline" className="text-[10px]">Grade {o.grade}</Badge>}
+                  {o.quality && <Badge variant="outline" className="text-[10px]">{o.quality}</Badge>}
+                  {isOwnerWorkspace
+                    ? <Badge className="text-[10px]">Your order</Badge>
+                    : <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>}
+                </div>
+              </CardContent>
+            </Card>
+          ))}</div>}
 
       {/* ============================================================
-          UNIFIED MODAL — branches by ownership.
-          Buyer page / owner → Edit / Save / Delete.
-          Public listing     → Negotiate / Accept / Decline.
+          MODAL — strict scope branch. The two action groups live in
+          two separate sub-trees and can never render together.
           ============================================================ */}
       <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setChatOpen(false); setEditing(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selected && <>
             <DialogHeader>
               <DialogTitle>
-                {selected.crop_name} — {showBuyerOwnerActions ? "your order" : `buyer · ${selected.buyer_name || "Buyer"}`}
+                {selected.crop_name} — {isOwnerWorkspace ? "your order" : `buyer · ${selected.buyer_name || "Buyer"}`}
               </DialogTitle>
             </DialogHeader>
 
-            {/* ----- OWNER VIEW ----- */}
-            {showBuyerOwnerActions ? (
+            {/* ============================================================
+                BRANCH A — OWNER WORKSPACE (scope="mine" / "all")
+                Renders ONLY: Edit · Save · Delete.
+                ============================================================ */}
+            {isOwnerWorkspace && (
               editing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="sm:col-span-2"><Label>Product</Label>
@@ -412,8 +433,13 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
                   </div>
                 </>
               )
-            ) : (
-              /* ----- VISITOR (SUPPLIER) VIEW — read-only ----- */
+            )}
+
+            {/* ============================================================
+                BRANCH B — SUPPLIER WORKSPACE (scope="marketplace")
+                Renders ONLY: Negotiate · Accept · Decline.
+                ============================================================ */}
+            {isSupplierWorkspace && (
               <>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <I label="Buyer" v={selected.buyer_name || "Buyer"} />
@@ -438,8 +464,11 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
         </DialogContent>
       </Dialog>
 
-      {/* Negotiation chat — only valid from the public supplier listing. */}
-      <Dialog open={chatOpen && scope === "marketplace" && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+      {/* Negotiation chat — only valid in supplier workspace and only against another buyer. */}
+      <Dialog
+        open={chatOpen && isSupplierWorkspace && !!selected && !!user && selected?.buyer_id !== user?.id}
+        onOpenChange={(o) => { if (!o) setChatOpen(false); }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate — {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && selected.buyer_id !== user.id && (
@@ -460,8 +489,8 @@ export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
 }
 
 /* ============================================================== */
-/*  OwnOrderListing — kept as a thin wrapper for back-compat.       */
-/*  Now simply renders OrderListing scoped to "mine".               */
+/*  OwnOrderListing — buyer's Place Order page (owner workspace).  */
+/*  Hard-locked to scope="mine" so it can ONLY render Edit/Delete. */
 /* ============================================================== */
 export function OwnOrderListing() {
   const { user } = useAuth();
