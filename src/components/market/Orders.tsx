@@ -117,11 +117,26 @@ function useOrders(scope: "all" | "own") {
 
   const load = async () => {
     setLoading(true);
-    let query = supabase.from("buyer_orders" as any).select("*").neq("status", "cancelled").order("created_at", { ascending: false }).limit(200);
-    if (scope === "own") {
-      if (!user) { setItems([]); setLoading(false); return; }
-      query = (query as any).eq("buyer_id", user.id);
-    }
+    let query = supabase
+  .from("buyer_orders")
+  .select("*")
+  .neq("status", "cancelled")
+  .order("created_at", { ascending: false })
+  .limit(200);
+
+  if (scope === "own") {
+  if (!user) {
+    setItems([]);
+    setLoading(false);
+    return;
+  }
+
+  query = query.eq("buyer_id", user.id);
+}
+
+if (scope === "all" && user) {
+  query = query.neq("buyer_id", user.id);
+}
     const { data } = await query;
     setItems((data as any) || []);
     setLoading(false);
@@ -326,7 +341,6 @@ export function OrderListing() {
                   {isOwner(selected) ? (
                     <>
                       <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
-                      <Button variant="outline" onClick={beginEdit}><Save className="h-4 w-4 mr-1" />Save changes</Button>
                       <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
                       <p className="w-full text-[11px] text-muted-foreground">Suppliers can negotiate, accept or decline from their dashboard.</p>
                     </>
