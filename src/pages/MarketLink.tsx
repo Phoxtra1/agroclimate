@@ -365,22 +365,25 @@ export default function MarketLink() {
         </TabsContent>
 
         {/*
-          SUPPLIER-FACING BUYER ORDER LISTING
-          -----------------------------------
-          Uses Orders.tsx OrderListing with scope="all" so it excludes
-          the signed-in user's own buyer orders and renders only:
-          Negotiate / Accept / Decline.
+          BUYER ORDER LISTING (role-aware via Orders.tsx)
+          -----------------------------------------------
+          • Buyer-owned row    → Edit / Save / Delete
+          • Other (supplier)   → Negotiate / Accept / Decline
         */}
         <TabsContent value="order-listing" className="mt-3">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Buyer order listing</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Suppliers: open buyer demand to Negotiate, Accept or Decline.
+                Suppliers: open an order to Negotiate, Accept or Decline. Buyers: edit or delete your own orders.
               </p>
             </CardHeader>
             <CardContent>
-              <OrderListing />
+              {/* Dashboard view → suppliers see OTHER buyers' demand only.
+                  Modal in Orders.tsx is ownership-aware:
+                    • non-owner → Negotiate / Accept / Decline
+                    • owner    → Edit / Save / Delete (defensive) */}
+              <OrderListing scope="marketplace" />
             </CardContent>
           </Card>
         </TabsContent>
