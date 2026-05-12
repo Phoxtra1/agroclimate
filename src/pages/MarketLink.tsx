@@ -365,17 +365,18 @@ export default function MarketLink() {
         </TabsContent>
 
         {/*
-          BUYER ORDER LISTING (role-aware via Orders.tsx)
-          -----------------------------------------------
-          • Buyer-owned row    → Edit / Save / Delete
-          • Other (supplier)   → Negotiate / Accept / Decline
+          SUPPLIER-FACING BUYER ORDER LISTING
+          -----------------------------------
+          Uses Orders.tsx OrderListing with scope="all" so it excludes
+          the signed-in user's own buyer orders and renders only:
+          Negotiate / Accept / Decline.
         */}
         <TabsContent value="order-listing" className="mt-3">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Buyer order listing</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Suppliers: open an order to Negotiate, Accept or Decline. Buyers: edit or delete your own orders.
+                Suppliers: open buyer demand to Negotiate, Accept or Decline.
               </p>
             </CardHeader>
             <CardContent>
