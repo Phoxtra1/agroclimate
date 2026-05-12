@@ -108,7 +108,9 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
 }
 
 /* ============================================================== */
-/*  Shared list renderer used by OrderListing + OwnOrderListing.   */
+/*  Shared query hook used by supplier + buyer order listings.      */
+/*  scope="own" => ONLY current buyer rows.                         */
+/*  scope="all" => marketplace demand EXCLUDING current user's rows. */
 /* ============================================================== */
 function useOrders(scope: "all" | "own") {
   const { user } = useAuth();
@@ -118,25 +120,24 @@ function useOrders(scope: "all" | "own") {
   const load = async () => {
     setLoading(true);
     let query = supabase
-  .from("buyer_orders")
-  .select("*")
-  .neq("status", "cancelled")
-  .order("created_at", { ascending: false })
-  .limit(200);
+      .from("buyer_orders" as any)
+      .select("*")
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(200);
 
-  if (scope === "own") {
-  if (!user) {
-    setItems([]);
-    setLoading(false);
-    return;
-  }
+    if (scope === "own") {
+      if (!user) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+      query = query.eq("buyer_id", user.id);
+    }
 
-  query = query.eq("buyer_id", user.id);
-}
-
-if (scope === "all" && user) {
-  query = query.neq("buyer_id", user.id);
-}
+    if (scope === "all" && user) {
+      query = query.neq("buyer_id", user.id);
+    }
     const { data } = await query;
     setItems((data as any) || []);
     setLoading(false);
@@ -156,9 +157,9 @@ if (scope === "all" && user) {
 }
 
 /* ============================================================== */
-/*  OrderListing — Dashboard view, role-aware                      */
-/*  Owner buyer rows: Edit/Save/Delete                             */
-/*  Other (supplier) rows: Negotiate/Accept/Decline                */
+/*  OrderListing — SUPPLIER marketplace dashboard view              */
+/*  Shows buyer demand only; excludes the signed-in buyer's rows.   */
+/*  Allowed actions: Negotiate / Accept / Decline only.             */
 /* ============================================================== */
 export function OrderListing() {
   const { user } = useAuth();
@@ -167,9 +168,6 @@ export function OrderListing() {
   const [region, setRegion] = useState("");
   const [selected, setSelected] = useState<OrderRow | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Partial<OrderRow>>({});
-  const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => items.filter((o) => {
@@ -178,17 +176,13 @@ export function OrderListing() {
     return true;
   }), [items, q, region]);
 
-  const isOwner = (o: OrderRow) => !!user && o.buyer_id === user.id;
-
-  /* --- supplier-side actions ------------------------------------ */
   const openNegotiate = () => {
     if (!selected || !user) { toast.error("Sign in to negotiate"); return; }
-    if (isOwner(selected)) { toast.info("This is your own order — suppliers will respond to you."); return; }
     setChatOpen(true);
   };
 
   const acceptOrder = async () => {
-    if (!selected || !user || isOwner(selected)) return;
+    if (!selected || !user) return;
     setBusy(true);
     try {
       const negotiation = await openNegotiation({
@@ -209,7 +203,7 @@ export function OrderListing() {
   };
 
   const declineOrder = async () => {
-    if (!selected || !user || isOwner(selected)) return;
+    if (!selected || !user) return;
     setBusy(true);
     try {
       const negotiation = await openNegotiation({
@@ -220,53 +214,6 @@ export function OrderListing() {
       setSelected(null);
     } catch (e: any) { toast.error(e?.message || "Could not decline"); }
     finally { setBusy(false); }
-  };
-
-  /* --- owner buyer actions -------------------------------------- */
-  const beginEdit = () => {
-    if (!selected) return;
-    setDraft({ ...selected, price_label: selected.price_label || String(selected.target_price || "") });
-    setEditing(true);
-  };
-
-  const saveEdit = async () => {
-    if (!selected || !user || !isOwner(selected)) return;
-    setSaving(true);
-    try {
-      const label = String(draft.price_label || "").trim();
-      const patch = {
-        buyer_name: draft.buyer_name || null,
-        crop_name: String(draft.crop_name || "").trim(),
-        region: draft.region || null,
-        quantity_needed: Number(draft.quantity_needed || 0),
-        unit: draft.unit || "kg",
-        target_price: parseMarketPrice(label),
-        price_label: label || null,
-        quality: draft.quality || null,
-        grade: draft.grade || null,
-        moisture: draft.moisture || null,
-        contact_email: draft.contact_email || null,
-        contact_phone: draft.contact_phone || null,
-        notes: draft.notes || null,
-      };
-      const { error } = await supabase.from("buyer_orders" as any).update(patch as any).eq("id", selected.id).eq("buyer_id", user.id);
-      if (error) throw error;
-      toast.success("Order saved");
-      setEditing(false);
-      setSelected({ ...selected, ...patch } as OrderRow);
-      reload();
-    } catch (err: any) { toast.error(err.message || "Failed to save"); }
-    finally { setSaving(false); }
-  };
-
-  const deleteOrder = async () => {
-    if (!selected || !user || !isOwner(selected)) return;
-    if (!window.confirm("Delete this order?")) return;
-    const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", selected.id).eq("buyer_id", user.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Order deleted");
-    setSelected(null);
-    reload();
   };
 
   return (
@@ -282,7 +229,7 @@ export function OrderListing() {
       {loading ? <p className="text-sm text-muted-foreground py-6 text-center">Loading…</p>
         : filtered.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">No buyer orders yet.</p>
         : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{filtered.map((o) => (
-            <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setEditing(false); setChatOpen(false); }}>
+            <Card key={o.id} className="hover:shadow-md transition cursor-pointer" onClick={() => { setSelected(o); setChatOpen(false); }}>
               <CardContent className="p-3 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-semibold truncate">{o.crop_name}</div>
@@ -294,36 +241,17 @@ export function OrderListing() {
                 <div className="flex flex-wrap gap-1 pt-1">
                   {o.grade && <Badge variant="outline" className="text-[10px]">Grade {o.grade}</Badge>}
                   {o.quality && <Badge variant="outline" className="text-[10px]">{o.quality}</Badge>}
-                  {isOwner(o) ? <Badge className="text-[10px]">Your order</Badge> : <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>}
+                  <Badge variant="secondary" className="text-[10px]">Buyer demand</Badge>
                   {o.negotiation_status && <Badge variant="outline" className="text-[10px] capitalize">{o.negotiation_status}</Badge>}
                 </div>
               </CardContent>
             </Card>
           ))}</div>}
 
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setEditing(false); setChatOpen(false); } }}>
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setChatOpen(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selected && <>
-            <DialogHeader><DialogTitle>{selected.crop_name} — {isOwner(selected) ? "your order" : `buyer · ${selected.buyer_name || "Buyer"}`}</DialogTitle></DialogHeader>
-
-            {editing ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><Label>Buyer name</Label><Input value={String(draft.buyer_name || "")} onChange={(e) => setDraft((d) => ({ ...d, buyer_name: e.target.value }))} /></div>
-                <div><Label>Product</Label><Input value={String(draft.crop_name || "")} onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} /></div>
-                <div><Label>Quantity</Label><Input type="number" value={String(draft.quantity_needed || "")} onChange={(e) => setDraft((d) => ({ ...d, quantity_needed: Number(e.target.value) }))} /></div>
-                <div><Label>Unit</Label><Select value={String(draft.unit || "kg")} onValueChange={(v) => setDraft((d) => ({ ...d, unit: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-                <div><Label>Target price</Label><Input value={String(draft.price_label || "")} onChange={(e) => setDraft((d) => ({ ...d, price_label: e.target.value }))} /></div>
-                <div><Label>Region</Label><Input value={String(draft.region || "")} onChange={(e) => setDraft((d) => ({ ...d, region: e.target.value }))} /></div>
-                <div><Label>Email</Label><Input value={String(draft.contact_email || "")} onChange={(e) => setDraft((d) => ({ ...d, contact_email: e.target.value }))} /></div>
-                <div><Label>Phone</Label><Input value={String(draft.contact_phone || "")} onChange={(e) => setDraft((d) => ({ ...d, contact_phone: e.target.value }))} /></div>
-                <div className="sm:col-span-2"><Label>Notes</Label><Textarea value={String(draft.notes || "")} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} /></div>
-                <div className="sm:col-span-2 flex gap-2">
-                  <Button onClick={saveEdit} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1" />Save</>}</Button>
-                  <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
-                </div>
-              </div>
-            ) : (
-              <>
+            <DialogHeader><DialogTitle>{selected.crop_name} — buyer · {selected.buyer_name || "Buyer"}</DialogTitle></DialogHeader>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <I label="Buyer" v={selected.buyer_name || "Buyer"} />
                   <I label="Quantity" v={`${Number(selected.quantity_needed).toLocaleString()} ${selected.unit}`} />
@@ -336,25 +264,13 @@ export function OrderListing() {
                 </div>
                 {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
 
-                {/* Role-aware actions */}
+                {/* SUPPLIER-ONLY ACTIONS — no Edit / Save / Delete here. */}
                 <div className="flex gap-2 flex-wrap pt-2">
-                  {isOwner(selected) ? (
-                    <>
-                      <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
-                      <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
-                      <p className="w-full text-[11px] text-muted-foreground">Suppliers can negotiate, accept or decline from their dashboard.</p>
-                    </>
-                  ) : (
-                    <>
-                      <Button variant="outline" onClick={openNegotiate}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
-                      <Button onClick={acceptOrder} disabled={busy}><CheckCircle2 className="h-4 w-4 mr-1" />Accept</Button>
-                      <Button variant="destructive" onClick={declineOrder} disabled={busy}><XCircle className="h-4 w-4 mr-1" />Decline</Button>
-                      <p className="w-full text-[11px] text-muted-foreground">Decline keeps this order active for other suppliers.</p>
-                    </>
-                  )}
+                  <Button variant="outline" onClick={openNegotiate}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
+                  <Button onClick={acceptOrder} disabled={busy}><CheckCircle2 className="h-4 w-4 mr-1" />Accept</Button>
+                  <Button variant="destructive" onClick={declineOrder} disabled={busy}><XCircle className="h-4 w-4 mr-1" />Decline</Button>
+                  <p className="w-full text-[11px] text-muted-foreground">Decline keeps this order active for other suppliers.</p>
                 </div>
-              </>
-            )}
           </>}
         </DialogContent>
       </Dialog>
