@@ -302,19 +302,39 @@ export function OrderListing() {
 export function OwnOrderListing() {
   const { user } = useAuth();
   const { items, loading, reload } = useOrders("own");
-  const [selected, setSelected] = useState<OrderRow | null>(null);
+
+  if (!user) return <p className="text-sm text-muted-foreground py-4 text-center">Sign in to view your orders.</p>;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-semibold uppercase text-muted-foreground">Your orders</div>
+      {loading ? <p className="text-xs text-muted-foreground">Loading…</p>
+        : items.length === 0 ? <p className="text-xs text-muted-foreground">No orders yet.</p>
+        : items.map((o) => (
+          <OwnOrderCard key={o.id} order={o} onChanged={reload} />
+        ))}
+    </div>
+  );
+}
+
+/* ============================================================== */
+/*  OwnOrderCard — inline Edit / Delete / Save only.                */
+/* ============================================================== */
+function OwnOrderCard({ order, onChanged }: { order: OrderRow; onChanged: () => void }) {
+  const { user } = useAuth();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Partial<OrderRow>>({});
   const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<Partial<OrderRow>>(order);
+
+  useEffect(() => { setDraft(order); }, [order]);
 
   const beginEdit = () => {
-    if (!selected) return;
-    setDraft({ ...selected, price_label: selected.price_label || String(selected.target_price || "") });
+    setDraft({ ...order, price_label: order.price_label || String(order.target_price || "") });
     setEditing(true);
   };
 
   const saveEdit = async () => {
-    if (!selected || !user) return;
+    if (!user) return;
     setSaving(true);
     try {
       const label = String(draft.price_label || "").trim();
@@ -327,74 +347,63 @@ export function OwnOrderListing() {
         price_label: label || null,
         notes: draft.notes || null,
       };
-      const { error } = await supabase.from("buyer_orders" as any).update(patch as any).eq("id", selected.id).eq("buyer_id", user.id);
+      const { error } = await supabase.from("buyer_orders" as any)
+        .update(patch as any).eq("id", order.id).eq("buyer_id", user.id);
       if (error) throw error;
       toast.success("Order updated");
       setEditing(false);
-      setSelected({ ...selected, ...patch } as OrderRow);
-      reload();
+      onChanged();
     } catch (e: any) { toast.error(e?.message || "Failed to save"); }
     finally { setSaving(false); }
   };
 
   const deleteOrder = async () => {
-    if (!selected || !user) return;
+    if (!user) return;
     if (!window.confirm("Delete this order?")) return;
-    const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", selected.id).eq("buyer_id", user.id);
+    const { error } = await supabase.from("buyer_orders" as any)
+      .delete().eq("id", order.id).eq("buyer_id", user.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Order deleted");
-    setSelected(null);
-    reload();
+    onChanged();
   };
 
-  if (!user) return <p className="text-sm text-muted-foreground py-4 text-center">Sign in to view your orders.</p>;
-
   return (
-    <div className="space-y-2">
-      <div className="text-xs font-semibold uppercase text-muted-foreground">Your orders</div>
-      {loading ? <p className="text-xs text-muted-foreground">Loading…</p>
-        : items.length === 0 ? <p className="text-xs text-muted-foreground">No orders yet.</p>
-        : items.map((o) => (
-          <Card key={o.id} className="cursor-pointer" onClick={() => { setSelected(o); setEditing(false); }}>
-            <CardContent className="p-2.5 flex items-center justify-between gap-2">
-              <div>
-                <div className="font-medium text-sm">{o.crop_name}</div>
-                <div className="text-[11px] text-muted-foreground">{Number(o.quantity_needed).toLocaleString()} {o.unit} · {formatMarketPrice(o.target_price, o.unit, o.price_label)}</div>
+    <Card>
+      <CardContent className="p-2.5 space-y-2">
+        {editing ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="sm:col-span-2"><Label className="text-[11px]">Product</Label><Input value={String(draft.crop_name || "")} onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} /></div>
+            <div><Label className="text-[11px]">Quantity</Label><Input type="number" value={String(draft.quantity_needed || "")} onChange={(e) => setDraft((d) => ({ ...d, quantity_needed: Number(e.target.value) }))} /></div>
+            <div><Label className="text-[11px]">Unit</Label><Select value={String(draft.unit || "kg")} onValueChange={(v) => setDraft((d) => ({ ...d, unit: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
+            <div className="sm:col-span-2"><Label className="text-[11px]">Target price</Label><Input value={String(draft.price_label || "")} onChange={(e) => setDraft((d) => ({ ...d, price_label: e.target.value }))} /></div>
+            <div className="sm:col-span-2"><Label className="text-[11px]">Notes</Label><Textarea rows={2} value={String(draft.notes || "")} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} /></div>
+            <div className="sm:col-span-2 flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => { setEditing(false); setDraft(order); }}>Cancel</Button>
+              <Button size="sm" onClick={saveEdit} disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1" />Save</>}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-medium text-sm truncate">{order.crop_name}</div>
+              <div className="text-[11px] text-muted-foreground truncate">
+                {Number(order.quantity_needed).toLocaleString()} {order.unit} · {formatMarketPrice(order.target_price, order.unit, order.price_label)}
               </div>
-              <Badge variant="outline" className="text-[10px] capitalize">{o.negotiation_status || o.status}</Badge>
-            </CardContent>
-          </Card>
-        ))}
-
-      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setEditing(false); } }}>
-        <DialogContent className="max-w-lg">
-          {selected && <>
-            <DialogHeader><DialogTitle>{selected.crop_name}</DialogTitle></DialogHeader>
-            {editing ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><Label>Product</Label><Input value={String(draft.crop_name || "")} onChange={(e) => setDraft((d) => ({ ...d, crop_name: e.target.value }))} /></div>
-                <div><Label>Quantity</Label><Input type="number" value={String(draft.quantity_needed || "")} onChange={(e) => setDraft((d) => ({ ...d, quantity_needed: Number(e.target.value) }))} /></div>
-                <div><Label>Unit</Label><Select value={String(draft.unit || "kg")} onValueChange={(v) => setDraft((d) => ({ ...d, unit: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-                <div><Label>Target price</Label><Input value={String(draft.price_label || "")} onChange={(e) => setDraft((d) => ({ ...d, price_label: e.target.value }))} /></div>
-                <div className="sm:col-span-2"><Label>Notes</Label><Textarea value={String(draft.notes || "")} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} /></div>
-                <div className="sm:col-span-2 flex gap-2">
-                  <Button onClick={saveEdit} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1" />Save</>}</Button>
-                  <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-sm">{Number(selected.quantity_needed).toLocaleString()} {selected.unit} @ {formatMarketPrice(selected.target_price, selected.unit, selected.price_label)}</div>
-                <div className="flex gap-2">
-                  <Button onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>
-                  <Button variant="destructive" onClick={deleteOrder}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>
-                </div>
-              </div>
-            )}
-          </>}
-        </DialogContent>
-      </Dialog>
-    </div>
+            </div>
+            <div className="flex gap-1.5 shrink-0">
+              <Button size="sm" variant="outline" onClick={beginEdit}>
+                <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+              </Button>
+              <Button size="sm" variant="destructive" onClick={deleteOrder}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
