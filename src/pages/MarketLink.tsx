@@ -102,7 +102,8 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
       const finalPrice = price.trim() ? parseMarketPrice(price) : est.estimatedPrice;
       const finalLabel = price.trim() || est.priceLabel;
 
-      const { error } = await supabase.from("farmer_inputs" as any).insert({
+      // Base payload only includes columns guaranteed to exist on farmer_inputs.
+      const basePayload: Record<string, any> = {
         user_id: user.id,
         crop_name: product.trim(),
         category,
@@ -115,15 +116,32 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
         delivery_timeline: delivery || null,
         suggested_price: finalPrice,
         price_label: finalLabel,
-        estimated_price: est.estimatedPrice,
-        demand_level: est.demandLevel,
-        listing_status: "active",
-        risk_level: risk,
         image_url,
         contact_email: email || user.email || null,
         contact_phone: phone || null,
         notes: notes || null,
-      } as any);
+      };
+      // Optional columns added by the workflow-correction migration. If the
+      // migration has not been applied to the connected Supabase project yet,
+      // we strip the unknown columns and retry so publishing still works.
+      const optionalPayload: Record<string, any> = {
+        estimated_price: est.estimatedPrice,
+        demand_level: est.demandLevel,
+        listing_status: "active",
+        risk_level: risk,
+        owner_id: user.id,
+      };
+      let payload: Record<string, any> = { ...basePayload, ...optionalPayload };
+      let { error } = await supabase.from("farmer_inputs" as any).insert(payload as any);
+      // PostgREST returns PGRST204 ("Could not find the 'X' column ... in the schema cache")
+      // when an optional column is missing. Strip unknown columns and retry once.
+      while (error && (error as any).code === "PGRST204") {
+        const m = /'([^']+)' column/.exec(error.message || "");
+        const missing = m?.[1];
+        if (!missing || !(missing in payload)) break;
+        delete payload[missing];
+        ({ error } = await supabase.from("farmer_inputs" as any).insert(payload as any));
+      }
       if (error) throw error;
       toast.success(`Published — estimated ${est.priceLabel} · demand ${est.demandLevel}`);
       setProduct(""); setQty(""); setStart(""); setEnd(""); setNotes(""); setFile(null); setPrice("");
@@ -219,7 +237,7 @@ function DashboardMarketInbox() {
       <DialogHeader><DialogTitle>Market Link Messages</DialogTitle></DialogHeader>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card><CardContent className="p-2 space-y-1">
-          {threads.length === 0 && <p className="text-xs text-muted-foreground p-3">No dialog yet.</p>}
+          {threads.length === 0 && <p className="text-xs text-muted-foreground p-3">No market conversations yet.</p>}
           {threads.map((t) => {
             const displayName = names[t.other] || `User · ${t.other.slice(0, 8)}`;
             return (
@@ -267,7 +285,7 @@ function ContractsPanel() {
   }, [user?.id]);
 
   if (loading) return <p className="text-sm text-muted-foreground py-6 text-center">Loading agreements…</p>;
-  if (!rows.length) return <p className="text-sm text-muted-foreground py-6 text-center">No completed agreements yet.</p>;
+  if (!rows.length) return <p className="text-sm text-muted-foreground py-6 text-center">No completed agreements yet. Accept a negotiation from Order Listing to generate one.</p>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -356,7 +374,7 @@ export default function MarketLink() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Your supply listings</CardTitle>
-              <p className="text-xs text-muted-foreground">Edit, delete or view buyer responses.</p>
+              <p className="text-xs text-muted-foreground">Edit, delete or view buyer responses. Buyers negotiate from the public Market Link homepage.</p>
             </CardHeader>
             <CardContent>
               <SupplyList requireAuthForChat={false} allowOwnerActions ownerOnly compact />
@@ -365,22 +383,21 @@ export default function MarketLink() {
         </TabsContent>
 
         {/*
-          ORDER LISTING (public supplier response view)
-          ---------------------------------------------
-          Uses the existing Order Listing tab only. Suppliers can
-          Negotiate / Accept / Decline buyer-published orders.
+          BUYER ORDER LISTING (role-aware via Orders.tsx)
+          -----------------------------------------------
+          • Buyer-owned row    → Edit / Save / Delete
+          • Other (supplier)   → Negotiate / Accept / Decline
         */}
         <TabsContent value="order-listing" className="mt-3">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Order Listing</CardTitle>
+              <CardTitle className="text-base">Buyer order listing</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Suppliers open published buyer orders here to Negotiate, Accept or Decline.
+                Suppliers: open an order to Negotiate, Accept or Decline. Buyers: edit or delete your own orders.
               </p>
             </CardHeader>
             <CardContent>
-              {/* Dashboard view → suppliers see OTHER buyers' demand only. */}
-              <OrderListing scope="marketplace" />
+              <OrderListing />
             </CardContent>
           </Card>
         </TabsContent>
