@@ -219,7 +219,7 @@ function DashboardMarketInbox() {
       <DialogHeader><DialogTitle>Market Link Messages</DialogTitle></DialogHeader>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card><CardContent className="p-2 space-y-1">
-          {threads.length === 0 && <p className="text-xs text-muted-foreground p-3">No market conversations yet.</p>}
+          {threads.length === 0 && <p className="text-xs text-muted-foreground p-3">No dialog yet.</p>}
           {threads.map((t) => {
             const displayName = names[t.other] || `User · ${t.other.slice(0, 8)}`;
             return (
@@ -267,7 +267,7 @@ function ContractsPanel() {
   }, [user?.id]);
 
   if (loading) return <p className="text-sm text-muted-foreground py-6 text-center">Loading agreements…</p>;
-  if (!rows.length) return <p className="text-sm text-muted-foreground py-6 text-center">No completed agreements yet. Accept a negotiation from Order Listing to generate one.</p>;
+  if (!rows.length) return <p className="text-sm text-muted-foreground py-6 text-center">No completed agreements yet.</p>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -356,7 +356,7 @@ export default function MarketLink() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Your supply listings</CardTitle>
-              <p className="text-xs text-muted-foreground">Edit, delete or view buyer responses. Buyers negotiate from the public Market Link homepage.</p>
+              <p className="text-xs text-muted-foreground">Edit, delete or view buyer responses.</p>
             </CardHeader>
             <CardContent>
               <SupplyList requireAuthForChat={false} allowOwnerActions ownerOnly compact />
