@@ -26,7 +26,7 @@ export interface SupplyRow {
 
 const CATEGORIES = ["All", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
-export function SupplyList({ requireAuthForChat = true, allowOwnerActions = false, compact = false }: { requireAuthForChat?: boolean; allowOwnerActions?: boolean; compact?: boolean }) {
+export function SupplyList({ requireAuthForChat = true, allowOwnerActions = false, compact = false, ownerOnly = false }: { requireAuthForChat?: boolean; allowOwnerActions?: boolean; compact?: boolean; ownerOnly?: boolean }) {
   const [items, setItems] = useState<SupplyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -42,12 +42,18 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from("farmer_inputs" as any)
       .select("*")
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(200);
+      
+    if (ownerOnly && user) {
+      query = query.eq("user_id", user.id);
+    }
+    
+    const { data } = await query;
     setItems((data as any) || []);
     setLoading(false);
   };
@@ -237,7 +243,7 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
                   {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                   <div className="border-t pt-3 space-y-1 text-sm"><div className="font-semibold">Supplier contact</div>{selected.contact_email && <div className="flex items-center gap-2"><Mail className="h-3.5 w-3.5" /><a className="text-primary hover:underline" href={`mailto:${selected.contact_email}`}>{selected.contact_email}</a></div>}{selected.contact_phone && <div className="flex items-center gap-2"><Phone className="h-3.5 w-3.5" /><a className="text-primary hover:underline" href={`tel:${selected.contact_phone}`}>{selected.contact_phone}</a></div>}{!selected.contact_email && !selected.contact_phone && <div className="text-muted-foreground text-xs">No public contact — use chat.</div>}</div>
                   <div className="flex gap-2 flex-wrap">
-                    <Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
+                    {!ownerOnly && <Button variant="outline" onClick={openChat}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>}
                     {allowOwnerActions && selected.user_id === user?.id && <Button variant="outline" onClick={beginEdit}><Pencil className="h-4 w-4 mr-1" />Edit</Button>}
                     {allowOwnerActions && selected.user_id === user?.id && <Button variant="ghost" onClick={deleteListing}><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}
                   </div>
