@@ -393,11 +393,11 @@ export default function MarketLink() {
             <CardHeader>
               <CardTitle className="text-base">Buyer order listing</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Suppliers: open an order to Negotiate, Accept or Decline. Buyers: edit or delete your own orders.
+                Suppliers: open an order to Negotiate, Accept or Decline.
               </p>
             </CardHeader>
             <CardContent>
-              <OrderListing scope="global" />
+              <OrderListing scope="marketplace" />
             </CardContent>
           </Card>
         </TabsContent>
