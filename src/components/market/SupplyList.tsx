@@ -114,7 +114,6 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
 
   const openChat = () => {
     if (!user) { toast.error("Please sign in to start a live chat"); return; }
-    if (selected && selected.user_id === user.id) { toast.info("This is your own listing — open a buyer's listing to chat."); return; }
     setChatOpen(true);
   };
 
@@ -256,10 +255,10 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
       </Dialog>
 
       {/* Dedicated chat dialog */}
-      <Dialog open={chatOpen && !!selected && !!user && selected?.user_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+      <Dialog open={chatOpen && !!selected && !!user} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat — {selected?.crop_name}</DialogTitle></DialogHeader>
-          {selected && user && selected.user_id !== user.id && (
+          {selected && user && (
             <ChatPanel otherUserId={selected.user_id} otherName={`Supplier · ${selected.crop_name}`} relatedSupplyId={selected.id} />
           )}
         </DialogContent>
