@@ -112,7 +112,7 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
 /*  scope="mine"        → ONLY current buyer's own orders.          */
 /*  scope="all"         → legacy alias for mine; never mixed here.   */
 /* ============================================================== */
-type Scope = "marketplace" | "mine" | "all";
+type Scope = "marketplace" | "mine" | "all" | "global";
 
 function useOrders(scope: Scope) {
   const { user } = useAuth();
@@ -160,7 +160,7 @@ function useOrders(scope: Scope) {
 /*        Modal: Edit / Save / Delete.                              */
 /*    • scope="all"   → legacy buyer page alias, treated as mine.  */
 /* ============================================================== */
-export function OrderListing({ scope = "mine" }: { scope?: Scope } = {}) {
+export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
   const { user } = useAuth();
   const { items, loading, reload } = useOrders(scope);
   const [q, setQ] = useState("");

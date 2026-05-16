@@ -11,7 +11,7 @@ export default function MarketplaceOrderForm() {
         </Card>
         <Card>
           <CardHeader><CardTitle>Your Orders — edit or delete</CardTitle></CardHeader>
-          <CardContent><OrderListing requireAuthForChat allowOwnerActions /></CardContent>
+          <CardContent><OrderListing scope="mine" /></CardContent>
         </Card>
       </div>
     </MarketplaceLayout>
