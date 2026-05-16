@@ -397,7 +397,7 @@ export default function MarketLink() {
               </p>
             </CardHeader>
             <CardContent>
-              <OrderListing scope="marketplace" />
+              <OrderListing scope="global" />
             </CardContent>
           </Card>
         </TabsContent>

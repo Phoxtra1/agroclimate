@@ -400,14 +400,20 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                   </div>
                   {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                   <div className="flex gap-2 flex-wrap pt-2">
-                    <Button variant="outline" onClick={() => setEditing(true)}>
-                      <Pencil className="h-4 w-4 mr-1" />Edit
-                    </Button>
-                    <Button variant="destructive" onClick={deleteOwn}>
-                      <Trash2 className="h-4 w-4 mr-1" />Delete
-                    </Button>
+                    {scope !== "global" && (
+                      <>
+                        <Button variant="outline" onClick={() => setEditing(true)}>
+                          <Pencil className="h-4 w-4 mr-1" />Edit
+                        </Button>
+                        <Button variant="destructive" onClick={deleteOwn}>
+                          <Trash2 className="h-4 w-4 mr-1" />Delete
+                        </Button>
+                      </>
+                    )}
                     <p className="w-full text-[11px] text-muted-foreground">
-                      You own this order. Suppliers will negotiate, accept or decline it from their dashboard.
+                      {scope === "global" 
+                        ? "You own this order. You can edit or delete it from your Place Order page."
+                        : "You own this order. Suppliers will negotiate, accept or decline it from their dashboard."}
                     </p>
                   </div>
                 </>
@@ -439,7 +445,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
       </Dialog>
 
       {/* Negotiation chat — only valid from the public supplier listing. */}
-      <Dialog open={chatOpen && scope === "marketplace" && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+      <Dialog open={chatOpen && (scope === "marketplace" || scope === "global") && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate — {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && selected.buyer_id !== user.id && (
