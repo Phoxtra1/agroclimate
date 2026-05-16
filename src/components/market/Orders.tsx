@@ -176,7 +176,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
 
   const isOwner = !!user && !!selected && selected.buyer_id === user.id;
   const isBuyerManagementContext = scope === "mine" || scope === "all";
-  const showBuyerOwnerActions = isOwner || isBuyerManagementContext;
+  const showBuyerOwnerActions = (isOwner && scope !== "global") || isBuyerManagementContext;
 
   // Reset edit state whenever the modal opens/closes or selection changes.
   useEffect(() => {
@@ -445,10 +445,10 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
       </Dialog>
 
       {/* Negotiation chat — only valid from the public supplier listing. */}
-      <Dialog open={chatOpen && (scope === "marketplace" || scope === "global") && !!selected && !!user && selected?.buyer_id !== user?.id} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
+      <Dialog open={chatOpen && (scope === "marketplace" || scope === "global") && !!selected && !!user} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate — {selected?.crop_name}</DialogTitle></DialogHeader>
-          {selected && user && selected.buyer_id !== user.id && (
+          {selected && user && (
             <ChatPanel
               otherUserId={selected.buyer_id}
               otherName={`Buyer · ${selected.buyer_name || selected.crop_name}`}
