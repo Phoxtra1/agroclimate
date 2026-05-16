@@ -51,7 +51,7 @@ export function ChatPanel({
 
   // Load (or create) the negotiation thread for this pair + listing/order.
   useEffect(() => {
-    if (!user || selfChat) return;
+    if (!user) return;
     if (!relatedSupplyId && !relatedOrderId) return;
     const buyerId    = otherRole === "buyer"    ? otherUserId : user.id;
     const supplierId = otherRole === "supplier" ? otherUserId : user.id;
@@ -66,11 +66,11 @@ export function ChatPanel({
   }, [user?.id, otherUserId, otherRole, relatedSupplyId, relatedOrderId, selfChat, defaultUnit, defaultPrice, defaultQuantity]);
 
   useEffect(() => {
-    if (!otherUserId || selfChat) return;
+    if (!otherUserId) return;
     refresh([otherUserId]);
     const t = setInterval(() => refresh([otherUserId]), 30_000);
     return () => clearInterval(t);
-  }, [otherUserId, refresh, selfChat]);
+  }, [otherUserId, refresh]);
 
   useEffect(() => { if (user) markAllRead(); }, [messages.length, markAllRead, user]);
 
@@ -128,13 +128,7 @@ export function ChatPanel({
     );
   }
 
-  if (selfChat) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[30vh] border rounded-lg bg-background p-6 text-center">
-        <p className="text-sm text-muted-foreground">This belongs to you — open another party's listing/order to negotiate.</p>
-      </div>
-    );
-  }
+
 
   const isOnline = !!online[otherUserId];
   const status: NegotiationStatus = negotiation?.status ?? "pending";

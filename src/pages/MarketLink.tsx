@@ -199,10 +199,9 @@ function useDisplayNames(userIds: string[]) {
   return names;
 }
 
-function DashboardMarketInbox() {
+function useMarketInboxThreads() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -230,6 +229,11 @@ function DashboardMarketInbox() {
     return () => { try { supabase.removeChannel(ch); } catch {} };
   }, [user]);
 
+  return threads;
+}
+
+function DashboardMarketInbox({ threads }: { threads: ThreadSummary[] }) {
+  const [active, setActive] = useState<string | null>(null);
   const names = useDisplayNames(threads.map((t) => t.other));
 
   return (
@@ -311,6 +315,8 @@ function ContractsPanel() {
 
 export default function MarketLink() {
   const m = useMarketLink();
+  const inboxThreads = useMarketInboxThreads();
+  const unreadCount = inboxThreads.reduce((sum, t) => sum + t.unread, 0);
   const [inboxOpen, setInboxOpen] = useState(false);
 
   const computedPrices = useMemo(() => {
@@ -349,7 +355,10 @@ export default function MarketLink() {
           <h1 className="text-2xl font-bold flex items-center gap-2"><Store className="h-6 w-6 text-primary" /> Market Link</h1>
           <p className="text-sm text-muted-foreground">Coordinate supply, demand, contracts and live trade discussions inside AgroClimate.</p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setInboxOpen(true)}><Inbox className="h-4 w-4 mr-1" />Messages</Button>
+        <Button size="sm" variant="outline" className="relative" onClick={() => setInboxOpen(true)}>
+          <Inbox className="h-4 w-4 mr-1" />Messages
+          {unreadCount > 0 && <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center rounded-full p-0 text-[10px]">{unreadCount}</Badge>}
+        </Button>
       </div>
 
       <OverviewCards totalSupply={m.totalSupply} totalDemand={m.totalDemand} activeContracts={m.activeContracts} balance={m.balance} />
@@ -435,7 +444,7 @@ export default function MarketLink() {
       </Tabs>
 
       <Dialog open={inboxOpen} onOpenChange={setInboxOpen}>
-        <DashboardMarketInbox />
+        <DashboardMarketInbox threads={inboxThreads} />
       </Dialog>
     </div>
   );
