@@ -8,6 +8,12 @@ export interface WeatherDay {
   description: string;
   humidity: number;
   wind: number;
+  // Optional agro-forecast fields
+  weatherCode?: number;
+  rainMm?: number;
+  evapotranspiration?: number;
+  soilMoisture?: number;
+  soilTemperature?: number;
 }
 
 export interface CropCalendarEntry {

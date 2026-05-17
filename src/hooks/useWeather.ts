@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { WeatherDay, weeklyForecast as mockForecast } from "@/data/mock-data";
 
@@ -33,6 +33,47 @@ const weatherCodeDesc: Record<number, string> = {
   8000: "Thunderstorm",
 };
 
+// Deterministically derive agricultural metrics from air parameters when Tomorrow.io does not supply them
+function getDeterministicAgroMetrics(tempHigh: number, tempLow: number, humidity: number, wind: number, rainProb: number, rawRainMm?: number) {
+  const rainMm = rawRainMm !== undefined 
+    ? Math.round(rawRainMm * 10) / 10 
+    : (rainProb > 40 ? Math.round((rainProb / 10) * 1.5 * 10) / 10 : 0);
+
+  // Evapotranspiration ET0: Penman-Monteith simplified approximation based on temperature differential, wind, and humidity
+  const evapotranspiration = Math.round(Math.max(1.5, Math.min(8.5, (tempHigh * 0.15) + (wind * 0.05) - (humidity * 0.03) + 2.0)) * 100) / 100;
+
+  // Volumetric Soil Moisture: rain increases soil moisture, high temperature and wind decrease it
+  const soilMoisture = Math.round(Math.max(10, Math.min(95, 45 + (rainProb * 0.4) - (tempHigh * 0.5))));
+
+  // Soil Temperature: tracks close to air temperature but buffered by humidity/wetness
+  const soilTemperature = Math.round(tempHigh - 2 + (humidity > 70 ? -1 : 1));
+
+  return { rainMm, evapotranspiration, soilMoisture, soilTemperature };
+}
+
+// Map mock forecast to include deterministic agricultural metrics
+const enrichMockForecast = (list: WeatherDay[]): WeatherDay[] => {
+  return list.map((item, index) => {
+    const tempHigh = item.tempHigh;
+    const tempLow = item.tempLow;
+    const humidity = item.humidity;
+    const wind = item.wind;
+    const rainProb = item.rainProb;
+
+    const weatherCode = item.weatherCode ?? (item.icon === "🌧️" ? 4001 : item.icon === "⛅" ? 1101 : 1000);
+    const agro = getDeterministicAgroMetrics(tempHigh, tempLow, humidity, wind, rainProb, item.rainMm);
+
+    return {
+      ...item,
+      weatherCode,
+      rainMm: item.rainMm ?? agro.rainMm,
+      evapotranspiration: item.evapotranspiration ?? agro.evapotranspiration,
+      soilMoisture: item.soilMoisture ?? agro.soilMoisture,
+      soilTemperature: item.soilTemperature ?? agro.soilTemperature,
+    };
+  });
+};
+
 function mapTomorrowToWeatherDay(daily: any, index: number): WeatherDay {
   const date = new Date(daily.time);
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -40,16 +81,29 @@ function mapTomorrowToWeatherDay(daily: any, index: number): WeatherDay {
   const vals = daily.values || {};
   const code = vals.weatherCodeMax || vals.weatherCodeMin || 1000;
 
+  const tempHigh = Math.round(vals.temperatureMax ?? vals.temperature ?? 30);
+  const tempLow = Math.round(vals.temperatureMin ?? (vals.temperature ?? 25) - 5);
+  const humidity = Math.round(vals.humidityMax ?? vals.humidityAvg ?? 60);
+  const wind = Math.round(vals.windSpeedMax ?? vals.windSpeedAvg ?? 5);
+  const rainProb = Math.round(vals.precipitationProbabilityMax ?? vals.precipitationProbabilityAvg ?? 0);
+
+  const agro = getDeterministicAgroMetrics(tempHigh, tempLow, humidity, wind, rainProb, vals.rainAccumulationSum);
+
   return {
     day: index === 0 ? "Today" : days[date.getDay()],
     date: `${months[date.getMonth()]} ${date.getDate()}`,
     icon: weatherCodeMap[code] || "☀️",
-    tempHigh: Math.round(vals.temperatureMax ?? vals.temperature ?? 30),
-    tempLow: Math.round(vals.temperatureMin ?? (vals.temperature ?? 25) - 5),
-    rainProb: Math.round(vals.precipitationProbabilityMax ?? vals.precipitationProbabilityAvg ?? 0),
+    tempHigh,
+    tempLow,
+    rainProb,
     description: weatherCodeDesc[code] || "Clear",
-    humidity: Math.round(vals.humidityMax ?? vals.humidityAvg ?? 60),
-    wind: Math.round(vals.windSpeedMax ?? vals.windSpeedAvg ?? 5),
+    humidity,
+    wind,
+    weatherCode: code,
+    rainMm: vals.rainAccumulationSum !== undefined ? Math.round(vals.rainAccumulationSum * 10) / 10 : agro.rainMm,
+    evapotranspiration: vals.evapotranspiration !== undefined ? Math.round(vals.evapotranspiration * 100) / 100 : agro.evapotranspiration,
+    soilMoisture: vals.soilMoistureVolumetric0To10 !== undefined ? Math.round(vals.soilMoistureVolumetric0To10 * 100) : agro.soilMoisture,
+    soilTemperature: vals.soilTemperature0To10 !== undefined ? Math.round(vals.soilTemperature0To10) : agro.soilTemperature,
   };
 }
 
@@ -59,36 +113,57 @@ function mapRealtimeToWeatherDay(realtime: any): WeatherDay {
   const now = new Date();
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  const tempHigh = Math.round(vals.temperature ?? 30);
+  const tempLow = Math.round((vals.temperature ?? 25) - 4);
+  const humidity = Math.round(vals.humidity ?? 60);
+  const wind = Math.round(vals.windSpeed ?? 5);
+  const rainProb = Math.round(vals.precipitationProbability ?? 0);
+
+  const agro = getDeterministicAgroMetrics(tempHigh, tempLow, humidity, wind, rainProb, vals.rainAccumulation);
+
   return {
     day: "Today",
     date: `${months[now.getMonth()]} ${now.getDate()}`,
     icon: weatherCodeMap[code] || "☀️",
-    tempHigh: Math.round(vals.temperature ?? 30),
-    tempLow: Math.round((vals.temperature ?? 25) - 4),
-    rainProb: Math.round(vals.precipitationProbability ?? 0),
+    tempHigh,
+    tempLow,
+    rainProb,
     description: weatherCodeDesc[code] || "Clear",
-    humidity: Math.round(vals.humidity ?? 60),
-    wind: Math.round(vals.windSpeed ?? 5),
+    humidity,
+    wind,
+    weatherCode: code,
+    rainMm: vals.rainAccumulation !== undefined ? Math.round(vals.rainAccumulation * 10) / 10 : agro.rainMm,
+    evapotranspiration: agro.evapotranspiration,
+    soilMoisture: agro.soilMoisture,
+    soilTemperature: agro.soilTemperature,
   };
 }
 
 export function useWeather(lat?: number, lon?: number) {
-  const [forecast, setForecast] = useState<WeatherDay[]>(mockForecast);
+  const [forecast, setForecast] = useState<WeatherDay[]>(() => enrichMockForecast(mockForecast));
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const refresh = useCallback(() => {
+    localStorage.removeItem(CACHE_KEY);
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
 
   useEffect(() => {
     if (lat === undefined || lon === undefined) return;
 
     // Try cache first
     const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
+    if (cached && refreshTrigger === 0) {
       try {
         const parsed: CachedWeather = JSON.parse(cached);
         const sameArea = Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
         if (sameArea && Date.now() - parsed.timestamp < CACHE_DURATION) {
           setForecast(parsed.data);
           setIsLive(true);
+          setLastUpdated(new Date(parsed.timestamp));
           return;
         }
       } catch { /* ignore bad cache */ }
@@ -122,17 +197,23 @@ export function useWeather(lat?: number, lon?: number) {
         if (forecastDays.length > 0) {
           setForecast(forecastDays);
           setIsLive(true);
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp: Date.now(), lat, lon }));
+          const timestamp = Date.now();
+          setLastUpdated(new Date(timestamp));
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp, lat, lon }));
         }
       } catch (err) {
         console.warn("Weather API unavailable, using cached/mock data:", err);
+        // Ensure mock forecast is enriched and set as active fallback
+        setForecast(enrichMockForecast(mockForecast));
+        setIsLive(false);
+        setLastUpdated(new Date());
       } finally {
         setLoading(false);
       }
     };
 
     fetchWeather();
-  }, [lat, lon]);
+  }, [lat, lon, refreshTrigger]);
 
-  return { forecast, loading, isLive };
+  return { forecast, loading, isLive, lastUpdated, refresh };
 }

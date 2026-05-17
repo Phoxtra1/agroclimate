@@ -1,35 +1,10 @@
-/**
- * ============================================================
- * WEATHER & AGRO FORECAST MODULE — Standalone, PWA-Ready
- * ============================================================
- *
- * COPY THIS ENTIRE FILE into your project as a single page.
- *
- * DEPENDENCIES (install if missing):
- *   - lucide-react
- *   - A shadcn/ui Badge component at @/components/ui/badge
- *
- * SETUP:
- *   1. Get a free API key from https://www.tomorrow.io/weather-api/
- *   2. Set VITE_TOMORROW_API_KEY in your env (or replace below)
- *   3. Route this page in your app (e.g. /weather)
- *
- * PWA NOTES:
- *   - Uses cache-busting timestamps so service workers always
- *     serve fresh weather data on app open / pull-to-refresh.
- *   - Listens for visibilitychange to auto-refresh in foreground.
- *
- * ============================================================
- */
-
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Droplets,
   Thermometer,
   Wind,
   MapPin,
   Sprout,
-  AlertTriangle,
   RefreshCw,
   Cloud,
   CloudRain,
@@ -46,46 +21,13 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { reverseGeocodeLocation, buildLocationName } from "@/lib/location";
-
-// ────────────────────────────────────────────────────────────
-// CONFIG — Replace with your own key or inject via env
-// ────────────────────────────────────────────────────────────
-const TOMORROW_API_KEY =
-  import.meta.env.VITE_TOMORROW_API_KEY || "zgfWrUPZrTNAAU55g8HQyszNueud5H5J";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { useWeather } from "@/hooks/useWeather";
+import { WeatherDay } from "@/data/mock-data";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
 // ────────────────────────────────────────────────────────────
-interface Position {
-  lat: number;
-  lon: number;
-  locationName: string;
-  community?: string;
-  district?: string;
-  region?: string;
-}
-
-interface DayForecast {
-  day: string;
-  date: string;
-  weatherCode: number;
-  condition: string;
-  tempHigh: number;
-  tempLow: number;
-  humidity: number;
-  wind: number;
-  rainProb: number;
-  rainMm: number;
-  /** mm/day — reference evapotranspiration (ET₀) */
-  evapotranspiration: number;
-  /** Volumetric soil moisture 0-100 % (top 10 cm) */
-  soilMoisture: number;
-  /** Soil temperature °C */
-  soilTemperature: number;
-}
-
-/** Per-crop irrigation advisory derived from live weather */
 interface CropWaterAdvisory {
   crop: string;
   icon: string;
@@ -103,78 +45,19 @@ interface CropWaterAdvisory {
   recommendation: string;
 }
 
-// ────────────────────────────────────────────────────────────
-// SECTION 1: GEOLOCATION HOOK
-// Fetches the user's current GPS position and reverse-geocodes
-// it to community / district / region. Falls back to IP-based
-// location if GPS is denied or unavailable.
-// ────────────────────────────────────────────────────────────
-function useGeolocation() {
-  const [position, setPosition] = useState<Position>({
-    lat: 5.6037,
-    lon: -0.187,
-    locationName: "Accra, Ghana",
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function reverseGeocode(lat: number, lon: number) {
-      try {
-        const resolved = await reverseGeocodeLocation(lat, lon);
-        return {
-          locationName: buildLocationName(resolved),
-          community: resolved.community || undefined,
-          district: resolved.district || undefined,
-          region: resolved.region || undefined,
-        };
-      } catch {
-        return { locationName: "Your Location" };
-      }
-    }
-
-    // Fallback: IP-based geolocation (no permission needed)
-    async function ipFallback() {
-      try {
-        const res = await fetch("https://ipapi.co/json/");
-        const data = await res.json();
-        if (!cancelled && data.latitude) {
-          const geo = await reverseGeocode(data.latitude, data.longitude);
-          setPosition({ lat: data.latitude, lon: data.longitude, ...geo });
-        }
-      } catch {
-        setError("Could not determine location");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    if (!navigator.geolocation) {
-      ipFallback();
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        if (cancelled) return;
-        const geo = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-        setPosition({ lat: pos.coords.latitude, lon: pos.coords.longitude, ...geo });
-        setLoading(false);
-      },
-      () => ipFallback(),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
-    );
-
-    return () => { cancelled = true; };
-  }, []);
-
-  return { position, loading, error };
+interface IrrigationSummary {
+  avgET: number;
+  effectiveRain: number;
+  avgSoilMoisture: number;
+  avgSoilTemp: number;
+  avgHumidity: number;
+  overallNeed: "none" | "low" | "moderate" | "critical";
+  criticalCrops: number;
+  totalCrops: number;
 }
 
 // ────────────────────────────────────────────────────────────
-// SECTION 2: TOMORROW.IO WEATHER CODE → CONDITION MAPPING
+// WEATHER CODE → CONDITION LABEL & ICON HINTS
 // ────────────────────────────────────────────────────────────
 const WEATHER_CODES: Record<number, { label: string; iconHint: string }> = {
   0: { label: "Unknown", iconHint: "cloud" },
@@ -211,143 +94,7 @@ function getCondition(code: number) {
 }
 
 // ────────────────────────────────────────────────────────────
-// SECTION 3: WEATHER DATA HOOK (Tomorrow.io v4)
-// Fetches daily forecast with soil moisture, ET, and agro fields.
-// Uses cache-busting to ensure PWA always gets fresh data.
-// ────────────────────────────────────────────────────────────
-function useWeather(lat: number, lon: number) {
-  const [forecast, setForecast] = useState<DayForecast[]>([]);
-  const [isLive, setIsLive] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  const fetchWeather = useCallback(async () => {
-    if (TOMORROW_API_KEY === "YOUR_API_KEY_HERE") {
-      // Demo mode — generate realistic mock data with agro fields
-      setForecast(generateMockForecast());
-      setIsLive(false);
-      setLoading(false);
-      setLastUpdated(new Date());
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      // Tomorrow.io v4 forecast endpoint — daily timesteps, 7 days
-      // Fields: core weather + evapotranspiration + soil moisture/temp
-      const fields = [
-        "temperatureMax",
-        "temperatureMin",
-        "humidityAvg",
-        "windSpeedAvg",
-        "precipitationProbabilityAvg",
-        "rainAccumulationSum",
-        "weatherCodeMax",
-        "evapotranspiration",
-        "soilMoistureVolumetric0To10",
-        "soilTemperature0To10",
-      ].join(",");
-
-      const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1d&units=metric&apikey=${TOMORROW_API_KEY}&_t=${Date.now()}`;
-
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const data = await res.json();
-
-      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const dailyTimeline = data.timelines?.daily || [];
-
-      const dailyForecasts: DayForecast[] = dailyTimeline.slice(0, 7).map(
-        (entry: any, i: number) => {
-          const d = new Date(entry.time);
-          const v = entry.values || {};
-          const code = v.weatherCodeMax || v.weatherCodeMin || 0;
-          return {
-            day: i === 0 ? "Today" : dayNames[d.getDay()],
-            date: entry.time.split("T")[0],
-            weatherCode: code,
-            condition: getCondition(code).label,
-            tempHigh: Math.round(v.temperatureMax ?? 30),
-            tempLow: Math.round(v.temperatureMin ?? 22),
-            humidity: Math.round(v.humidityAvg ?? 65),
-            wind: Math.round(v.windSpeedAvg ?? 10),
-            rainProb: Math.round(v.precipitationProbabilityAvg ?? 0),
-            rainMm: Math.round((v.rainAccumulationSum ?? 0) * 10) / 10,
-            evapotranspiration: Math.round((v.evapotranspiration ?? 4) * 100) / 100,
-            soilMoisture: Math.round((v.soilMoistureVolumetric0To10 ?? 0.3) * 100),
-            soilTemperature: Math.round(v.soilTemperature0To10 ?? 28),
-          };
-        }
-      );
-
-      setForecast(dailyForecasts);
-      setIsLive(true);
-      setLastUpdated(new Date());
-    } catch (err) {
-      console.error("Weather fetch failed, using mock data:", err);
-      setForecast(generateMockForecast());
-      setIsLive(false);
-      setLastUpdated(new Date());
-    } finally {
-      setLoading(false);
-    }
-  }, [lat, lon]);
-
-  // Initial fetch + 30-min auto-refresh
-  useEffect(() => {
-    fetchWeather();
-    const interval = setInterval(fetchWeather, 30 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchWeather]);
-
-  // PWA: refresh when app comes to foreground
-  useEffect(() => {
-    const onVis = () => { if (document.visibilityState === "visible") fetchWeather(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [fetchWeather]);
-
-  return { forecast, isLive, loading, lastUpdated, refresh: fetchWeather };
-}
-
-// ────────────────────────────────────────────────────────────
-// SECTION 4: MOCK DATA GENERATOR (demo / offline fallback)
-// Includes evapotranspiration & soil moisture for demo mode
-// ────────────────────────────────────────────────────────────
-function generateMockForecast(): DayForecast[] {
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const codes = [1000, 1101, 4001, 4200, 8000, 1001, 1100];
-
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const baseTemp = 28 + Math.random() * 6;
-    const rainProb = Math.round(Math.random() * 100);
-    const code = codes[i];
-    return {
-      day: i === 0 ? "Today" : dayNames[d.getDay()],
-      date: d.toISOString().split("T")[0],
-      weatherCode: code,
-      condition: getCondition(code).label,
-      tempHigh: Math.round(baseTemp + 2),
-      tempLow: Math.round(baseTemp - 5),
-      humidity: Math.round(55 + Math.random() * 35),
-      wind: Math.round(5 + Math.random() * 20),
-      rainProb,
-      rainMm: rainProb > 40 ? Math.round(Math.random() * 15 * 10) / 10 : 0,
-      // Agro fields — realistic tropical ranges
-      evapotranspiration: Math.round((3 + Math.random() * 4) * 100) / 100,
-      soilMoisture: Math.round(15 + Math.random() * 45),
-      soilTemperature: Math.round(25 + Math.random() * 8),
-    };
-  });
-}
-
-// ────────────────────────────────────────────────────────────
-// SECTION 5: CROP DATABASE WITH WATER REQUIREMENTS
-// Each crop has a Kc (crop coefficient) and water thresholds
-// used for computing crop-specific irrigation advisories.
+// CROP DATABASE WITH WATER REQUIREMENTS
 // ────────────────────────────────────────────────────────────
 const CROPS = [
   { name: "Maize",   icon: "🌽", category: "Cereals",    kc: 1.15, wiltPoint: 15, fieldCapacity: 35, season: [3,4,5,6,7] },
@@ -361,51 +108,41 @@ const CROPS = [
 ];
 
 // ────────────────────────────────────────────────────────────
-// SECTION 6: IRRIGATION INTELLIGENCE ENGINE
-// Computes per-crop water needs from live ET₀, rainfall,
-// and soil moisture data. Uses FAO Penman-Monteith concepts:
-//   CropET = ET₀ × Kc
-//   NetIrrigation = CropET − EffectiveRainfall
+// IRRIGATION INTELLIGATION ENGINE (FAO Penman-Monteith concepts)
 // ────────────────────────────────────────────────────────────
 function computeIrrigationAdvisories(
-  forecast: DayForecast[],
+  forecast: WeatherDay[],
   month: number
 ): { advisories: CropWaterAdvisory[]; summary: IrrigationSummary } {
-  // Average the next 3 days of forecast for short-term advisory
   const shortTerm = forecast.slice(0, 3);
   const avgET = shortTerm.length
-    ? shortTerm.reduce((s, d) => s + d.evapotranspiration, 0) / shortTerm.length
+    ? shortTerm.reduce((s, d) => s + (d.evapotranspiration ?? 4.5), 0) / shortTerm.length
     : 4.5;
   const avgRainMm = shortTerm.length
-    ? shortTerm.reduce((s, d) => s + d.rainMm, 0) / shortTerm.length
+    ? shortTerm.reduce((s, d) => s + (d.rainMm ?? 0), 0) / shortTerm.length
     : 0;
   const avgSoilMoisture = shortTerm.length
-    ? shortTerm.reduce((s, d) => s + d.soilMoisture, 0) / shortTerm.length
+    ? shortTerm.reduce((s, d) => s + (d.soilMoisture ?? 30), 0) / shortTerm.length
     : 30;
   const avgSoilTemp = shortTerm.length
-    ? shortTerm.reduce((s, d) => s + d.soilTemperature, 0) / shortTerm.length
+    ? shortTerm.reduce((s, d) => s + (d.soilTemperature ?? 28), 0) / shortTerm.length
     : 28;
   const avgHumidity = shortTerm.length
     ? shortTerm.reduce((s, d) => s + d.humidity, 0) / shortTerm.length
     : 65;
 
-  // Effective rainfall = ~80% of actual rain (FAO approximation for tropical soils)
   const effectiveRain = avgRainMm * 0.8;
-
-  // Current crops for this month
   const currentCrops = CROPS.filter((c) => c.season.includes(month));
 
   const advisories: CropWaterAdvisory[] = currentCrops.map((crop) => {
     const cropET = avgET * crop.kc;
     const irrigationNeed = Math.max(0, cropET - effectiveRain);
 
-    // Soil moisture status relative to crop thresholds
     let soilStatus: CropWaterAdvisory["soilStatus"] = "adequate";
     if (avgSoilMoisture >= crop.fieldCapacity) soilStatus = "saturated";
     else if (avgSoilMoisture <= crop.wiltPoint) soilStatus = "critical";
     else if (avgSoilMoisture <= crop.wiltPoint + 5) soilStatus = "low";
 
-    // Generate human-readable recommendation
     let recommendation: string;
     if (soilStatus === "critical") {
       recommendation = `Urgent: Soil moisture critically low (${Math.round(avgSoilMoisture)}%). Apply ${irrigationNeed.toFixed(1)} mm/day immediately. Drip irrigation preferred.`;
@@ -433,7 +170,6 @@ function computeIrrigationAdvisories(
     };
   });
 
-  // Overall summary
   const totalIrrigationNeed = advisories.reduce((s, a) => s + a.irrigationNeed, 0);
   const criticalCrops = advisories.filter((a) => a.soilStatus === "critical").length;
   const lowCrops = advisories.filter((a) => a.soilStatus === "low").length;
@@ -452,19 +188,8 @@ function computeIrrigationAdvisories(
   return { advisories, summary };
 }
 
-interface IrrigationSummary {
-  avgET: number;
-  effectiveRain: number;
-  avgSoilMoisture: number;
-  avgSoilTemp: number;
-  avgHumidity: number;
-  overallNeed: "none" | "low" | "moderate" | "critical";
-  criticalCrops: number;
-  totalCrops: number;
-}
-
 // ────────────────────────────────────────────────────────────
-// SECTION 7: SEASONAL AGRO DATA (West Africa baseline)
+// SEASONAL AGRO DATA (West Africa baseline)
 // ────────────────────────────────────────────────────────────
 function getCurrentSeason(month: number) {
   if (month >= 3 && month <= 7) return { name: "Major Rainy Season", type: "rainy" as const };
@@ -493,7 +218,7 @@ function getSeasonalRecommendations(month: number): string[] {
 }
 
 // ────────────────────────────────────────────────────────────
-// SECTION 8: WEATHER ICON COMPONENT
+// WEATHER ICON COMPONENT
 // ────────────────────────────────────────────────────────────
 function WeatherIcon({ code, className }: { code: number; className?: string }) {
   const cn = className || "h-8 w-8";
@@ -510,27 +235,25 @@ function WeatherIcon({ code, className }: { code: number; className?: string }) 
 }
 
 // ────────────────────────────────────────────────────────────
-// SECTION 9: SUB-COMPONENTS
+// SUB-COMPONENTS
 // ────────────────────────────────────────────────────────────
-
-/** Today's weather hero card */
-function TodayWeather({ weather }: { weather: DayForecast }) {
+function TodayWeather({ weather }: { weather: WeatherDay }) {
   if (!weather) return null;
   return (
     <div className="bg-gradient-to-br from-blue-600 to-blue-800 text-white rounded-2xl p-6 shadow-lg">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm opacity-80">Today's Weather</p>
+          <p className="text-sm opacity-80">Today's Agro Forecast</p>
           <p className="text-5xl font-bold mt-1">{weather.tempHigh}°C</p>
-          <p className="text-sm opacity-80 mt-1">{weather.condition}</p>
+          <p className="text-sm opacity-80 mt-1">{weather.description}</p>
         </div>
-        <WeatherIcon code={weather.weatherCode} className="h-16 w-16" />
+        <WeatherIcon code={weather.weatherCode ?? 1000} className="h-16 w-16" />
       </div>
       <div className="grid grid-cols-4 gap-3 mt-6 pt-4 border-t border-white/20 text-center text-sm">
         <div>
           <Droplets className="h-4 w-4 mx-auto opacity-70" />
           <p className="font-semibold mt-1">{weather.rainProb}%</p>
-          <p className="text-xs opacity-70">Rain</p>
+          <p className="text-xs opacity-70">Rain Prob.</p>
         </div>
         <div>
           <Wind className="h-4 w-4 mx-auto opacity-70" />
@@ -540,11 +263,11 @@ function TodayWeather({ weather }: { weather: DayForecast }) {
         <div>
           <Thermometer className="h-4 w-4 mx-auto opacity-70" />
           <p className="font-semibold mt-1">{weather.tempLow}°C</p>
-          <p className="text-xs opacity-70">Low</p>
+          <p className="text-xs opacity-70">Low Air</p>
         </div>
         <div>
           <Leaf className="h-4 w-4 mx-auto opacity-70" />
-          <p className="font-semibold mt-1">{weather.evapotranspiration}</p>
+          <p className="font-semibold mt-1">{weather.evapotranspiration ?? 4.5}</p>
           <p className="text-xs opacity-70">ET₀ mm</p>
         </div>
       </div>
@@ -552,15 +275,14 @@ function TodayWeather({ weather }: { weather: DayForecast }) {
   );
 }
 
-/** Single forecast row */
-function ForecastRow({ day }: { day: DayForecast }) {
+function ForecastRow({ day }: { day: WeatherDay }) {
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
       <div className="flex items-center gap-3 w-20">
-        <WeatherIcon code={day.weatherCode} className="h-5 w-5" />
+        <WeatherIcon code={day.weatherCode ?? 1000} className="h-5 w-5" />
         <span className="text-sm font-medium">{day.day}</span>
       </div>
-      <span className="text-xs text-muted-foreground w-20 text-center">{day.condition}</span>
+      <span className="text-xs text-muted-foreground w-20 text-center">{day.description}</span>
       <div className="flex items-center gap-1 text-xs w-14 justify-center">
         <Droplets className="h-3 w-3 text-blue-400" />
         <span>{day.rainProb}%</span>
@@ -577,7 +299,6 @@ function ForecastRow({ day }: { day: DayForecast }) {
   );
 }
 
-/** Soil moisture status badge */
 function SoilStatusBadge({ status }: { status: CropWaterAdvisory["soilStatus"] }) {
   const styles = {
     critical: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
@@ -593,13 +314,13 @@ function SoilStatusBadge({ status }: { status: CropWaterAdvisory["soilStatus"] }
 }
 
 // ────────────────────────────────────────────────────────────
-// SECTION 10: MAIN PAGE COMPONENT
+// MAIN PAGE COMPONENT
 // ────────────────────────────────────────────────────────────
 export default function Weather() {
-  const { position, loading: geoLoading, error: geoError } = useGeolocation();
+  const { position, loading: geoLoading } = useGeolocation();
   const { forecast, isLive, loading: weatherLoading, lastUpdated, refresh } = useWeather(
-    position.lat,
-    position.lon
+    position?.lat,
+    position?.lon
   );
 
   const today = forecast[0];
@@ -620,7 +341,7 @@ export default function Weather() {
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-xl font-bold">Weather & Agro Forecast</h1>
+        <h1 className="text-xl font-bold">Agro Forecast</h1>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">
             {season.type === "rainy" ? "🌧️" : "☀️"} {season.name}
@@ -639,18 +360,18 @@ export default function Weather() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-3.5 w-3.5" />
-          <span className="font-medium">{position.community || position.locationName}</span>
-          {position.district && <span>• {position.district}</span>}
-          {position.region && <span>• {position.region}</span>}
+          <span className="font-medium">{position?.community || position?.locationName || "Accra, Ghana"}</span>
+          {position?.district && <span>• {position.district}</span>}
+          {position?.region && <span>• {position.region}</span>}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {isLive ? (
-            <span className="flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Live
+            <span className="flex items-center gap-1 text-green-600 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Live
             </span>
           ) : (
-            <span className="flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Demo
+            <span className="flex items-center gap-1 text-amber-600 font-medium">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Offline/Demo
             </span>
           )}
           {lastUpdated && (
@@ -660,12 +381,6 @@ export default function Weather() {
           )}
         </div>
       </div>
-
-      {geoError && (
-        <div className="bg-destructive/10 text-destructive rounded-xl p-3 mb-4 text-sm">
-          ⚠️ {geoError} — showing fallback location data.
-        </div>
-      )}
 
       {isLoading && !today ? (
         <div className="flex items-center justify-center py-20">
@@ -677,26 +392,26 @@ export default function Weather() {
           <div className="lg:col-span-2 space-y-5">
             <TodayWeather weather={today} />
 
-            {/* Quick stats — now includes soil & ET */}
+            {/* Quick stats — agricultural metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-card rounded-xl p-4 text-center shadow-sm">
+              <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Droplets className="h-5 w-5 mx-auto text-blue-500" />
                 <p className="text-lg font-bold mt-2">{today.humidity}%</p>
                 <p className="text-xs text-muted-foreground">Humidity</p>
               </div>
-              <div className="bg-card rounded-xl p-4 text-center shadow-sm">
+              <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <CloudRain className="h-5 w-5 mx-auto text-blue-400" />
-                <p className="text-lg font-bold mt-2">{today.rainMm} mm</p>
+                <p className="text-lg font-bold mt-2">{today.rainMm ?? 0} mm</p>
                 <p className="text-xs text-muted-foreground">Rainfall</p>
               </div>
-              <div className="bg-card rounded-xl p-4 text-center shadow-sm">
+              <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Gauge className="h-5 w-5 mx-auto text-amber-600" />
-                <p className="text-lg font-bold mt-2">{today.soilMoisture}%</p>
+                <p className="text-lg font-bold mt-2">{today.soilMoisture ?? 0}%</p>
                 <p className="text-xs text-muted-foreground">Soil Moisture</p>
               </div>
-              <div className="bg-card rounded-xl p-4 text-center shadow-sm">
+              <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Leaf className="h-5 w-5 mx-auto text-green-600" />
-                <p className="text-lg font-bold mt-2">{today.evapotranspiration}</p>
+                <p className="text-lg font-bold mt-2">{today.evapotranspiration ?? 0}</p>
                 <p className="text-xs text-muted-foreground">ET₀ (mm/day)</p>
               </div>
             </div>
@@ -710,12 +425,12 @@ export default function Weather() {
                   variant="outline"
                   className={`text-[10px] ml-auto ${
                     summary.overallNeed === "critical"
-                      ? "border-red-300 text-red-600"
+                      ? "border-red-300 text-red-600 bg-red-50 dark:bg-red-950/20"
                       : summary.overallNeed === "moderate"
-                      ? "border-amber-300 text-amber-600"
+                      ? "border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/20"
                       : summary.overallNeed === "low"
-                      ? "border-yellow-300 text-yellow-600"
-                      : "border-green-300 text-green-600"
+                      ? "border-yellow-300 text-yellow-600 bg-yellow-50 dark:bg-yellow-950/20"
+                      : "border-green-300 text-green-600 bg-green-50 dark:bg-green-950/20"
                   }`}
                 >
                   {summary.overallNeed === "none" ? "✓ No Irrigation" : `⚠ ${summary.overallNeed} need`}
@@ -724,26 +439,26 @@ export default function Weather() {
 
               {/* Summary metrics row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 text-center">
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 text-center border border-blue-100 dark:border-blue-900/40">
                   <p className="text-xs text-muted-foreground">Ref. ET₀</p>
                   <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                    {summary.avgET.toFixed(1)} <span className="text-xs font-normal">mm/day</span>
+                    {summary.avgET.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">mm/d</span>
                   </p>
                 </div>
-                <div className="bg-cyan-50 dark:bg-cyan-950/30 rounded-lg p-3 text-center">
+                <div className="bg-cyan-50 dark:bg-cyan-950/30 rounded-lg p-3 text-center border border-cyan-100 dark:border-cyan-900/40">
                   <p className="text-xs text-muted-foreground">Eff. Rainfall</p>
                   <p className="text-lg font-bold text-cyan-700 dark:text-cyan-300">
-                    {summary.effectiveRain.toFixed(1)} <span className="text-xs font-normal">mm/day</span>
+                    {summary.effectiveRain.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">mm/d</span>
                   </p>
                 </div>
-                <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Soil Moisture</p>
+                <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-center border border-amber-100 dark:border-amber-900/40">
+                  <p className="text-xs text-muted-foreground">Avg Soil Moist.</p>
                   <p className="text-lg font-bold text-amber-700 dark:text-amber-300">
                     {Math.round(summary.avgSoilMoisture)}%
                   </p>
                 </div>
-                <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Soil Temp</p>
+                <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 text-center border border-orange-100 dark:border-orange-900/40">
+                  <p className="text-xs text-muted-foreground">Avg Soil Temp</p>
                   <p className="text-lg font-bold text-orange-700 dark:text-orange-300">
                     {Math.round(summary.avgSoilTemp)}°C
                   </p>
@@ -751,7 +466,7 @@ export default function Weather() {
               </div>
 
               {/* Per-crop water advisories */}
-              <div className="bg-card rounded-xl shadow-sm divide-y divide-border/50">
+              <div className="bg-card rounded-xl shadow-sm border border-border/40 divide-y divide-border/50">
                 {advisories.length === 0 ? (
                   <p className="text-xs text-muted-foreground p-4 text-center">
                     No crops in season this month. Check seasonal actions for guidance.
@@ -792,34 +507,23 @@ export default function Weather() {
               </div>
             </section>
 
-            {/* 7-day forecast — short-term (1–3d) and mid-term (4–7d) */}
-            <section>
-              <h2 className="font-bold mb-3">Short-Term Forecast (1–3 Days)</h2>
-              <div className="bg-card rounded-xl p-4 shadow-sm">
+            {/* 7-day forecast */}
+            <section className="space-y-4">
+              <div>
+                <h2 className="font-bold mb-1">7-Day Agricultural Forecast</h2>
+                <p className="text-xs text-muted-foreground">Daily evapotranspiration and soil moisture projections.</p>
+              </div>
+              <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
                 <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-2 px-1">
                   <span className="w-20">Day</span>
                   <span className="w-20 text-center">Cond.</span>
-                  <span className="w-14 text-center">Rain</span>
-                  <span className="w-14 text-center">Soil</span>
-                  <span className="w-20 text-right">Temp</span>
+                  <span className="w-14 text-center">Rain Prob</span>
+                  <span className="w-14 text-center">Est Soil</span>
+                  <span className="w-20 text-right">Air Temp</span>
                 </div>
-                {forecast.slice(0, 3).map((day) => (
+                {forecast.map((day) => (
                   <ForecastRow key={day.date} day={day} />
                 ))}
-              </div>
-            </section>
-
-            <section>
-              <h2 className="font-bold mb-3">Mid-Term Outlook (4–7 Days)</h2>
-              <div className="bg-card rounded-xl p-4 shadow-sm">
-                {forecast.slice(3, 7).map((day) => (
-                  <ForecastRow key={day.date} day={day} />
-                ))}
-                {forecast.length <= 3 && (
-                  <p className="text-xs text-muted-foreground py-4 text-center">
-                    Extended forecast data not yet available.
-                  </p>
-                )}
               </div>
             </section>
           </div>
@@ -827,7 +531,7 @@ export default function Weather() {
           {/* Sidebar: Agro info */}
           <div className="space-y-5">
             {/* Crops to plant */}
-            <div className="bg-card rounded-xl p-4 shadow-sm">
+            <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
               <h3 className="font-bold text-sm flex items-center gap-2 mb-3">
                 <Sprout className="h-4 w-4 text-green-600" /> Plant This Season
               </h3>
@@ -851,7 +555,7 @@ export default function Weather() {
             </div>
 
             {/* Seasonal recommendations */}
-            <div className="bg-card rounded-xl p-4 shadow-sm">
+            <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
               <h3 className="font-bold text-sm mb-3">📋 Seasonal Actions</h3>
               <ul className="space-y-2">
                 {recommendations.map((rec, i) => (
@@ -877,7 +581,7 @@ export default function Weather() {
             </div>
 
             {/* ET explanation card */}
-            <div className="bg-card rounded-xl p-4 shadow-sm">
+            <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
               <h3 className="font-bold text-sm mb-2 flex items-center gap-2">
                 <TrendingDown className="h-4 w-4 text-blue-500" /> How It Works
               </h3>
