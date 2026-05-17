@@ -33,11 +33,10 @@ export function MarketplaceLayout({
               <div className="font-bold text-sm flex items-center gap-1">
                 <Store className="h-3.5 w-3.5 text-primary" /> Market Link
               </div>
-              <div className="text-[10px] text-muted-foreground">Powered by AgroClimate</div>
             </div>
           </Link>
           <nav className="hidden md:flex items-center gap-1 ml-2">
-            <NavLink to="/marketplace" end className={linkCls}><Home className="h-4 w-4" />Home</NavLink>
+            <a href="https://agro.amineva.com" className={linkCls({ isActive: false })}><Home className="h-4 w-4" />Home</a>
             <NavLink to="/marketplace/supply" className={linkCls}><Package className="h-4 w-4" />Supply Listings</NavLink>
             <NavLink to="/marketplace/orders" className={linkCls}><ListPlus className="h-4 w-4" />Place Order</NavLink>
             {user && <NavLink to="/marketplace/inbox" className={linkCls}>Messages</NavLink>}
@@ -61,7 +60,7 @@ export function MarketplaceLayout({
           </div>
         </div>
         <div className="md:hidden border-t flex overflow-x-auto">
-          <NavLink to="/marketplace" end className={linkCls}>Home</NavLink>
+          <a href="https://agro.amineva.com" className={linkCls({ isActive: false })}>Home</a>
           <NavLink to="/marketplace/supply" className={linkCls}>Supply</NavLink>
           <NavLink to="/marketplace/orders" className={linkCls}>Place Order</NavLink>
           {user && <NavLink to="/marketplace/inbox" className={linkCls}>Messages</NavLink>}
