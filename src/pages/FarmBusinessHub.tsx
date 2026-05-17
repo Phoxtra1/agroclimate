@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useNewTag } from "@/hooks/useNewTag";
 import {
   TrendingUp, DollarSign, ShieldCheck, ChevronDown, ChevronUp,
   Users, Package, BarChart3, Warehouse, LineChart, Bot, Sprout,
@@ -132,6 +133,12 @@ const solutions: Solution[] = [
 export default function FarmBusinessHub() {
   const [expandedSolution, setExpandedSolution] = useState<string | null>(solutions[0].id);
   const [expandedPillar, setExpandedPillar] = useState<Record<string, number | null>>({});
+  const { isNew, markVisited } = useNewTag();
+  const [showNewBadge, setShowNewBadge] = useState(() => isNew("farm-business-hub"));
+
+  useEffect(() => {
+    markVisited("farm-business-hub");
+  }, [markVisited]);
 
   const togglePillar = (solutionId: string, index: number) => {
     setExpandedPillar(prev => ({
@@ -146,7 +153,7 @@ export default function FarmBusinessHub() {
         <div className="flex items-center gap-2 mb-2">
           <Lightbulb className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold">Farm Business Hub</h1>
-          <Badge variant="default" className="text-[10px]">New</Badge>
+          {showNewBadge && <Badge variant="default" className="text-[10px]">New</Badge>}
         </div>
         <p className="text-sm text-muted-foreground">
           Practical, actionable solutions to the real challenges facing African farmers. No theories — just steps you can take today.

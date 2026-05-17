@@ -11,6 +11,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { useNewTag } from "@/hooks/useNewTag";
 
 interface FlightAdvisory {
   status: "safe" | "caution" | "no_fly";
@@ -34,6 +35,7 @@ export default function DroneAdvisory() {
   const { position } = useGeolocation();
   const { forecast } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
+  const { isNew, markVisited } = useNewTag();
 
   const evaluate = async () => {
     setLoading(true);
@@ -66,10 +68,20 @@ export default function DroneAdvisory() {
         </div>
       </div>
 
-      <Tabs defaultValue="advisory" className="space-y-4">
+      <Tabs defaultValue="advisory" onValueChange={(val) => {
+        if (val === "monitoring") {
+          markVisited("drone-monitoring");
+          markVisited("drone-api");
+        }
+      }} className="space-y-4">
         <TabsList>
           <TabsTrigger value="advisory">Flight Evaluation</TabsTrigger>
-          <TabsTrigger value="monitoring">Air Monitoring <Badge variant="secondary" className="ml-1 text-[10px] px-1">New</Badge></TabsTrigger>
+          <TabsTrigger value="monitoring">
+            Air Monitoring 
+            {isNew("drone-monitoring") && (
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1">New</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="advisory">
@@ -202,7 +214,10 @@ export default function DroneAdvisory() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Globe className="h-4 w-4" /> API Data Ingestion <Badge variant="secondary" className="text-[10px]">New</Badge>
+                  <Globe className="h-4 w-4" /> API Data Ingestion 
+                  {isNew("drone-api") && (
+                    <Badge variant="secondary" className="text-[10px]">New</Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
