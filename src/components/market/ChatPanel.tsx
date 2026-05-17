@@ -140,8 +140,8 @@ export function ChatPanel({
         <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? "bg-green-500" : "bg-muted-foreground/40"}`} />
         <div className="text-sm font-semibold truncate flex-1">{otherName}</div>
         <Badge variant={statusBadgeTone(status)} className="capitalize">{status}</Badge>
-        <div className="text-[11px] text-muted-foreground basis-full">
-          {isOnline ? "Online" : "Offline · leave a message"} · {otherRole === "buyer" ? "You: Supplier" : "You: Buyer"}
+        <div className="text-[11px] text-muted-foreground basis-full mt-1">
+          {isOnline ? "User is currently Online" : "User is currently Offline · Leave a message"}
         </div>
       </div>
 

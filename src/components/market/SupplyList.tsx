@@ -257,9 +257,9 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
       {/* Dedicated chat dialog */}
       <Dialog open={chatOpen && !!selected && !!user} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat — {selected?.crop_name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat: {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && (
-            <ChatPanel otherUserId={selected.user_id} otherName={`Supplier · ${selected.crop_name}`} relatedSupplyId={selected.id} />
+            <ChatPanel otherUserId={selected.user_id} otherName={`${selected.crop_name} Supplier`} relatedSupplyId={selected.id} />
           )}
         </DialogContent>
       </Dialog>

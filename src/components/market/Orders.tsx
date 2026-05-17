@@ -447,11 +447,11 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
       {/* Negotiation chat — only valid from the public supplier listing. */}
       <Dialog open={chatOpen && (scope === "marketplace" || scope === "global") && !!selected && !!user} onOpenChange={(o) => { if (!o) setChatOpen(false); }}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate — {selected?.crop_name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && (
             <ChatPanel
               otherUserId={selected.buyer_id}
-              otherName={`Buyer · ${selected.buyer_name || selected.crop_name}`}
+              otherName={`${selected.buyer_name || selected.crop_name} Buyer`}
               otherRole="buyer"
               relatedOrderId={selected.id}
               defaultUnit={selected.unit}
