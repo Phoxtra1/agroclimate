@@ -67,7 +67,18 @@ export function MarketplaceLayout({
           {user && <NavLink to="/marketplace/inbox" className={linkCls}>Messages</NavLink>}
         </div>
       </header>
-      <main className="flex-1 container mx-auto px-3 py-4">{children}</main>
+      <main className="flex-1 container mx-auto px-3 py-4">
+        {user && (
+          <div className="flex justify-end mb-2">
+            <a href="https://agro.amineva.com">
+              <Button variant="ghost" size="sm">
+                <Home className="h-4 w-4 mr-1" /> Home
+              </Button>
+            </a>
+          </div>
+        )}
+        {children}
+      </main>
       <footer className="border-t py-3 text-center text-[11px] text-muted-foreground">
         Market Link · A public agricultural trade access point of AgroClimate.
       </footer>

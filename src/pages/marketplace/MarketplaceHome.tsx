@@ -6,7 +6,7 @@ import { SupplyList } from "@/components/market/SupplyList";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, Navigate } from "react-router-dom";
-import { ArrowRight, Sprout, ShoppingBag, Home } from "lucide-react";
+import { ArrowRight, Sprout, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 export default function MarketplaceHome() {
@@ -20,14 +20,6 @@ export default function MarketplaceHome() {
 
   return (
     <MarketplaceLayout requireAuth>
-      {/* Home tab — returns to the main application's homepage (outside marketplace). */}
-      <div className="flex justify-end mb-2">
-        <a href="https://agro.amineva.com">
-          <Button variant="ghost" size="sm">
-            <Home className="h-4 w-4 mr-1" /> Home
-          </Button>
-        </a>
-      </div>
       <section className="text-center py-6">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
           Connect with African farmers, directly.
