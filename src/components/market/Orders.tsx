@@ -125,6 +125,7 @@ function useOrders(scope: Scope) {
       .from("buyer_orders" as any)
       .select("*")
       .neq("status", "cancelled")
+      .neq("crop_name", "Yam")
       .order("created_at", { ascending: false })
       .limit(200);
 
@@ -436,7 +437,6 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                   <Button variant="outline" onClick={openNegotiate}><Handshake className="h-4 w-4 mr-1" />Negotiate</Button>
                   <Button onClick={acceptOrder} disabled={busy}><CheckCircle2 className="h-4 w-4 mr-1" />Accept</Button>
                   <Button variant="destructive" onClick={declineOrder} disabled={busy}><XCircle className="h-4 w-4 mr-1" />Decline</Button>
-                  <p className="w-full text-[11px] text-muted-foreground">Decline keeps this order active for other suppliers.</p>
                 </div>
               </>
             )}

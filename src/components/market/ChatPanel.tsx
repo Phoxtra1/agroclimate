@@ -148,11 +148,7 @@ export function ChatPanel({
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
         {loading ? (
           <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : messages.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">
-            No messages yet. Discuss price, quantity and delivery — accept to lock the agreement.
-          </p>
-        ) : (
+        ) : messages.length === 0 ? null : (
           messages.map((m) => {
             const mine = m.sender_id === user?.id;
             const meta: any = (user as any)?.user_metadata || {};
