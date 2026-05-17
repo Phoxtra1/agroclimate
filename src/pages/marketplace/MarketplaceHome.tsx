@@ -22,11 +22,11 @@ export default function MarketplaceHome() {
     <MarketplaceLayout requireAuth>
       {/* Home tab — returns to the main application's homepage (outside marketplace). */}
       <div className="flex justify-end mb-2">
-        <Link to="/">
+        <a href="https://agro.amineva.com">
           <Button variant="ghost" size="sm">
             <Home className="h-4 w-4 mr-1" /> Home
           </Button>
-        </Link>
+        </a>
       </div>
       <section className="text-center py-6">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
