@@ -450,6 +450,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
           <DialogHeader><DialogTitle><MessageCircle className="h-4 w-4 inline mr-1" /> Negotiate {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && (
             <ChatPanel
+              key={`${user.id}-${selected.buyer_id}-${selected.id}`}
               otherUserId={selected.buyer_id}
               otherName={`${selected.buyer_name || selected.crop_name} Buyer`}
               otherRole="buyer"

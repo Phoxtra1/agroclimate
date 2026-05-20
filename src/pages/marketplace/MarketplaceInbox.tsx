@@ -61,7 +61,7 @@ export default function MarketplaceInbox() {
           ))}
         </CardContent></Card>
         <div className="md:col-span-2">
-          {active ? <ChatPanel otherUserId={active} otherName={`User · ${active.slice(0, 8)}`} />
+          {active ? <ChatPanel key={`${user?.id}-${active}`} otherUserId={active} otherName={`User · ${active.slice(0, 8)}`} />
             : <p className="text-sm text-muted-foreground p-6 text-center">Select a conversation to start chatting.</p>}
         </div>
       </div>

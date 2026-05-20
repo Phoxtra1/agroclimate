@@ -259,7 +259,12 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-4 w-4" /> Chat: {selected?.crop_name}</DialogTitle></DialogHeader>
           {selected && user && (
-            <ChatPanel otherUserId={selected.user_id} otherName={`${selected.crop_name} Supplier`} relatedSupplyId={selected.id} />
+            <ChatPanel
+              key={`${user.id}-${selected.user_id}-${selected.id}`}
+              otherUserId={selected.user_id}
+              otherName={`${selected.crop_name} Supplier`}
+              relatedSupplyId={selected.id}
+            />
           )}
         </DialogContent>
       </Dialog>

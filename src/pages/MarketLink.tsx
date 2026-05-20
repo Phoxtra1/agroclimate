@@ -233,6 +233,7 @@ function useMarketInboxThreads() {
 }
 
 function DashboardMarketInbox({ threads }: { threads: ThreadSummary[] }) {
+  const { user } = useAuth();
   const [active, setActive] = useState<string | null>(null);
   const names = useDisplayNames(threads.map((t) => t.other));
 
@@ -252,7 +253,7 @@ function DashboardMarketInbox({ threads }: { threads: ThreadSummary[] }) {
             );
           })}
         </CardContent></Card>
-        <div className="md:col-span-2">{active ? <ChatPanel otherUserId={active} otherName={names[active] || `User · ${active.slice(0, 8)}`} /> : <p className="text-sm text-muted-foreground p-6 text-center">Select a message thread.</p>}</div>
+        <div className="md:col-span-2">{active ? <ChatPanel key={`${user?.id}-${active}`} otherUserId={active} otherName={names[active] || `User · ${active.slice(0, 8)}`} /> : <p className="text-sm text-muted-foreground p-6 text-center">Select a message thread.</p>}</div>
       </div>
     </DialogContent>
   );

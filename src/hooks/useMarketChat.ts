@@ -38,6 +38,7 @@ export function useMarketChat(otherUserId: string | null) {
   }, [threadKey]);
 
   useEffect(() => {
+    setMessages([]);
     fetchMessages();
     if (!threadKey) return;
     const ch = supabase
