@@ -41,4 +41,101 @@ export const lovableProvider: OdenehoProvider = {
     const r = await call("chat", { messages });
     return String(r?.text || "");
   },
+  async generateAlertsAdvisory(location: string, forecast: any[]): Promise<AIAlertAdvisory[]> {
+    const prompt = `Analyze the 7-day weather forecast for the location: ${location}.
+Forecast data: ${JSON.stringify(forecast)}.
+
+Perform a comprehensive agricultural risk assessment and generate proactive alerts for each of the following 6 categories:
+1. "weather"
+2. "crop"
+3. "livestock"
+4. "aquaculture"
+5. "environment"
+6. "flight"
+
+For each category, provide:
+- A risk score (0 to 100)
+- A risk level ("low", "moderate", "high", or "critical")
+- Disease outbreak risk (e.g. Blight/Rust for crops, Heat Stress/Pneumonia for livestock, Fungus for fish, or "None")
+- Potential disasters or hazards (e.g. Flooding, Drought, Fire, Severe Storms, or "None")
+- Highly accurate, actionable proactive advice for the farmer or surveyor
+- 1 to 2 detailed proactive alerts (each having a title, message, and severity type: "warning", "danger", "info", or "success")
+
+Respond ONLY with a valid, clean JSON array of objects with the following schema:
+[
+  {
+    "category": "weather" | "crop" | "livestock" | "aquaculture" | "environment" | "flight",
+    "score": number,
+    "level": "low" | "moderate" | "high" | "critical",
+    "diseaseRisk": string,
+    "disasterWarning": string,
+    "advice": string,
+    "proactiveAlerts": [
+      {
+        "title": string,
+        "message": string,
+        "type": "warning" | "danger" | "info" | "success"
+      }
+    ]
+  }
+]
+Do not wrap your output in markdown code blocks like \`\`\`json. Return only the raw JSON.`;
+
+    const text = await lovableProvider.chatCompletion([
+      { role: "system", content: "You are an expert agricultural climate analysis engine. Return only clean raw JSON as requested, without any markdown formatting or surrounding backticks." },
+      { role: "user", content: prompt }
+    ]);
+
+    try {
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      return JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("Failed to parse AI Alerts Advisory response:", text, e);
+      return [];
+    }
+  },
+  async generateEnvironmentalAssessment(location: string, forecast: any[]): Promise<AIEnvironmentalAssessment> {
+    const prompt = `Analyze the 7-day weather forecast for the location: ${location}.
+Forecast data: ${JSON.stringify(forecast)}.
+
+Perform a holistic ecological and environmental assessment of this community.
+Provide:
+- An overall ecological health score (0 to 100, where 100 is pristine/stable, and 0 is severe distress/disaster)
+- A concise, expert, factual paragraph summarizing the current environmental conditions and how they impact local farming/ecology.
+- Air Quality Status: "Good" | "Moderate" | "Poor" | "Hazardous"
+- Any disaster risks (type, severity: "low" | "moderate" | "high" | "critical", and description)
+- Agricultural Impacts for "Crops", "Livestock", and "Aquaculture" (sector, status: "low" | "moderate" | "high" | "critical", and bulleted factors/stressors)
+- Flight and Airborne risk status (drone operation safety wind shear and particulate risk: severity "low" | "moderate" | "high" | "critical", and factors)
+
+Respond ONLY with a valid, clean JSON object with the following schema:
+{
+  "ecologicalScore": number,
+  "analysis": string,
+  "airQualityStatus": "Good" | "Moderate" | "Poor" | "Hazardous",
+  "disasters": [
+    { "type": string, "severity": "low" | "moderate" | "high" | "critical", "description": string }
+  ],
+  "agriculturalImpacts": [
+    { "sector": "Crops" | "Livestock" | "Aquaculture", "status": "low" | "moderate" | "high" | "critical", "factors": [string] }
+  ],
+  "flightRisk": {
+    "severity": "low" | "moderate" | "high" | "critical",
+    "factors": [string]
+  }
+}
+Do not wrap your output in markdown code blocks like \`\`\`json. Return only the raw JSON.`;
+
+    const text = await lovableProvider.chatCompletion([
+      { role: "system", content: "You are an expert environmental and agricultural sensor intelligence engine. Return only clean raw JSON as requested, without any markdown formatting or surrounding backticks." },
+      { role: "user", content: prompt }
+    ]);
+
+    try {
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      return JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("Failed to parse AI Environmental Assessment response:", text, e);
+      throw e;
+    }
+  }
 };

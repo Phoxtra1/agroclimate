@@ -27,6 +27,40 @@ export interface PredictionRequest {
 
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string; }
 
+export interface AIAlertAdvisory {
+  category: "weather" | "crop" | "livestock" | "aquaculture" | "environment" | "flight" | "general";
+  score: number;
+  level: RiskLevel;
+  diseaseRisk: string;
+  disasterWarning: string;
+  advice: string;
+  proactiveAlerts: {
+    title: string;
+    message: string;
+    type: "warning" | "danger" | "info" | "success";
+  }[];
+}
+
+export interface AIEnvironmentalAssessment {
+  ecologicalScore: number;
+  analysis: string;
+  airQualityStatus: "Good" | "Moderate" | "Poor" | "Hazardous";
+  disasters: {
+    type: string;
+    severity: RiskLevel;
+    description: string;
+  }[];
+  agriculturalImpacts: {
+    sector: "Crops" | "Livestock" | "Aquaculture";
+    status: RiskLevel;
+    factors: string[];
+  }[];
+  flightRisk: {
+    severity: RiskLevel;
+    factors: string[];
+  };
+}
+
 export interface OdenehoProvider {
   id: string;
   generateSummary(req: SummaryRequest): Promise<string>;
@@ -34,6 +68,8 @@ export interface OdenehoProvider {
   generateRecommendations(context: Record<string, unknown>): Promise<string[]>;
   generateRiskAssessment(category: string, signals: Record<string, unknown>): Promise<RiskAssessment>;
   chatCompletion(messages: ChatMessage[]): Promise<string>;
+  generateAlertsAdvisory(location: string, forecast: any[]): Promise<AIAlertAdvisory[]>;
+  generateEnvironmentalAssessment(location: string, forecast: any[]): Promise<AIEnvironmentalAssessment>;
 }
 
 export function levelFromScore(score: number): RiskLevel {

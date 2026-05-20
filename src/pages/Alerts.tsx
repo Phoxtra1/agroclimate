@@ -8,6 +8,8 @@ import {
   Send,
   Trash2,
   X,
+  Sparkles,
+  Activity,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -97,6 +99,10 @@ export default function Alerts() {
     markRead,
     dismiss,
     deleteAlert,
+    aiAdvisory,
+    isAiLoading,
+    aiError,
+    refreshAiAdvisory,
   } = useUserAlerts(forecast, position.locationName);
 
   const [showTicketForm, setShowTicketForm] = useState(false);
@@ -105,6 +111,11 @@ export default function Alerts() {
   const [refreshing, setRefreshing] = useState(false);
   const [feedbackState, setFeedbackState] = useState<Record<string, AlertFeedback>>(readFeedbackState);
   const [ticket, setTicket] = useState({ subject: "", description: "", category: "general" });
+
+  const selectedAdvisory = useMemo(() => {
+    if (!aiAdvisory || activeFilter === "all") return null;
+    return aiAdvisory.find((adv) => adv.category === activeFilter);
+  }, [aiAdvisory, activeFilter]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -196,15 +207,32 @@ export default function Alerts() {
 
   const renderAlert = (alert: EnrichedAlert) => {
     const feedback = feedbackState[alert.id];
+    const isAi = alert.isAiBacked;
 
     return (
-      <div key={alert.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div
+        key={alert.id}
+        className={`rounded-xl border p-4 shadow-sm transition-all duration-300 ${
+          isAi
+            ? "border-primary/30 bg-primary/5 hover:border-primary/50 relative overflow-hidden group shadow-md"
+            : "border-border bg-card"
+        }`}
+      >
+        {isAi && (
+          <div className="absolute top-0 right-0 h-24 w-24 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/15 transition-all animate-pulse" />
+        )}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold">{alert.title}</h3>
               <Badge variant="outline">{filterLabel(inferAlertFilter(alert))}</Badge>
-              {!alert.isRead && <span className="h-2 w-2 rounded-full bg-destructive" />}
+              {isAi ? (
+                <Badge className="bg-primary text-primary-foreground border-transparent animate-pulse flex items-center gap-1 text-[10px]">
+                  <Sparkles className="h-3 w-3" /> Odeneho AI Advisory
+                </Badge>
+              ) : (
+                !alert.isRead && <span className="h-2 w-2 rounded-full bg-destructive" />
+              )}
               {feedback && (
                 <Badge variant="secondary" className="capitalize">
                   {feedback}
@@ -266,6 +294,20 @@ export default function Alerts() {
         </div>
 
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="default"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all duration-300 relative group overflow-hidden flex items-center gap-1.5"
+            onClick={refreshAiAdvisory}
+            disabled={isAiLoading}
+          >
+            {isAiLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary-foreground" />
+            ) : (
+              <Sparkles className="h-4 w-4 text-primary-foreground group-hover:scale-110 transition-transform" />
+            )}
+            Analyze with Odeneho AI
+          </Button>
           <Button size="sm" variant="outline" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
           </Button>
@@ -351,8 +393,113 @@ export default function Alerts() {
           </div>
 
           <div className="space-y-4">
+            {/* AI Proactive Advisory Hub */}
+            {selectedAdvisory ? (
+              <div className="rounded-xl border border-border bg-card p-4 relative overflow-hidden shadow-md">
+                <div className="absolute top-0 right-0 h-32 w-32 bg-primary/10 rounded-full blur-3xl" />
+                
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                    </span>
+                    AI Proactive Advisory
+                  </h3>
+                  <Badge variant={selectedAdvisory.level === "critical" || selectedAdvisory.level === "high" ? "destructive" : "secondary"} className="capitalize">
+                    {selectedAdvisory.level} Risk
+                  </Badge>
+                </div>
+
+                <div className="flex items-center gap-4 py-2 border-b border-border/50 mb-3">
+                  <div className="relative h-14 w-14 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="28" cy="28" r="22" stroke="hsl(var(--border))" strokeWidth="4" fill="transparent" />
+                      <circle
+                        cx="28" cy="28" r="22"
+                        stroke={selectedAdvisory.score > 70 ? "hsl(var(--destructive))" : selectedAdvisory.score > 40 ? "hsl(var(--warning))" : "hsl(var(--primary))"}
+                        strokeWidth="4"
+                        fill="transparent"
+                        strokeDasharray={2 * Math.PI * 22}
+                        strokeDashoffset={2 * Math.PI * 22 * (1 - selectedAdvisory.score / 100)}
+                        className="transition-all duration-1000 ease-out"
+                      />
+                    </svg>
+                    <span className="absolute text-xs font-black">{selectedAdvisory.score}%</span>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Category Risk Index</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Calculated in real-time from the backend weather API stream.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  {selectedAdvisory.diseaseRisk !== "None" && (
+                    <div className="p-2 rounded bg-muted/50 border border-border/30">
+                      <p className="font-semibold text-muted-foreground">🦠 Disease/Spore Outbreak Risk</p>
+                      <p className="mt-0.5 text-foreground font-medium">{selectedAdvisory.diseaseRisk}</p>
+                    </div>
+                  )}
+
+                  {selectedAdvisory.disasterWarning !== "None" && (
+                    <div className="p-2 rounded bg-destructive/5 border border-destructive/10">
+                      <p className="font-semibold text-destructive/80">⚠️ Disaster Preparedness Warning</p>
+                      <p className="mt-0.5 text-foreground font-medium">{selectedAdvisory.disasterWarning}</p>
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    <p className="font-semibold text-muted-foreground">💡 Dynamic Farmer Guidance</p>
+                    <p className="text-muted-foreground leading-relaxed italic bg-muted/30 p-2.5 rounded-lg border border-border/30">
+                      "{selectedAdvisory.advice}"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+                <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                  <h3 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
+                    <Activity className="h-4 w-4 text-primary animate-pulse" />
+                    AI Ecological Health Panel
+                  </h3>
+                  {isAiLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                </div>
+                
+                <div className="space-y-2.5">
+                  {aiAdvisory ? (
+                    aiAdvisory.map((adv) => (
+                      <div key={adv.category} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
+                        <span className="capitalize font-semibold text-muted-foreground flex items-center gap-1.5">
+                          {filterLabel(adv.category)}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 bg-muted h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${adv.score > 70 ? "bg-destructive" : adv.score > 40 ? "bg-warning" : "bg-primary"}`}
+                              style={{ width: `${adv.score}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[10px] w-6 text-right font-bold">{adv.score}%</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-[11px] text-muted-foreground">
+                      <Sparkles className="h-5 w-5 mx-auto mb-2 text-primary animate-pulse" />
+                      Click "Analyze with Odeneho AI" above to load real-time alerts.
+                    </div>
+                  )}
+                </div>
+                
+                <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+                  • Select any category filter above to unlock deep, localized disease predictions and proactive farmer guidance for that sector.
+                </div>
+              </div>
+            )}
+
             <div className="rounded-xl border border-border bg-card p-4">
-              <h3 className="text-sm font-semibold">Live Data Source</h3>
+              <h3 className="text-sm font-semibold text-foreground">Live Data Source</h3>
               <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
                 <li>• Alerts are generated from your current weather and environment feed.</li>
                 <li>• Categories cover crops, livestock, aquaculture, environment, weather, and flight risk.</li>
@@ -362,7 +509,7 @@ export default function Alerts() {
 
             {forecast[0] && (
               <div className="rounded-xl border border-border bg-card p-4">
-                <h3 className="text-sm font-semibold">Current Conditions</h3>
+                <h3 className="text-sm font-semibold text-foreground">Current Conditions</h3>
                 <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                   <p>{position.locationName}</p>
                   <p>{forecast[0].description}</p>

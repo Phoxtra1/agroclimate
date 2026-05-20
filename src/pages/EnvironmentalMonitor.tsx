@@ -3,10 +3,13 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { getActiveProvider } from "@/lib/aiProviders/registry";
+import { AIEnvironmentalAssessment } from "@/lib/aiProviders/index";
 import {
   Wind, Thermometer, Droplets, Eye, AlertTriangle, CloudRain,
   Sprout, Activity, Waves, Flame, Tornado, Sun, Gauge, RefreshCw,
-  Fish, TreePine, Bug, Zap, CloudFog, Snowflake
+  Fish, TreePine, Bug, Zap, CloudFog, Snowflake, Sparkles, Loader2
 } from "lucide-react";
 
 // =============================================================================
@@ -593,6 +596,92 @@ export default function EnvironmentalMonitor() {
   const { forecast } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
 
+  const [aiEnv, setAiEnv] = useState<AIEnvironmentalAssessment | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const fetchAiAssessment = useCallback(async (force = false) => {
+    if (!forecast || forecast.length === 0 || !position.locationName) return;
+
+    const cacheKey = `agroclimate_ai_env_${position.locationName.replace(/[^a-zA-Z]/g, "").toLowerCase()}`;
+    if (!force) {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Date.now() - parsed.timestamp < 4 * 60 * 60 * 1000) {
+            setAiEnv(parsed.assessment);
+            return;
+          }
+        } catch { /* bad cache */ }
+      }
+    }
+
+    setIsAiLoading(true);
+    setAiError(null);
+    try {
+      const provider = getActiveProvider();
+      const data = await provider.generateEnvironmentalAssessment(position.locationName, forecast);
+      if (data && typeof data.ecologicalScore === "number") {
+        setAiEnv(data);
+        sessionStorage.setItem(cacheKey, JSON.stringify({ assessment: data, timestamp: Date.now() }));
+      } else {
+        throw new Error("Invalid environmental assessment data structure");
+      }
+    } catch (err: any) {
+      console.warn("AI Environmental Assessment failed:", err);
+      setAiError(err.message || "AI service temporarily offline");
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [forecast, position.locationName]);
+
+  useEffect(() => {
+    fetchAiAssessment();
+  }, [fetchAiAssessment]);
+
+  const mergedDisasters = useMemo(() => {
+    if (!envState) return [];
+    if (!aiEnv) return envState.disasters;
+
+    const aiMappedDisasters = aiEnv.disasters.map((d) => {
+      let icon = AlertTriangle;
+      const t = d.type.toLowerCase();
+      if (t.includes("flood") || t.includes("rain") || t.includes("water")) icon = Waves;
+      else if (t.includes("drought") || t.includes("heat") || t.includes("dry")) icon = Sun;
+      else if (t.includes("fire") || t.includes("burn")) icon = Flame;
+      else if (t.includes("wind") || t.includes("storm") || t.includes("tornado")) icon = Tornado;
+
+      return {
+        type: d.type,
+        severity: d.severity.charAt(0).toUpperCase() + d.severity.slice(1) as Severity,
+        icon,
+        description: d.description,
+        isAiBacked: true,
+      };
+    });
+
+    return [...aiMappedDisasters, ...envState.disasters];
+  }, [envState, aiEnv]);
+
+  const mergedImpacts = useMemo(() => {
+    if (!envState) return [];
+    if (!aiEnv) return envState.agriculturalImpacts;
+
+    return envState.agriculturalImpacts.map((imp) => {
+      const aiImp = aiEnv.agriculturalImpacts.find((ai) => ai.sector === imp.sector);
+      if (aiImp) {
+        return {
+          ...imp,
+          status: aiImp.status.charAt(0).toUpperCase() + aiImp.status.slice(1) as Severity,
+          factors: [...aiImp.factors, ...imp.factors.filter(f => !f.includes("No significant"))],
+          isAiBacked: true,
+        };
+      }
+      return imp;
+    });
+  }, [envState, aiEnv]);
+
   // Real-time clock tick for "last updated" display freshness
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -620,7 +709,10 @@ export default function EnvironmentalMonitor() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Environmental Monitor</h1>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            Environmental Monitor
+            {isAiLoading && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+          </h1>
           <p className="text-sm text-muted-foreground">{locationLabel}</p>
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -628,6 +720,74 @@ export default function EnvironmentalMonitor() {
           <span>Updated {envState.lastUpdated.toLocaleTimeString()}</span>
         </div>
       </div>
+
+      {/* AI Ecological Health Summary */}
+      {aiEnv ? (
+        <Card className="border-primary/20 bg-primary/5 overflow-hidden relative shadow-md">
+          <div className="absolute top-0 right-0 h-40 w-40 bg-primary/10 rounded-full blur-3xl" />
+          <CardContent className="p-5 flex flex-col md:flex-row items-center gap-6">
+            <div className="relative h-20 w-20 flex items-center justify-center flex-shrink-0">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="40" cy="40" r="32" stroke="hsl(var(--border))" strokeWidth="6" fill="transparent" />
+                <circle
+                  cx="40" cy="40" r="32"
+                  stroke={aiEnv.ecologicalScore > 75 ? "hsl(var(--primary))" : aiEnv.ecologicalScore > 45 ? "hsl(var(--warning))" : "hsl(var(--destructive))"}
+                  strokeWidth="6"
+                  fill="transparent"
+                  strokeDasharray={2 * Math.PI * 32}
+                  strokeDashoffset={2 * Math.PI * 32 * (1 - aiEnv.ecologicalScore / 100)}
+                  className="transition-all duration-1000 ease-out"
+                />
+              </svg>
+              <div className="absolute text-center">
+                <span className="text-xl font-black text-foreground">{aiEnv.ecologicalScore}</span>
+                <p className="text-[8px] text-muted-foreground font-semibold uppercase">Health</p>
+              </div>
+            </div>
+            
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary text-primary-foreground border-transparent animate-pulse flex items-center gap-1 text-[10px]">
+                  <Sparkles className="h-3 w-3" /> Odeneho AI Ecological Analysis
+                </Badge>
+              </div>
+              <p className="text-sm font-semibold text-foreground">Community Ecological Health Summary</p>
+              <p className="text-xs text-muted-foreground leading-relaxed italic">
+                "{aiEnv.analysis}"
+              </p>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-background hover:bg-muted border-primary/20 flex items-center gap-1 text-xs shrink-0"
+              onClick={() => fetchAiAssessment(true)}
+              disabled={isAiLoading}
+            >
+              {isAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Analyze Ecology
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-border/40 bg-card/50">
+          <CardContent className="p-4 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-primary animate-pulse animate-duration-1000" />
+              Unlock real-time AI Ecological Risk and Outbreak Assessments for {locationLabel}.
+            </span>
+            <Button
+              size="sm"
+              className="bg-primary text-primary-foreground flex items-center gap-1.5"
+              onClick={() => fetchAiAssessment(true)}
+              disabled={isAiLoading}
+            >
+              {isAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Trigger AI Analysis
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Primary Conditions Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -697,7 +857,7 @@ export default function EnvironmentalMonitor() {
       </div>
 
       {/* Disaster Risks */}
-      {envState.disasters.length > 0 && (
+      {mergedDisasters.length > 0 && (
         <Card className="border-destructive/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2 text-foreground">
@@ -706,13 +866,18 @@ export default function EnvironmentalMonitor() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {envState.disasters.map((d, i) => (
+            {mergedDisasters.map((d, i) => (
               <div key={i} className={`flex items-start gap-3 p-3 rounded-lg border ${severityBg(d.severity)}`}>
                 <d.icon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${severityColor(d.severity)}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{d.type}</span>
                     <Badge variant="outline" className={`text-[10px] ${severityColor(d.severity)}`}>{d.severity}</Badge>
+                    {(d as any).isAiBacked && (
+                      <Badge className="bg-primary/10 text-primary border-primary/20 text-[8px] h-4 flex items-center gap-0.5">
+                        <Sparkles className="h-2 w-2" /> AI Backed
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
                 </div>
@@ -731,11 +896,16 @@ export default function EnvironmentalMonitor() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {envState.agriculturalImpacts.map((impact, i) => (
+          {mergedImpacts.map((impact, i) => (
             <div key={i} className={`p-3 rounded-lg border ${severityBg(impact.status)}`}>
               <div className="flex items-center gap-2 mb-1.5">
                 <impact.icon className={`h-4 w-4 ${severityColor(impact.status)}`} />
                 <span className="text-sm font-medium text-foreground">{impact.sector}</span>
+                {(impact as any).isAiBacked && (
+                  <Badge className="bg-primary/10 text-primary border-primary/20 text-[8px] h-4 flex items-center gap-0.5">
+                    <Sparkles className="h-2 w-2" /> AI Backed
+                  </Badge>
+                )}
                 <Badge variant="outline" className={`text-[10px] ml-auto ${severityColor(impact.status)}`}>
                   {impact.status}
                 </Badge>

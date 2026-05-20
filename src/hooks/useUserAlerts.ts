@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Alert } from "@/data/mock-data";
 import { WeatherDay } from "@/data/mock-data";
+import { getActiveProvider } from "@/lib/aiProviders/registry";
+import { AIAlertAdvisory } from "@/lib/aiProviders/index";
 
 interface UserAlertState {
   alert_id: string;
@@ -13,6 +15,7 @@ interface UserAlertState {
 export interface EnrichedAlert extends Alert {
   isRead: boolean;
   isDismissed: boolean;
+  isAiBacked?: boolean;
 }
 
 function dateKey() {
@@ -180,6 +183,50 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   const [loading, setLoading] = useState(true);
   const [smsSent, setSmsSent] = useState(false);
 
+  const [aiAdvisory, setAiAdvisory] = useState<AIAlertAdvisory[] | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const fetchAiAdvisory = useCallback(async (force = false) => {
+    if (!forecast || forecast.length === 0 || !location) return;
+    
+    const cacheKey = `agroclimate_ai_alerts_${location.replace(/[^a-zA-Z]/g, "").toLowerCase()}`;
+    if (!force) {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Date.now() - parsed.timestamp < 4 * 60 * 60 * 1000) {
+            setAiAdvisory(parsed.advisory);
+            return;
+          }
+        } catch { /* bad cache */ }
+      }
+    }
+
+    setIsAiLoading(true);
+    setAiError(null);
+    try {
+      const provider = getActiveProvider();
+      const data = await provider.generateAlertsAdvisory(location, forecast);
+      if (Array.isArray(data) && data.length > 0) {
+        setAiAdvisory(data);
+        sessionStorage.setItem(cacheKey, JSON.stringify({ advisory: data, timestamp: Date.now() }));
+      } else {
+        throw new Error("No data returned from AI provider");
+      }
+    } catch (err: any) {
+      console.warn("AI Alerts Advisory query failed, relying on rule-based engine:", err);
+      setAiError(err.message || "AI service temporarily unavailable");
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, [forecast, location]);
+
+  useEffect(() => {
+    fetchAiAdvisory();
+  }, [fetchAiAdvisory]);
+
   // Fetch user's alert states from DB
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -285,7 +332,26 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
     };
   }, [user]);
 
-  const allAlerts = [...dynamicAlerts, ...dbAlerts];
+  const aiAlerts = useMemo(() => {
+    if (!aiAdvisory) return [];
+    const list: Alert[] = [];
+    aiAdvisory.forEach((adv) => {
+      adv.proactiveAlerts.forEach((pa, idx) => {
+        list.push({
+          id: `ai-alert-${adv.category}-${idx}-${dateKey()}`,
+          type: pa.type,
+          title: pa.title,
+          message: pa.message,
+          time: "AI Real-time Advisory",
+          read: false,
+          isAiBacked: true,
+        } as any);
+      });
+    });
+    return list;
+  }, [aiAdvisory]);
+
+  const allAlerts = [...aiAlerts, ...dynamicAlerts, ...dbAlerts];
 
   const enrichedAlerts: EnrichedAlert[] = allAlerts.map((a) => {
     const state = getState(a.id);
@@ -293,6 +359,7 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
       ...a,
       isRead: state?.is_read ?? a.read,
       isDismissed: state?.is_dismissed ?? false,
+      isAiBacked: (a as any).isAiBacked,
     };
   });
 
@@ -339,5 +406,17 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
     });
   }, [user]);
 
-  return { alerts: visibleAlerts, unreadAlerts, loading, markRead, dismiss, markUnread, deleteAlert };
+  return {
+    alerts: visibleAlerts,
+    unreadAlerts,
+    loading: loading || isAiLoading,
+    isAiLoading,
+    aiAdvisory,
+    aiError,
+    refreshAiAdvisory: () => fetchAiAdvisory(true),
+    markRead,
+    dismiss,
+    markUnread,
+    deleteAlert
+  };
 }
