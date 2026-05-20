@@ -34,42 +34,37 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.openweathermap\.org\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "weather-api",
-              expiration: { maxEntries: 10, maxAgeSeconds: 1800 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "edge-functions",
-              expiration: { maxEntries: 20, maxAgeSeconds: 1800 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts",
-              expiration: { maxEntries: 10, maxAgeSeconds: 31536000 },
-            },
-          },
-        ],
-        navigateFallbackDenylist: [/^\/~oauth/],
+  skipWaiting: true,
+  clientsClaim: true,
+  maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+  globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+  runtimeCaching: [
+    {
+      urlPattern: /^https:\/\/api\.openweathermap\.org\/.*/i,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "weather-api",
+        expiration: { maxEntries: 10, maxAgeSeconds: 1800 },
       },
-    }),
-  ].filter(Boolean),
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
     },
-  },
+    {
+      urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "edge-functions",
+        expiration: { maxEntries: 20, maxAgeSeconds: 1800 },
+      },
+    },
+    {
+      urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+      handler: "CacheFirst",
+      options: {
+        cacheName: "google-fonts",
+        expiration: { maxEntries: 10, maxAgeSeconds: 31536000 },
+      },
+    },
+  ],
+  navigateFallbackDenylist: [/^\/~oauth/],
+ },
+},
 }));
