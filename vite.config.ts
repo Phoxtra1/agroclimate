@@ -12,59 +12,146 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+
   plugins: [
     react(),
+
     mode === "development" && componentTagger(),
+
     VitePWA({
       registerType: "autoUpdate",
+
       includeAssets: ["favicon.ico", "placeholder.svg"],
+
       manifest: {
         name: "AgroClimate - Smart Farming Weather",
         short_name: "AgroClimate",
-        description: "Localized weather forecasts, crop advisory, and aquaculture monitoring for farmers",
+        description:
+          "Localized weather forecasts, crop advisory, and aquaculture monitoring for farmers",
+
         theme_color: "#2d7a4a",
         background_color: "#f7f4ef",
+
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
+
         icons: [
-          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          {
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
         ],
       },
+
       workbox: {
-  skipWaiting: true,
-  clientsClaim: true,
-  maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-  globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-  runtimeCaching: [
-    {
-      urlPattern: /^https:\/\/api\.openweathermap\.org\/.*/i,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "weather-api",
-        expiration: { maxEntries: 10, maxAgeSeconds: 1800 },
+        skipWaiting: true,
+        clientsClaim: true,
+
+        // FIX: Increase default 2MB precache limit
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+
+        globPatterns: [
+          "**/*.{js,css,html,ico,png,svg,woff2}",
+        ],
+
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.openweathermap\.org\/.*/i,
+            handler: "NetworkFirst",
+
+            options: {
+              cacheName: "weather-api",
+
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 1800,
+              },
+
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+
+          {
+            urlPattern:
+              /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
+
+            handler: "NetworkFirst",
+
+            options: {
+              cacheName: "edge-functions",
+
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 1800,
+              },
+
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+
+            handler: "CacheFirst",
+
+            options: {
+              cacheName: "google-fonts",
+
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 31536000,
+              },
+
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+
+        navigateFallbackDenylist: [/^\/~oauth/],
+      },
+
+      devOptions: {
+        enabled: mode === "development",
+      },
+    }),
+  ].filter(Boolean),
+
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+
+  build: {
+    sourcemap: false,
+
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+        },
       },
     },
-    {
-      urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "edge-functions",
-        expiration: { maxEntries: 20, maxAgeSeconds: 1800 },
-      },
-    },
-    {
-      urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-      handler: "CacheFirst",
-      options: {
-        cacheName: "google-fonts",
-        expiration: { maxEntries: 10, maxAgeSeconds: 31536000 },
-      },
-    },
-  ],
-  navigateFallbackDenylist: [/^\/~oauth/],
- },
-},
+
+    chunkSizeWarningLimit: 1500,
+  },
 }));
