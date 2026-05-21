@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import {
   Anchor, AlertTriangle, MapPin, Navigation, LifeBuoy, Layers, Loader2, Cloud,
   Route as RouteIcon, Search, Mic, MicOff, Volume2, VolumeX, Crosshair, Wind, Waves,
-  Save, Ship, Phone, MessageCircle, Send, Car,
+  Save, Ship, Phone, MessageCircle, Send, Car, Bike, Train, Footprints, Play, Pause, Square
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -237,6 +237,19 @@ export default function AGNav() {
   const [listening, setListening] = useState(false);
   const [navMode, setNavMode] = useState<"water" | "road">("water");
 
+  // Road transport search & autocomplete states
+  const [startLocation, setStartLocation] = useState<Destination | null>(null);
+  const [startLocationText, setStartLocationText] = useState("");
+  const [startSuggestions, setStartSuggestions] = useState<Destination[]>([]);
+  const [destSuggestions, setDestSuggestions] = useState<Destination[]>([]);
+  const [showStartSuggestions, setShowStartSuggestions] = useState(false);
+  const [showDestSuggestions, setShowDestSuggestions] = useState(false);
+  const [travelMode, setTravelMode] = useState<"car" | "motorcycle" | "train" | "walking">("car");
+
+  // Navigation simulation states
+  const [simulating, setSimulating] = useState(false);
+  const [simStepIdx, setSimStepIdx] = useState(0);
+
   // Load
   const [passengers, setPassengers] = useState<number>(1);
   const [cargoKg, setCargoKg] = useState<number>(0);
@@ -297,133 +310,199 @@ export default function AGNav() {
     }
   }, [position.lat, position.lon]);
 
-  // LIVE TRACKING & TURN-BY-TURN SEA NAVIGATOR
+  // Core Navigator Guidance Engine (triggered whenever currentPos changes, supporting live GPS and Simulator!)
+  useEffect(() => {
+    const { lat, lon } = currentPos;
+    if (!lat || !lon) return;
+
+    if (showLiveTrack) {
+      setBoatTrail((t) => [...t.slice(-200), [lat, lon]]);
+    }
+
+    // Turn-by-turn Voice Navigator (configurable for sea/road modes)
+    if (routeResult && routeResult.route && routeResult.route.length > 2) {
+      const route = routeResult.route;
+      const distToDest = haversineDist(lat, lon, route[route.length - 1][0], route[route.length - 1][1]);
+      const isRoad = navMode === "road";
+      
+      if (distToDest < 30) {
+        if (!lastArrivalAnnouncedRef.current) {
+          lastArrivalAnnouncedRef.current = true;
+          const arrivalMsg = isRoad 
+            ? "You have arrived at your destination." 
+            : "Destination reached. Heave to and drop anchor.";
+          speak(arrivalMsg, voiceOn);
+          toast.success("Destination reached");
+          if (simulating) {
+            setSimulating(false);
+          }
+        }
+      } else {
+        if (distToDest > 50) lastArrivalAnnouncedRef.current = false;
+
+        let closestIdx = -1;
+        let minDistance = Infinity;
+        for (let i = 0; i < route.length; i++) {
+          const dist = haversineDist(lat, lon, route[i][0], route[i][1]);
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestIdx = i;
+          }
+        }
+
+        // Auto-scroll simulation marker index to match closest coordinate during live tracking
+        if (simulating && closestIdx !== -1) {
+          setSimStepIdx(closestIdx);
+        }
+
+        if (minDistance > 150) {
+          const nowTime = Date.now();
+          if (nowTime - lastOffCourseAnnouncedRef.current > 45000) {
+            lastOffCourseAnnouncedRef.current = nowTime;
+            const offRouteMsg = isRoad
+              ? "Warning. You are off route. Recalculating directions."
+              : "Warning. You are off course. Realign heading to route.";
+            speak(offRouteMsg, voiceOn);
+            toast.warning("Off course warning");
+          }
+        } else {
+          let scanIdx = closestIdx + 1;
+          let accumulatedDist = 0;
+
+          while (scanIdx < route.length - 3 && accumulatedDist < 150) {
+            const stepDist = haversineDist(route[scanIdx - 1][0], route[scanIdx - 1][1], route[scanIdx][0], route[scanIdx][1]);
+            accumulatedDist += stepDist;
+
+            const b1 = getBearing(route[scanIdx - 1][0], route[scanIdx - 1][1], route[scanIdx][0], route[scanIdx][1]);
+            const b2 = getBearing(route[scanIdx][0], route[scanIdx][1], route[scanIdx + 3][0], route[scanIdx + 3][1]);
+            const diff = getBearingDifference(b1, b2);
+
+            if (Math.abs(diff) > 25) {
+              if (lastTurnAnnouncedIdxRef.current !== scanIdx) {
+                lastTurnAnnouncedIdxRef.current = scanIdx;
+                const roundedDist = Math.round(accumulatedDist);
+
+                if (isRoad) {
+                  const direction = diff > 0 ? "right" : "left";
+                  if (roundedDist < 40) {
+                    speak(`Turn ${direction} now.`, voiceOn);
+                    toast.info(`Turn ${direction} now`);
+                  } else {
+                    speak(`In ${roundedDist} meters, turn ${direction}.`, voiceOn);
+                    toast.info(`In ${roundedDist}m, turn ${direction}`);
+                  }
+                } else {
+                  const direction = diff > 0 ? "starboard" : "port";
+                  if (roundedDist < 40) {
+                    speak(`Steer ${direction} now.`, voiceOn);
+                    toast.info(`Steer ${direction} now`);
+                  } else {
+                    speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
+                    toast.info(`In ${roundedDist}m, steer ${direction}`);
+                  }
+                }
+              }
+              break;
+            }
+            scanIdx++;
+          }
+        }
+      }
+    }
+
+    const now = Date.now();
+    if (now - lastPushRef.current > 4000) {
+      lastPushRef.current = now;
+      const level = scoreRisk({ lat, lon }, { rainProb: today?.rainProb, load: { passengers, cargo_kg: cargoKg } }).level;
+      pushVesselLocation({
+        vessel_id: vesselId, user_id: user?.id, lat, lon,
+        risk_level: level,
+      }).catch(() => {});
+
+      for (let i = 0; i < FLOOD_ZONES.length; i++) {
+        if (pointInPolygon([lat, lon], FLOOD_ZONES[i].coords)) {
+          if (!lastWarnRef.current.zone || now - lastWarnRef.current.zone > 30000) {
+            lastWarnRef.current.zone = now;
+            toast.warning(`Entering danger zone: ${FLOOD_ZONES[i].name}`);
+            speak(`Warning. Entering ${FLOOD_ZONES[i].name}`, voiceOn); beep();
+          }
+        }
+      }
+      if ((today?.rainProb || 0) >= 80 && (!lastWarnRef.current.weather || now - lastWarnRef.current.weather > 60000)) {
+        lastWarnRef.current.weather = now;
+        toast.warning(`Weather spike: rain ${today?.rainProb}%`);
+        speak("Weather spike detected. Consider sheltering.", voiceOn); beep();
+      }
+    }
+  }, [currentPos, routeResult, navMode, voiceOn, showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, simulating]);
+
+  // Live GPS Geolocation Watcher
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
-        setCurrentPos({ lat, lon });
-
-        if (showLiveTrack) {
-          setBoatTrail((t) => [...t.slice(-200), [lat, lon]]);
-        }
-
-        // Turn-by-turn Voice Navigator (configurable for sea/road modes)
-        if (routeResult && routeResult.route && routeResult.route.length > 2) {
-          const route = routeResult.route;
-          const distToDest = haversineDist(lat, lon, route[route.length - 1][0], route[route.length - 1][1]);
-          const isRoad = navMode === "road";
-          
-          if (distToDest < 30) {
-            if (!lastArrivalAnnouncedRef.current) {
-              lastArrivalAnnouncedRef.current = true;
-              const arrivalMsg = isRoad 
-                ? "You have arrived at your destination." 
-                : "Destination reached. Heave to and drop anchor.";
-              speak(arrivalMsg, voiceOn);
-              toast.success("Destination reached");
-            }
-          } else {
-            if (distToDest > 50) lastArrivalAnnouncedRef.current = false;
-
-            let closestIdx = -1;
-            let minDistance = Infinity;
-            for (let i = 0; i < route.length; i++) {
-              const dist = haversineDist(lat, lon, route[i][0], route[i][1]);
-              if (dist < minDistance) {
-                minDistance = dist;
-                closestIdx = i;
-              }
-            }
-
-            if (minDistance > 150) {
-              const nowTime = Date.now();
-              if (nowTime - lastOffCourseAnnouncedRef.current > 45000) {
-                lastOffCourseAnnouncedRef.current = nowTime;
-                const offRouteMsg = isRoad
-                  ? "Warning. You are off route. Recalculating directions."
-                  : "Warning. You are off course. Realign heading to route.";
-                speak(offRouteMsg, voiceOn);
-                toast.warning("Off course warning");
-              }
-            } else {
-              let scanIdx = closestIdx + 1;
-              let accumulatedDist = 0;
-
-              while (scanIdx < route.length - 3 && accumulatedDist < 150) {
-                const stepDist = haversineDist(route[scanIdx - 1][0], route[scanIdx - 1][1], route[scanIdx][0], route[scanIdx][1]);
-                accumulatedDist += stepDist;
-
-                const b1 = getBearing(route[scanIdx - 1][0], route[scanIdx - 1][1], route[scanIdx][0], route[scanIdx][1]);
-                const b2 = getBearing(route[scanIdx][0], route[scanIdx][1], route[scanIdx + 3][0], route[scanIdx + 3][1]);
-                const diff = getBearingDifference(b1, b2);
-
-                if (Math.abs(diff) > 25) {
-                  if (lastTurnAnnouncedIdxRef.current !== scanIdx) {
-                    lastTurnAnnouncedIdxRef.current = scanIdx;
-                    const roundedDist = Math.round(accumulatedDist);
-
-                    if (isRoad) {
-                      const direction = diff > 0 ? "right" : "left";
-                      if (roundedDist < 40) {
-                        speak(`Turn ${direction} now.`, voiceOn);
-                        toast.info(`Turn ${direction} now`);
-                      } else {
-                        speak(`In ${roundedDist} meters, turn ${direction}.`, voiceOn);
-                        toast.info(`In ${roundedDist}m, turn ${direction}`);
-                      }
-                    } else {
-                      const direction = diff > 0 ? "starboard" : "port";
-                      if (roundedDist < 40) {
-                        speak(`Steer ${direction} now.`, voiceOn);
-                        toast.info(`Steer ${direction} now`);
-                      } else {
-                        speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
-                        toast.info(`In ${roundedDist}m, steer ${direction}`);
-                      }
-                    }
-                  }
-                  break;
-                }
-                scanIdx++;
-              }
-            }
-          }
-        }
-
-        const now = Date.now();
-        if (now - lastPushRef.current > 4000) {
-          lastPushRef.current = now;
-          const level = scoreRisk({ lat, lon }, { rainProb: today?.rainProb, load: { passengers, cargo_kg: cargoKg } }).level;
-          await pushVesselLocation({
-            vessel_id: vesselId, user_id: user?.id, lat, lon,
-            speed_kn: pos.coords.speed ? pos.coords.speed * 1.94384 : undefined,
-            heading: pos.coords.heading ?? undefined, risk_level: level,
-          }).catch(() => {});
-
-          for (let i = 0; i < FLOOD_ZONES.length; i++) {
-            if (pointInPolygon([lat, lon], FLOOD_ZONES[i].coords)) {
-              if (!lastWarnRef.current.zone || now - lastWarnRef.current.zone > 30000) {
-                lastWarnRef.current.zone = now;
-                toast.warning(`Entering danger zone: ${FLOOD_ZONES[i].name}`);
-                speak(`Warning. Entering ${FLOOD_ZONES[i].name}`, voiceOn); beep();
-              }
-            }
-          }
-          if ((today?.rainProb || 0) >= 80 && (!lastWarnRef.current.weather || now - lastWarnRef.current.weather > 60000)) {
-            lastWarnRef.current.weather = now;
-            toast.warning(`Weather spike: rain ${today?.rainProb}%`);
-            speak("Weather spike detected. Consider sheltering.", voiceOn); beep();
-          }
+        // Only update currentPos if NOT currently simulating
+        if (!simulating) {
+          setCurrentPos({ lat, lon });
         }
       },
       () => {},
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
     );
     return () => { navigator.geolocation.clearWatch(watchId); };
-  }, [showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, voiceOn, routeResult, navMode]);
+  }, [simulating]);
+
+  // GPS Navigation Simulator Effect
+  useEffect(() => {
+    if (!simulating || !routeResult || !routeResult.route || routeResult.route.length === 0) return;
+
+    // Define simulation speeds and intervals based on travelMode
+    let intervalMs = 1000;
+    let stepSize = 1;
+
+    switch (travelMode) {
+      case "walking":
+        intervalMs = 1500;
+        stepSize = 1; // 1 coordinate step per interval (slow walking)
+        break;
+      case "motorcycle":
+        intervalMs = 1000;
+        stepSize = 2; // Fast motorcycle speed
+        break;
+      case "car":
+        intervalMs = 800;
+        stepSize = 3; // Standard car driving speed
+        break;
+      case "train":
+        intervalMs = 600;
+        stepSize = 4; // High speed rail train
+        break;
+    }
+
+    const route = routeResult.route;
+    const intervalId = setInterval(() => {
+      setSimStepIdx((currIdx) => {
+        const nextIdx = currIdx + stepSize;
+        if (nextIdx >= route.length - 1) {
+          clearInterval(intervalId);
+          setSimulating(false);
+          const arrivalMsg = navMode === "road" 
+            ? "You have arrived at your destination." 
+            : "Destination reached. Heave to and drop anchor.";
+          speak(arrivalMsg, voiceOn);
+          toast.success("Destination reached");
+          setCurrentPos({ lat: route[route.length - 1][0], lon: route[route.length - 1][1] });
+          return route.length - 1;
+        }
+        setCurrentPos({ lat: route[nextIdx][0], lon: route[nextIdx][1] });
+        return nextIdx;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(intervalId);
+  }, [simulating, routeResult, travelMode, voiceOn, navMode]);
 
   useEffect(() => {
     if (passengers > 20 || cargoKg > 1000) {
@@ -446,6 +525,24 @@ export default function AGNav() {
     () => buildHeatPoints(forecast || [], currentPos.lat || 7.95, currentPos.lon || -1.03),
     [forecast, currentPos.lat, currentPos.lon],
   );
+
+  // ----- OSM Address Auto-suggestions -----
+  const fetchSuggestions = async (query: string): Promise<Destination[]> => {
+    if (!query || query.trim().length < 3) return [];
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+      const json = await res.json();
+      if (!Array.isArray(json)) return [];
+      return json.map((item: any) => ({
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+        label: item.display_name,
+      }));
+    } catch {
+      return [];
+    }
+  };
 
   // ----- Destination geocode (place names) -----
   const geocode = async (text: string): Promise<Destination | null> => {
@@ -488,6 +585,30 @@ export default function AGNav() {
     setSearchText(`${currentPos.lat.toFixed(5)}, ${currentPos.lon.toFixed(5)}`);
   };
 
+  const handleStartTextChange = async (val: string) => {
+    setStartLocationText(val);
+    if (val.trim().length >= 3) {
+      const sug = await fetchSuggestions(val);
+      setStartSuggestions(sug);
+      setShowStartSuggestions(true);
+    } else {
+      setStartSuggestions([]);
+      setShowStartSuggestions(false);
+    }
+  };
+
+  const handleDestTextChange = async (val: string) => {
+    setSearchText(val);
+    if (val.trim().length >= 3) {
+      const sug = await fetchSuggestions(val);
+      setDestSuggestions(sug);
+      setShowDestSuggestions(true);
+    } else {
+      setDestSuggestions([]);
+      setShowDestSuggestions(false);
+    }
+  };
+
   // ----- Farm GPS input handlers (replaces dropdown) -----
   const applyFarmGpsText = () => {
     const c = parseCoords(farmGpsText);
@@ -524,11 +645,17 @@ export default function AGNav() {
     let target: { lat: number; lon: number; label: string } | null = destination;
     if (!target && farmTarget) target = { ...farmTarget, label: `Farm ${farmTarget.lat.toFixed(4)}, ${farmTarget.lon.toFixed(4)}` };
     if (!target) { toast.error("Enter a farm GPS, pick on map, or search a destination"); return; }
-    if (!currentPos.lat || !currentPos.lon) { toast.error("Current location unavailable"); return; }
+    
+    // Choose start location (fallback to current position if not defined or in water mode)
+    const startPoint = (navMode === "road" && startLocation)
+      ? { lat: startLocation.lat, lon: startLocation.lon }
+      : { lat: currentPos.lat, lon: currentPos.lon };
+
+    if (!startPoint.lat || !startPoint.lon) { toast.error("Start location coordinates unavailable"); return; }
     setRouteBusy(true);
     try {
       const result = await engineComputeRoute({
-        start: { lat: currentPos.lat, lon: currentPos.lon },
+        start: startPoint,
         end: { lat: target.lat, lon: target.lon },
         vessel_id: vesselId, user_id: user?.id,
         load: { passengers, cargo_kg: cargoKg },
@@ -538,6 +665,8 @@ export default function AGNav() {
       lastTurnAnnouncedIdxRef.current = -1;
       lastArrivalAnnouncedRef.current = false;
       lastOffCourseAnnouncedRef.current = 0;
+      setSimStepIdx(0);
+      setSimulating(false);
       const km = (result.distance_m / 1000).toFixed(1);
       const min = (result.duration_s / 60).toFixed(0);
       toast.success(`Route ${km} km · ${min} min · risk ${result.risk_level}`);
@@ -633,7 +762,9 @@ export default function AGNav() {
     finally { setRegBusy(false); }
   };
 
-  const center: [number, number] = destination
+  const center: [number, number] = simulating
+    ? [currentPos.lat || 7.95, currentPos.lon || -1.03]
+    : destination
     ? [destination.lat, destination.lon]
     : farmTarget ? [farmTarget.lat, farmTarget.lon]
     : [currentPos.lat || 7.95, currentPos.lon || -1.03];
@@ -642,11 +773,19 @@ export default function AGNav() {
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Anchor className="h-6 w-6 text-primary" /> AGNav — Decentralized Water Navigator</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            {navMode === "road" ? (
+              <><Navigation className="h-6 w-6 text-emerald-500 animate-pulse" /> AGNav — Real-Time Road Navigator</>
+            ) : (
+              <><Anchor className="h-6 w-6 text-primary" /> AGNav — Decentralized Water Navigator</>
+            )}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Vessel <span className="font-mono">{vesselId}</span>
-            {registered ? <Badge variant="outline" className="ml-2 text-xs">Registered</Badge> : <Badge variant="destructive" className="ml-2 text-xs">Unregistered</Badge>}
-            {" "}· peer-to-peer SOS · live routing
+            {navMode === "road" ? (
+              <>GPS tracking · address autocomplete · real-time travel simulator</>
+            ) : (
+              <>Vessel <span className="font-mono">{vesselId}</span> {registered ? <Badge variant="outline" className="ml-2 text-xs">Registered</Badge> : <Badge variant="destructive" className="ml-2 text-xs">Unregistered</Badge>} · peer-to-peer SOS · live routing</>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -744,19 +883,258 @@ export default function AGNav() {
       </Dialog>
 
       {/* Destination search */}
-      <Card><CardContent className="p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input value={searchText} onChange={(e) => setSearchText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-              placeholder="Where to? Place, address, or GPS" className="pl-9 h-11" />
+      <Card className="relative"><CardContent className="p-3 space-y-3">
+        {navMode === "road" ? (
+          <div className="space-y-3">
+            {/* START LOCATION INPUT */}
+            <div className="relative space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Start Location</Label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <MapPin className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
+                  <Input 
+                    value={startLocationText} 
+                    onChange={(e) => handleStartTextChange(e.target.value)}
+                    placeholder="Enter starting point (defaults to GPS location)" 
+                    className="pl-9 h-10 font-medium" 
+                  />
+                  {startLocationText && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => { setStartLocation(null); setStartLocationText(""); }} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
+                <Button variant="ghost" onClick={() => {
+                  if (currentPos.lat) {
+                    setStartLocation({ lat: currentPos.lat, lon: currentPos.lon, label: "Current Location" });
+                    setStartLocationText("Current Location");
+                    toast.success("Start location set to current GPS coordinates");
+                  }
+                }} className="h-10 px-2" title="Use current position">
+                  <Crosshair className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Start Suggestions Dropdown */}
+              {showStartSuggestions && startSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-popover text-popover-foreground border rounded-lg shadow-lg z-[100] max-h-48 overflow-y-auto divide-y divide-border">
+                  {startSuggestions.map((item, idx) => (
+                    <div 
+                      key={`start-sug-${idx}`}
+                      onClick={() => {
+                        setStartLocation(item);
+                        setStartLocationText(item.label);
+                        setShowStartSuggestions(false);
+                        toast.success("Start location set");
+                      }}
+                      className="p-2 text-xs hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors font-medium text-left truncate"
+                    >
+                      {item.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* DESTINATION LOCATION INPUT */}
+            <div className="relative space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Destination Location</Label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <Input 
+                    value={searchText} 
+                    onChange={(e) => handleDestTextChange(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                    placeholder="Where to? (e.g. Accra Mall, Kumasi)" 
+                    className="pl-9 h-10 font-medium" 
+                  />
+                  {searchText && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => { setDestination(null); setSearchText(""); setRouteResult(null); }} 
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    >
+                      ×
+                    </Button>
+                  )}
+                </div>
+                <Button variant="outline" onClick={toggleVoiceInput} className="h-10 px-3">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
+              </div>
+
+              {/* Dest Suggestions Dropdown */}
+              {showDestSuggestions && destSuggestions.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-popover text-popover-foreground border rounded-lg shadow-lg z-[100] max-h-48 overflow-y-auto divide-y divide-border">
+                  {destSuggestions.map((item, idx) => (
+                    <div 
+                      key={`dest-sug-${idx}`}
+                      onClick={() => {
+                        setDestination(item);
+                        setSearchText(item.label);
+                        setShowDestSuggestions(false);
+                        toast.success("Destination set");
+                        setRouteResult(null);
+                      }}
+                      className="p-2 text-xs hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors font-medium text-left truncate"
+                    >
+                      {item.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* TRANSPORT MODE SELECTOR */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Transport Mode</Label>
+              <div className="grid grid-cols-4 gap-1.5 bg-muted p-1 rounded-lg border border-border/60">
+                <Button
+                  variant={travelMode === "car" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setTravelMode("car");
+                    speak("Travel mode set to vehicle.", voiceOn);
+                    toast.info("Vehicle navigation mode (Speed: Car)");
+                  }}
+                  className="h-8 text-xs flex items-center gap-1 font-semibold"
+                >
+                  <Car className="h-3.5 w-3.5" /> Vehicle
+                </Button>
+                <Button
+                  variant={travelMode === "motorcycle" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setTravelMode("motorcycle");
+                    speak("Travel mode set to motor.", voiceOn);
+                    toast.info("Motorcycle navigation mode (Speed: Motor)");
+                  }}
+                  className="h-8 text-xs flex items-center gap-1 font-semibold"
+                >
+                  <Bike className="h-3.5 w-3.5" /> Motor
+                </Button>
+                <Button
+                  variant={travelMode === "train" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setTravelMode("train");
+                    speak("Travel mode set to train.", voiceOn);
+                    toast.info("Train transit mode (Speed: High-speed)");
+                  }}
+                  className="h-8 text-xs flex items-center gap-1 font-semibold"
+                >
+                  <Train className="h-3.5 w-3.5" /> Train
+                </Button>
+                <Button
+                  variant={travelMode === "walking" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => {
+                    setTravelMode("walking");
+                    speak("Travel mode set to walking.", voiceOn);
+                    toast.info("Pedestrian walking mode (Speed: Walking)");
+                  }}
+                  className="h-8 text-xs flex items-center gap-1 font-semibold"
+                >
+                  <Footprints className="h-3.5 w-3.5" /> Walking
+                </Button>
+              </div>
+            </div>
+
+            {/* SIMULATION GPS PLAYER CONTROLS (Render only when route exists) */}
+            {routeResult && (
+              <div className="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-lg space-y-2 mt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                    <Navigation className="h-3.5 w-3.5 animate-pulse" /> Live Simulator Guidance
+                  </span>
+                  <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-emerald-800 uppercase font-bold">
+                    {travelMode} Mode
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    {simulating ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSimulating(false);
+                          speak("Navigation simulation paused.", voiceOn);
+                        }}
+                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
+                      >
+                        <Pause className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSimulating(true);
+                          speak(`Starting real-time road navigator simulation for ${travelMode}.`, voiceOn);
+                        }}
+                        className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 px-3"
+                      >
+                        <Play className="h-4 w-4 fill-current" /> Start Navigation
+                      </Button>
+                    )}
+                    {(simulating || simStepIdx > 0) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSimulating(false);
+                          setSimStepIdx(0);
+                          if (routeResult.route && routeResult.route.length > 0) {
+                            setCurrentPos({ lat: routeResult.route[0][0], lon: routeResult.route[0][1] });
+                          }
+                          speak("Guidance reset to starting point.", voiceOn);
+                          toast.info("Navigator reset to start position");
+                        }}
+                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
+                      >
+                        <Square className="h-3.5 w-3.5 fill-current" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-1">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Progress</span>
+                      <span>{routeResult.route ? Math.round((simStepIdx / (routeResult.route.length - 1)) * 100) : 0}%</span>
+                    </div>
+                    <div className="w-full bg-emerald-500/20 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-emerald-600 h-full transition-all duration-300"
+                        style={{ width: `${routeResult.route ? (simStepIdx / (routeResult.route.length - 1)) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-          <Button onClick={() => handleSearch()} disabled={searchBusy} className="h-11">{searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}</Button>
-          <Button variant="outline" onClick={toggleVoiceInput} className="h-11">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
-          <Button variant="outline" onClick={() => setVoiceOn((v) => !v)} className="h-11">{voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
-          <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11"><Crosshair className="h-4 w-4" /></Button>
-        </div>
+        ) : (
+          /* WATER TRANSPORT SEARCH (MARINE) */
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input value={searchText} onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                placeholder="Where to? Place, address, or GPS" className="pl-9 h-11" />
+            </div>
+            <Button onClick={() => handleSearch()} disabled={searchBusy} className="h-11">{searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}</Button>
+            <Button variant="outline" onClick={toggleVoiceInput} className="h-11">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
+            <Button variant="outline" onClick={() => setVoiceOn((v) => !v)} className="h-11">{voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
+            <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11"><Crosshair className="h-4 w-4" /></Button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between border-t border-border/50 pt-2 text-xs">
           <span className="text-muted-foreground font-medium flex items-center gap-1">
             <Navigation className="h-3 w-3" /> Navigation Profile
@@ -796,7 +1174,7 @@ export default function AGNav() {
             <Button size="sm" className="ml-auto" onClick={computeRoute} disabled={routeBusy}>
               {routeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Navigation className="h-3.5 w-3.5 mr-1" />Navigate</>}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setDestination(null); setRouteResult(null); }}>Clear</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setDestination(null); setRouteResult(null); setSimStepIdx(0); setSimulating(false); }}>Clear</Button>
           </div>
         )}
       </CardContent></Card>
@@ -885,32 +1263,32 @@ export default function AGNav() {
             <FlyTo lat={center[0]} lon={center[1]} zoom={destination || farmTarget ? 11 : 7} />
             {pickOnMap && <MapClickPicker onPick={onMapPick} />}
             <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="Streets"><TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
+              <LayersControl.BaseLayer checked={navMode === "road"} name="Streets"><TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
               <LayersControl.BaseLayer name="Satellite"><TileLayer attribution="Tiles © Esri" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="AGNav (terrain)"><TileLayer attribution="© OpenTopoMap" url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
+              <LayersControl.BaseLayer checked={navMode === "water"} name="AGNav (terrain)"><TileLayer attribution="© OpenTopoMap" url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
             </LayersControl>
 
-            <Polygon positions={VOLTA_BASIN} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.05 }} />
+            {navMode === "water" && <Polygon positions={VOLTA_BASIN} pathOptions={{ color: "#2563eb", weight: 1, fillOpacity: 0.05 }} />}
 
-            {showRisk && FLOOD_ZONES.map((z) => (
+            {navMode === "water" && showRisk && FLOOD_ZONES.map((z) => (
               <Polygon key={z.name} positions={z.coords} pathOptions={{ color: "#dc2626", fillColor: "#dc2626", fillOpacity: 0.15 }}>
                 <Popup>{z.name} — flood-prone</Popup>
               </Polygon>
             ))}
 
-            {showHeat && heatLayers[heatDay]?.map((p, i) => (
+            {navMode === "water" && showHeat && heatLayers[heatDay]?.map((p, i) => (
               <Circle key={`h-${heatDay}-${i}`} center={[p.lat, p.lon]} radius={8000 + p.intensity * 14000}
                 pathOptions={{ color: heatColor(p.intensity), fillColor: heatColor(p.intensity), fillOpacity: 0.18 + p.intensity * 0.25, weight: 0 }} />
             ))}
 
-            {showWind && today && (
+            {navMode === "water" && showWind && today && (
               <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={Math.max(6, ((today as any).windSpeed || 4))}
                 pathOptions={{ color: "#0891b2", fillColor: "#0891b2", fillOpacity: 0.4 }}>
                 <Popup>Wind {(today as any).windSpeed || 0} m/s {(today as any).windDir != null ? `· ${(today as any).windDir}°` : ""}</Popup>
               </CircleMarker>
             )}
 
-            {showCurrent && RIVER_CURRENTS.map((c, i) => {
+            {navMode === "water" && showCurrent && RIVER_CURRENTS.map((c, i) => {
               const len = 0.25 * c.mag;
               const rad = (c.dir * Math.PI) / 180;
               const tip: [number, number] = [c.lat + len * Math.cos(rad), c.lon + len * Math.sin(rad)];
