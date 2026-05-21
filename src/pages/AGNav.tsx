@@ -357,13 +357,21 @@ export default function AGNav() {
 
         if (minDistance > 150) {
           const nowTime = Date.now();
-          if (nowTime - lastOffCourseAnnouncedRef.current > 45000) {
+          if (nowTime - lastOffCourseAnnouncedRef.current > 25000) {
             lastOffCourseAnnouncedRef.current = nowTime;
+            let destinationName = destination?.label || "your target destination";
+            if (destinationName.length > 25) {
+              destinationName = destinationName.slice(0, 22) + "...";
+            }
+
             const offRouteMsg = isRoad
-              ? "Warning. You are off route. Recalculating directions."
-              : "Warning. You are off course. Realign heading to route.";
+              ? `Warning. You have shifted from the planned road route. Continuing on this heading will bypass ${destinationName} and lead towards local rural coordinates. Please realign or recalculate to get back on track.`
+              : `Warning. You are drifting off course from the river channel. Continuing on this bearing leads towards shallow sandbars and agricultural danger zones in the Volta Basin. Realign your vessel's heading immediately to remain safe.`;
+            
             speak(offRouteMsg, voiceOn);
-            toast.warning("Off course warning");
+            toast.warning("Off-course drift detected", { 
+              description: isRoad ? "Headed towards rural coordinates" : "Headed towards Volta Basin danger zones" 
+            });
           }
         } else {
           let scanIdx = closestIdx + 1;
@@ -1048,79 +1056,6 @@ export default function AGNav() {
               </div>
             </div>
 
-            {/* SIMULATION GPS PLAYER CONTROLS (Render only when route exists) */}
-            {routeResult && (
-              <div className="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-lg space-y-2 mt-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-emerald-700 flex items-center gap-1">
-                    <Navigation className="h-3.5 w-3.5 animate-pulse" /> Live Simulator Guidance
-                  </span>
-                  <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-emerald-800 uppercase font-bold">
-                    {travelMode} Mode
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1.5">
-                    {simulating ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSimulating(false);
-                          speak("Navigation simulation paused.", voiceOn);
-                        }}
-                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
-                      >
-                        <Pause className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSimulating(true);
-                          speak(`Starting real-time road navigator simulation for ${travelMode}.`, voiceOn);
-                        }}
-                        className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 px-3"
-                      >
-                        <Play className="h-4 w-4 fill-current" /> Start Navigation
-                      </Button>
-                    )}
-                    {(simulating || simStepIdx > 0) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSimulating(false);
-                          setSimStepIdx(0);
-                          if (routeResult.route && routeResult.route.length > 0) {
-                            setCurrentPos({ lat: routeResult.route[0][0], lon: routeResult.route[0][1] });
-                          }
-                          speak("Guidance reset to starting point.", voiceOn);
-                          toast.info("Navigator reset to start position");
-                        }}
-                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
-                      >
-                        <Square className="h-3.5 w-3.5 fill-current" />
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="flex-1 space-y-1">
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{routeResult.route ? Math.round((simStepIdx / (routeResult.route.length - 1)) * 100) : 0}%</span>
-                    </div>
-                    <div className="w-full bg-emerald-500/20 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-emerald-600 h-full transition-all duration-300"
-                        style={{ width: `${routeResult.route ? (simStepIdx / (routeResult.route.length - 1)) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           /* WATER TRANSPORT SEARCH (MARINE) */
@@ -1170,14 +1105,90 @@ export default function AGNav() {
           </div>
         </div>
         {destination && (
-          <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-            <MapPin className="h-3.5 w-3.5 text-primary" />
-            <span className="font-medium text-foreground">{destination.label}</span>
-            <span>· {destination.lat.toFixed(5)}, {destination.lon.toFixed(5)}</span>
-            <Button size="sm" className="ml-auto" onClick={computeRoute} disabled={routeBusy}>
-              {routeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Navigation className="h-3.5 w-3.5 mr-1" />Navigate</>}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setDestination(null); setRouteResult(null); setSimStepIdx(0); setSimulating(false); }}>Clear</Button>
+          <div className="space-y-3 pt-2 border-t border-border/40">
+            <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+              <MapPin className="h-3.5 w-3.5 text-primary" />
+              <span className="font-medium text-foreground truncate max-w-[200px]">{destination.label}</span>
+              <span>· {destination.lat.toFixed(4)}, {destination.lon.toFixed(4)}</span>
+              <Button size="sm" className="ml-auto" onClick={computeRoute} disabled={routeBusy}>
+                {routeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Navigation className="h-3.5 w-3.5 mr-1" />Navigate</>}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setDestination(null); setRouteResult(null); setSimStepIdx(0); setSimulating(false); }}>Clear</Button>
+            </div>
+
+            {/* SIMULATION GPS PLAYER CONTROLS (Available for both marine and road route navigation) */}
+            {routeResult && (
+              <div className="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-lg space-y-2 mt-2 text-left">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                    <Navigation className="h-3.5 w-3.5 animate-pulse" /> Live Simulator Guidance
+                  </span>
+                  <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-emerald-800 uppercase font-bold">
+                    {navMode === "road" ? `${travelMode} speed` : "water route"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    {simulating ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSimulating(false);
+                          speak("Navigation simulation paused.", voiceOn);
+                        }}
+                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
+                      >
+                        <Pause className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSimulating(true);
+                          speak(`Starting real-time navigator simulation.`, voiceOn);
+                        }}
+                        className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 px-3"
+                      >
+                        <Play className="h-4 w-4 fill-current" /> Start Navigation
+                      </Button>
+                    )}
+                    {(simulating || simStepIdx > 0) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSimulating(false);
+                          setSimStepIdx(0);
+                          if (routeResult.route && routeResult.route.length > 0) {
+                            setCurrentPos({ lat: routeResult.route[0][0], lon: routeResult.route[0][1] });
+                          }
+                          speak("Guidance reset to starting point.", voiceOn);
+                          toast.info("Navigator reset to start position");
+                        }}
+                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
+                      >
+                        <Square className="h-3.5 w-3.5 fill-current" />
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-1">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Progress</span>
+                      <span>{routeResult.route ? Math.round((simStepIdx / (routeResult.route.length - 1)) * 100) : 0}%</span>
+                    </div>
+                    <div className="w-full bg-emerald-500/20 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-emerald-600 h-full transition-all duration-300"
+                        style={{ width: `${routeResult.route ? (simStepIdx / (routeResult.route.length - 1)) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </CardContent></Card>
@@ -1313,10 +1324,18 @@ export default function AGNav() {
               </CircleMarker>
             )}
 
-            {/* Vessel marker (blink red while SOS active) */}
+            {/* Pulsating outer blue halo glow when not in SOS mode */}
+            {!(sosStatus && sosStatus.status !== "RESOLVED") && blink && (
+              <CircleMarker 
+                center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} 
+                radius={16}
+                pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.25, weight: 0 }}
+              />
+            )}
+            {/* Vessel marker (blink red while SOS active, blink blue normally) */}
             <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={10}
-              pathOptions={{ color: sosStatus && sosStatus.status !== "RESOLVED" ? (blink ? "#dc2626" : "#fca5a5") : "#2563eb",
-                fillColor: sosStatus && sosStatus.status !== "RESOLVED" ? "#dc2626" : "#2563eb", fillOpacity: 0.8 }}>
+              pathOptions={{ color: sosStatus && sosStatus.status !== "RESOLVED" ? (blink ? "#dc2626" : "#fca5a5") : (blink ? "#3b82f6" : "#2563eb"),
+                fillColor: sosStatus && sosStatus.status !== "RESOLVED" ? "#dc2626" : "#2563eb", fillOpacity: 0.85, weight: 2 }}>
               <Popup>You · {vesselId}</Popup>
             </CircleMarker>
 
