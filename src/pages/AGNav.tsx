@@ -190,6 +190,8 @@ export default function AGNav() {
   const lastTurnAnnouncedIdxRef = useRef<number>(-1);
   const lastArrivalAnnouncedRef = useRef<boolean>(false);
   const lastOffCourseAnnouncedRef = useRef<number>(0);
+  const [isMoving, setIsMoving] = useState(false);
+  const lastGPSPosRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
 
   // Layer toggles
   const [showWeather, setShowWeather] = useState(true);
@@ -364,20 +366,23 @@ export default function AGNav() {
         if (minDistance > 150) {
           const nowTime = Date.now();
           if (nowTime - lastOffCourseAnnouncedRef.current > 25000) {
-            lastOffCourseAnnouncedRef.current = nowTime;
-            let destinationName = destination?.label || "your target destination";
-            if (destinationName.length > 25) {
-              destinationName = destinationName.slice(0, 22) + "...";
-            }
+            // Only announce off-course drift when simulating or physically moving
+            if (simulating || isMoving) {
+              lastOffCourseAnnouncedRef.current = nowTime;
+              let destinationName = destination?.label || "your target destination";
+              if (destinationName.length > 25) {
+                destinationName = destinationName.slice(0, 22) + "...";
+              }
 
-            const offRouteMsg = isRoad
-              ? `Warning. You have shifted from the planned road route. Continuing on this heading will bypass ${destinationName} and lead towards local rural coordinates. Please realign or recalculate to get back on track.`
-              : `Warning. You are drifting off course from the river channel. Continuing on this bearing leads towards shallow sandbars and agricultural danger zones in the Volta Basin. Realign your vessel's heading immediately to remain safe.`;
-            
-            speak(offRouteMsg, voiceOn);
-            toast.warning("Off-course drift detected", { 
-              description: isRoad ? "Headed towards rural coordinates" : "Headed towards Volta Basin danger zones" 
-            });
+              const offRouteMsg = isRoad
+                ? `Warning. You have shifted from the planned road route. Continuing on this heading will bypass ${destinationName} and lead towards local rural coordinates. Please realign or recalculate to get back on track.`
+                : `Warning. You are drifting off course from the river channel. Continuing on this bearing leads towards shallow sandbars and agricultural danger zones in the Volta Basin. Realign your vessel's heading immediately to remain safe.`;
+              
+              speak(offRouteMsg, voiceOn);
+              toast.warning("Off-course drift detected", { 
+                description: isRoad ? "Headed towards rural coordinates" : "Headed towards Volta Basin danger zones" 
+              });
+            }
           }
         } else {
           let scanIdx = closestIdx + 1;
@@ -393,26 +398,29 @@ export default function AGNav() {
 
             if (Math.abs(diff) > 25) {
               if (lastTurnAnnouncedIdxRef.current !== scanIdx) {
-                lastTurnAnnouncedIdxRef.current = scanIdx;
-                const roundedDist = Math.round(accumulatedDist);
+                // Only announce turns when simulating or physically moving
+                if (simulating || isMoving) {
+                  lastTurnAnnouncedIdxRef.current = scanIdx;
+                  const roundedDist = Math.round(accumulatedDist);
 
-                if (isRoad) {
-                  const direction = diff > 0 ? "right" : "left";
-                  if (roundedDist < 40) {
-                    speak(`Turn ${direction} now.`, voiceOn);
-                    toast.info(`Turn ${direction} now`);
+                  if (isRoad) {
+                    const direction = diff > 0 ? "right" : "left";
+                    if (roundedDist < 40) {
+                      speak(`Turn ${direction} now.`, voiceOn);
+                      toast.info(`Turn ${direction} now`);
+                    } else {
+                      speak(`In ${roundedDist} meters, turn ${direction}.`, voiceOn);
+                      toast.info(`In ${roundedDist}m, turn ${direction}`);
+                    }
                   } else {
-                    speak(`In ${roundedDist} meters, turn ${direction}.`, voiceOn);
-                    toast.info(`In ${roundedDist}m, turn ${direction}`);
-                  }
-                } else {
-                  const direction = diff > 0 ? "starboard" : "port";
-                  if (roundedDist < 40) {
-                    speak(`Steer ${direction} now.`, voiceOn);
-                    toast.info(`Steer ${direction} now`);
-                  } else {
-                    speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
-                    toast.info(`In ${roundedDist}m, steer ${direction}`);
+                    const direction = diff > 0 ? "starboard" : "port";
+                    if (roundedDist < 40) {
+                      speak(`Steer ${direction} now.`, voiceOn);
+                      toast.info(`Steer ${direction} now`);
+                    } else {
+                      speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
+                      toast.info(`In ${roundedDist}m, steer ${direction}`);
+                    }
                   }
                 }
               }
@@ -448,7 +456,7 @@ export default function AGNav() {
         speak("Weather spike detected. Consider sheltering.", voiceOn); beep();
       }
     }
-  }, [currentPos, routeResult, navMode, voiceOn, showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, simulating]);
+  }, [currentPos, routeResult, navMode, voiceOn, showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, simulating, isMoving]);
 
   // Live GPS Geolocation Watcher
   useEffect(() => {
@@ -457,6 +465,26 @@ export default function AGNav() {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
+        
+        // Calculate dynamic real-time speed in m/s to filter out stationary jitter
+        const now = Date.now();
+        if (lastGPSPosRef.current) {
+          const prev = lastGPSPosRef.current;
+          const dt = (now - prev.time) / 1000; // time diff in seconds
+          if (dt > 0.5) {
+            const dist = haversineDist(lat, lon, prev.lat, prev.lon);
+            const calculatedSpeed = dist / dt; // speed in meters per second
+            
+            // Filter out minor indoor GPS drift/jitter (less than 0.7 m/s / 2.5 km/h)
+            if (calculatedSpeed > 0.7) {
+              setIsMoving(true);
+            } else {
+              setIsMoving(false);
+            }
+          }
+        }
+        lastGPSPosRef.current = { lat, lon, time: now };
+
         // Only update currentPos if NOT currently simulating
         if (!simulating) {
           setCurrentPos({ lat, lon });
