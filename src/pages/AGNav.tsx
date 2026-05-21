@@ -235,7 +235,13 @@ export default function AGNav() {
   // Voice
   const [voiceOn, setVoiceOn] = useState(true);
   const [listening, setListening] = useState(false);
-  const [navMode, setNavMode] = useState<"water" | "road">("water");
+  const [navMode, setNavMode] = useState<"water" | "road">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("agnav.nav_mode");
+      if (saved === "water" || saved === "road") return saved;
+    }
+    return "water";
+  });
 
   // Road transport search & autocomplete states
   const [startLocation, setStartLocation] = useState<Destination | null>(null);
@@ -1083,6 +1089,7 @@ export default function AGNav() {
               size="sm"
               onClick={() => {
                 setNavMode("water");
+                if (typeof window !== "undefined") localStorage.setItem("agnav.nav_mode", "water");
                 speak("Switched to water transport navigation. Marine voice director active.", voiceOn);
                 toast.info("Marine navigator active (Nautical director)");
               }}
@@ -1095,6 +1102,7 @@ export default function AGNav() {
               size="sm"
               onClick={() => {
                 setNavMode("road");
+                if (typeof window !== "undefined") localStorage.setItem("agnav.nav_mode", "road");
                 speak("Switched to road transport navigation. Road voice director active.", voiceOn);
                 toast.info("Road driving navigator active (Road director)");
               }}
