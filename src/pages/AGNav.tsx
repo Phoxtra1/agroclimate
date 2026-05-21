@@ -882,8 +882,11 @@ export default function AGNav() {
         </DialogContent>
       </Dialog>
 
-      {/* Destination search */}
-      <Card className="relative"><CardContent className="p-3 space-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* Navigation Sidebar & Controls */}
+        <div className="space-y-4 lg:col-span-1">
+          {/* Destination search */}
+          <Card className="relative"><CardContent className="p-3 space-y-3">
         {navMode === "road" ? (
           <div className="space-y-3">
             {/* START LOCATION INPUT */}
@@ -1232,7 +1235,11 @@ export default function AGNav() {
         </div>
       </CardContent></Card>
 
-      {/* Map */}
+        </div>
+
+        {/* Dynamic Route Map & Environmental Filters */}
+        <div className="space-y-4 lg:col-span-2">
+          {/* Map */}
       <Card><CardContent className="p-3">
         <div className="flex flex-wrap items-center gap-4 mb-3">
           <div className="flex items-center gap-2"><Switch checked={showWeather} onCheckedChange={setShowWeather} id="w" /><Label htmlFor="w" className="text-xs flex items-center gap-1"><Cloud className="h-3.5 w-3.5" /> Weather</Label></div>
@@ -1258,7 +1265,7 @@ export default function AGNav() {
           <div className="flex items-center gap-2 ml-auto"><Layers className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs text-muted-foreground">Toggle base layer top-right</span></div>
         </div>
 
-        <div className="rounded-lg overflow-hidden border" style={{ height: "62vh", minHeight: 420 }}>
+        <div className="rounded-lg overflow-hidden border h-[340px] sm:h-[480px] lg:h-[62vh] w-full">
           <MapContainer center={center} zoom={destination || farmTarget ? 11 : 7} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
             <FlyTo lat={center[0]} lon={center[1]} zoom={destination || farmTarget ? 11 : 7} />
             {pickOnMap && <MapClickPicker onPick={onMapPick} />}
@@ -1359,6 +1366,8 @@ export default function AGNav() {
           </span>
         </div>
       </CardContent></Card>
+        </div>
+      </div>
     </div>
   );
 }
