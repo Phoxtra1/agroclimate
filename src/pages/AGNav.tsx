@@ -149,6 +149,31 @@ function pointInPolygon(pt: [number, number], poly: [number, number][]): boolean
   return inside;
 }
 
+function haversineDist(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function getBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const lat1Rad = lat1 * Math.PI / 180;
+  const lat2Rad = lat2 * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2Rad);
+  const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+  let brng = Math.atan2(y, x) * 180 / Math.PI;
+  return (brng + 360) % 360;
+}
+
+function getBearingDifference(b1: number, b2: number): number {
+  let diff = b2 - b1;
+  while (diff < -180) diff += 360;
+  while (diff > 180) diff -= 360;
+  return diff;
+}
+
 const VESSEL_ID_KEY = "agnav.vessel_id";
 const VESSEL_REGISTERED_KEY = "agnav.vessel_registered";
 
@@ -156,6 +181,15 @@ export default function AGNav() {
   const { user } = useAuth();
   const { position } = useGeolocation();
   const { forecast } = useWeather(position.lat, position.lon);
+
+  const [currentPos, setCurrentPos] = useState<{ lat: number; lon: number }>(() => ({
+    lat: position?.lat || 5.6037,
+    lon: position?.lon || -0.187,
+  }));
+
+  const lastTurnAnnouncedIdxRef = useRef<number>(-1);
+  const lastArrivalAnnouncedRef = useRef<boolean>(false);
+  const lastOffCourseAnnouncedRef = useRef<number>(0);
 
   // Layer toggles
   const [showWeather, setShowWeather] = useState(true);
@@ -256,24 +290,102 @@ export default function AGNav() {
     return unsub;
   }, [registered, vesselId, voiceOn]);
 
-  // LIVE TRACKING
   useEffect(() => {
-    if (!showLiveTrack || !navigator.geolocation) return;
-    watchIdRef.current = navigator.geolocation.watchPosition(
+    if (position.lat && position.lon) {
+      setCurrentPos({ lat: position.lat, lon: position.lon });
+    }
+  }, [position.lat, position.lon]);
+
+  // LIVE TRACKING & TURN-BY-TURN SEA NAVIGATOR
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
-        const p: [number, number] = [pos.coords.latitude, pos.coords.longitude];
-        setBoatTrail((t) => [...t.slice(-200), p]);
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        setCurrentPos({ lat, lon });
+
+        if (showLiveTrack) {
+          setBoatTrail((t) => [...t.slice(-200), [lat, lon]]);
+        }
+
+        // Turn-by-turn Voice Navigator (purposely styled for sea travel using nautical terms)
+        if (routeResult && routeResult.route && routeResult.route.length > 2) {
+          const route = routeResult.route;
+          const distToDest = haversineDist(lat, lon, route[route.length - 1][0], route[route.length - 1][1]);
+          
+          if (distToDest < 30) {
+            if (!lastArrivalAnnouncedRef.current) {
+              lastArrivalAnnouncedRef.current = true;
+              speak("Destination reached. Heave to and drop anchor.", voiceOn);
+              toast.success("Destination reached");
+            }
+          } else {
+            if (distToDest > 50) lastArrivalAnnouncedRef.current = false;
+
+            let closestIdx = -1;
+            let minDistance = Infinity;
+            for (let i = 0; i < route.length; i++) {
+              const dist = haversineDist(lat, lon, route[i][0], route[i][1]);
+              if (dist < minDistance) {
+                minDistance = dist;
+                closestIdx = i;
+              }
+            }
+
+            if (minDistance > 150) {
+              const nowTime = Date.now();
+              if (nowTime - lastOffCourseAnnouncedRef.current > 45000) {
+                lastOffCourseAnnouncedRef.current = nowTime;
+                speak("Warning. You are off course. Realign heading to route.", voiceOn);
+                toast.warning("Off course warning");
+              }
+            } else {
+              let scanIdx = closestIdx + 1;
+              let accumulatedDist = 0;
+
+              while (scanIdx < route.length - 3 && accumulatedDist < 150) {
+                const stepDist = haversineDist(route[scanIdx - 1][0], route[scanIdx - 1][1], route[scanIdx][0], route[scanIdx][1]);
+                accumulatedDist += stepDist;
+
+                const b1 = getBearing(route[scanIdx - 1][0], route[scanIdx - 1][1], route[scanIdx][0], route[scanIdx][1]);
+                const b2 = getBearing(route[scanIdx][0], route[scanIdx][1], route[scanIdx + 3][0], route[scanIdx + 3][1]);
+                const diff = getBearingDifference(b1, b2);
+
+                if (Math.abs(diff) > 25) {
+                  if (lastTurnAnnouncedIdxRef.current !== scanIdx) {
+                    lastTurnAnnouncedIdxRef.current = scanIdx;
+                    const direction = diff > 0 ? "starboard" : "port";
+                    const roundedDist = Math.round(accumulatedDist);
+
+                    if (roundedDist < 40) {
+                      speak(`Steer ${direction} now.`, voiceOn);
+                      toast.info(`Steer ${direction} now`);
+                    } else {
+                      speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
+                      toast.info(`In ${roundedDist}m, steer ${direction}`);
+                    }
+                  }
+                  break;
+                }
+                scanIdx++;
+              }
+            }
+          }
+        }
+
         const now = Date.now();
         if (now - lastPushRef.current > 4000) {
           lastPushRef.current = now;
-          const level = scoreRisk({ lat: p[0], lon: p[1] }, { rainProb: today?.rainProb, load: { passengers, cargo_kg: cargoKg } }).level;
+          const level = scoreRisk({ lat, lon }, { rainProb: today?.rainProb, load: { passengers, cargo_kg: cargoKg } }).level;
           await pushVesselLocation({
-            vessel_id: vesselId, user_id: user?.id, lat: p[0], lon: p[1],
+            vessel_id: vesselId, user_id: user?.id, lat, lon,
             speed_kn: pos.coords.speed ? pos.coords.speed * 1.94384 : undefined,
             heading: pos.coords.heading ?? undefined, risk_level: level,
           }).catch(() => {});
+
           for (let i = 0; i < FLOOD_ZONES.length; i++) {
-            if (pointInPolygon(p, FLOOD_ZONES[i].coords)) {
+            if (pointInPolygon([lat, lon], FLOOD_ZONES[i].coords)) {
               if (!lastWarnRef.current.zone || now - lastWarnRef.current.zone > 30000) {
                 lastWarnRef.current.zone = now;
                 toast.warning(`Entering danger zone: ${FLOOD_ZONES[i].name}`);
@@ -289,10 +401,10 @@ export default function AGNav() {
         }
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
     );
-    return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); };
-  }, [showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, voiceOn]);
+    return () => { navigator.geolocation.clearWatch(watchId); };
+  }, [showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, voiceOn, routeResult]);
 
   useEffect(() => {
     if (passengers > 20 || cargoKg > 1000) {
@@ -312,8 +424,8 @@ export default function AGNav() {
   }, [sosStatus]);
 
   const heatLayers = useMemo(
-    () => buildHeatPoints(forecast || [], position.lat || 7.95, position.lon || -1.03),
-    [forecast, position.lat, position.lon],
+    () => buildHeatPoints(forecast || [], currentPos.lat || 7.95, currentPos.lon || -1.03),
+    [forecast, currentPos.lat, currentPos.lon],
   );
 
   // ----- Destination geocode (place names) -----
@@ -353,8 +465,8 @@ export default function AGNav() {
   };
 
   const useCurrentAsDestination = () => {
-    if (!position.lat || !position.lon) { toast.error("Location unavailable"); return; }
-    setSearchText(`${position.lat.toFixed(5)}, ${position.lon.toFixed(5)}`);
+    if (!currentPos.lat || !currentPos.lon) { toast.error("Location unavailable"); return; }
+    setSearchText(`${currentPos.lat.toFixed(5)}, ${currentPos.lon.toFixed(5)}`);
   };
 
   // ----- Farm GPS input handlers (replaces dropdown) -----
@@ -393,17 +505,20 @@ export default function AGNav() {
     let target: { lat: number; lon: number; label: string } | null = destination;
     if (!target && farmTarget) target = { ...farmTarget, label: `Farm ${farmTarget.lat.toFixed(4)}, ${farmTarget.lon.toFixed(4)}` };
     if (!target) { toast.error("Enter a farm GPS, pick on map, or search a destination"); return; }
-    if (!position.lat || !position.lon) { toast.error("Current location unavailable"); return; }
+    if (!currentPos.lat || !currentPos.lon) { toast.error("Current location unavailable"); return; }
     setRouteBusy(true);
     try {
       const result = await engineComputeRoute({
-        start: { lat: position.lat, lon: position.lon },
+        start: { lat: currentPos.lat, lon: currentPos.lon },
         end: { lat: target.lat, lon: target.lon },
         vessel_id: vesselId, user_id: user?.id,
         load: { passengers, cargo_kg: cargoKg },
         rainProb: today?.rainProb,
       });
       setRouteResult(result);
+      lastTurnAnnouncedIdxRef.current = -1;
+      lastArrivalAnnouncedRef.current = false;
+      lastOffCourseAnnouncedRef.current = 0;
       const km = (result.distance_m / 1000).toFixed(1);
       const min = (result.duration_s / 60).toFixed(0);
       toast.success(`Route ${km} km · ${min} min · risk ${result.risk_level}`);
@@ -416,48 +531,47 @@ export default function AGNav() {
   const triggerSOS = async () => {
     if (!user) { toast.error("Sign in to send SOS"); return; }
     if (!registered) { toast.error("Register your vessel before sending SOS"); setRegOpen(true); return; }
+    if (!currentPos.lat || !currentPos.lon) { toast.error("Distress location unavailable"); return; }
     if (!confirm("Confirm SOS — broadcast distress signal to nearby vessels and rescue authorities?")) return;
     setSosBusy(true);
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        const resp = await engineTriggerSOS({
-          vessel_id: vesselId, user_id: user.id,
-          location: { lat: pos.coords.latitude, lon: pos.coords.longitude },
-          risk_level: (routeResult?.risk_level || fr.level) as RiskLevel,
-        });
-        setSosStatus(resp);
-        toast.success(`SOS broadcast → ${resp.notified_vessels.length} vessels, ${resp.notified_responders.length} responders`);
-        speak(`S O S broadcast to ${resp.notified_vessels.length} vessels and ${resp.notified_responders.length} rescue authorities. Stand by.`, voiceOn);
-        beep();
+    try {
+      const resp = await engineTriggerSOS({
+        vessel_id: vesselId, user_id: user.id,
+        location: { lat: currentPos.lat, lon: currentPos.lon },
+        risk_level: (routeResult?.risk_level || fr.level) as RiskLevel,
+      });
+      setSosStatus(resp);
+      toast.success(`SOS broadcast → ${resp.notified_vessels.length} vessels, ${resp.notified_responders.length} responders`);
+      speak(`S O S broadcast to ${resp.notified_vessels.length} vessels and ${resp.notified_responders.length} rescue authorities. Stand by.`, voiceOn);
+      beep();
 
-        const unsubEv = subscribeSOSEvent(resp.event_id, (row) => {
-          setSosStatus((s) => s ? { ...s, status: row.status, accepted_by: row.accepted_by_vessel_id ? { vessel_id: row.accepted_by_vessel_id, eta: row.eta_minutes ?? 0 } : s.accepted_by } : s);
-          if (row.status === "ACCEPTED" && row.accepted_by_vessel_id) {
-            toast.success(`Rescue accepted by ${row.accepted_by_vessel_id} · ETA ${row.eta_minutes} min`);
-            speak(`Rescue accepted by vessel ${row.accepted_by_vessel_id}. ETA ${row.eta_minutes} minutes.`, voiceOn);
-            subscribeVesselLocation(row.accepted_by_vessel_id, (loc) => {
-              if (loc.lat != null && loc.lon != null) setRescuePos({ lat: loc.lat, lon: loc.lon });
-            });
-          }
-          if (row.status === "RESOLVED") { toast.success("SOS resolved"); setRescuePos(null); }
-        });
-        const unsubMsg = subscribeVesselMessages(resp.event_id, (m) => {
-          setChatMessages((cs) => [...cs, { from: m.from_vessel_id, body: m.body, ts: m.created_at }]);
-        });
-        window.addEventListener("beforeunload", () => { unsubEv(); unsubMsg(); }, { once: true });
-      } catch (err: any) {
-        toast.error(`SOS queued offline (SMS fallback) — ${err?.message || ""}`);
-      } finally { setSosBusy(false); }
-    }, () => { toast.error("Location unavailable"); setSosBusy(false); });
+      const unsubEv = subscribeSOSEvent(resp.event_id, (row) => {
+        setSosStatus((s) => s ? { ...s, status: row.status, accepted_by: row.accepted_by_vessel_id ? { vessel_id: row.accepted_by_vessel_id, eta: row.eta_minutes ?? 0 } : s.accepted_by } : s);
+        if (row.status === "ACCEPTED" && row.accepted_by_vessel_id) {
+          toast.success(`Rescue accepted by ${row.accepted_by_vessel_id} · ETA ${row.eta_minutes} min`);
+          speak(`Rescue accepted by vessel ${row.accepted_by_vessel_id}. ETA ${row.eta_minutes} minutes.`, voiceOn);
+          subscribeVesselLocation(row.accepted_by_vessel_id, (loc) => {
+            if (loc.lat != null && loc.lon != null) setRescuePos({ lat: loc.lat, lon: loc.lon });
+          });
+        }
+        if (row.status === "RESOLVED") { toast.success("SOS resolved"); setRescuePos(null); }
+      });
+      const unsubMsg = subscribeVesselMessages(resp.event_id, (m) => {
+        setChatMessages((cs) => [...cs, { from: m.from_vessel_id, body: m.body, ts: m.created_at }]);
+      });
+      window.addEventListener("beforeunload", () => { unsubEv(); unsubMsg(); }, { once: true });
+    } catch (err: any) {
+      toast.error(`SOS queued offline (SMS fallback) — ${err?.message || ""}`);
+    } finally { setSosBusy(false); }
   };
 
   const acceptIncoming = async () => {
     if (!incomingSos) return;
-    if (!position.lat || !position.lon) { toast.error("Your location unavailable"); return; }
+    if (!currentPos.lat || !currentPos.lon) { toast.error("Your location unavailable"); return; }
     try {
       const { eta } = await acceptSOS({
         event_id: incomingSos.id, rescuer_vessel_id: vesselId,
-        rescuer_location: { lat: position.lat, lon: position.lon },
+        rescuer_location: { lat: currentPos.lat, lon: currentPos.lon },
         victim_location: { lat: incomingSos.lat, lon: incomingSos.lon },
       });
       toast.success(`You are the rescuer — ETA ${eta} min`);
@@ -481,7 +595,7 @@ export default function AGNav() {
   };
 
   const handleRegisterVessel = async () => {
-    const home = parseCoords(regHomeText) || (position.lat ? { lat: position.lat, lon: position.lon } : null);
+    const home = parseCoords(regHomeText) || (currentPos.lat ? { lat: currentPos.lat, lon: currentPos.lon } : null);
     if (!home) { toast.error("Provide home base GPS (e.g. 6.52, 0.12) or enable location"); return; }
     if (!regName.trim() || !regOperator.trim() || !regPhone.trim()) { toast.error("Fill all required fields"); return; }
     setRegBusy(true);
@@ -503,7 +617,7 @@ export default function AGNav() {
   const center: [number, number] = destination
     ? [destination.lat, destination.lon]
     : farmTarget ? [farmTarget.lat, farmTarget.lon]
-    : [position.lat || 7.95, position.lon || -1.03];
+    : [currentPos.lat || 7.95, currentPos.lon || -1.03];
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
@@ -740,7 +854,7 @@ export default function AGNav() {
             ))}
 
             {showWind && today && (
-              <CircleMarker center={[position.lat || 7.95, position.lon || -1.03]} radius={Math.max(6, ((today as any).windSpeed || 4))}
+              <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={Math.max(6, ((today as any).windSpeed || 4))}
                 pathOptions={{ color: "#0891b2", fillColor: "#0891b2", fillOpacity: 0.4 }}>
                 <Popup>Wind {(today as any).windSpeed || "—"} m/s {(today as any).windDir != null ? `· ${(today as any).windDir}°` : ""}</Popup>
               </CircleMarker>
@@ -758,14 +872,14 @@ export default function AGNav() {
             })}
 
             {showWeather && today && (
-              <CircleMarker center={[position.lat || 7.95, position.lon || -1.03]} radius={Math.max(8, (today.rainProb || 0) / 5)}
+              <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={Math.max(8, (today.rainProb || 0) / 5)}
                 pathOptions={{ color: "#0ea5e9", fillColor: "#0ea5e9", fillOpacity: 0.25 }}>
                 <Popup>Rain {today.rainProb}% · {today.tempLow}–{today.tempHigh}°C · {today.description}</Popup>
               </CircleMarker>
             )}
 
             {/* Vessel marker (blink red while SOS active) */}
-            <CircleMarker center={[position.lat || 7.95, position.lon || -1.03]} radius={10}
+            <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={10}
               pathOptions={{ color: sosStatus && sosStatus.status !== "RESOLVED" ? (blink ? "#dc2626" : "#fca5a5") : "#2563eb",
                 fillColor: sosStatus && sosStatus.status !== "RESOLVED" ? "#dc2626" : "#2563eb", fillOpacity: 0.8 }}>
               <Popup>You · {vesselId}</Popup>
@@ -797,8 +911,8 @@ export default function AGNav() {
                 <Popup>Rescue vessel en route</Popup>
               </CircleMarker>
             )}
-            {rescuePos && position.lat && (
-              <Polyline positions={[[rescuePos.lat, rescuePos.lon], [position.lat, position.lon]]}
+            {rescuePos && currentPos.lat && (
+              <Polyline positions={[[rescuePos.lat, rescuePos.lon], [currentPos.lat, currentPos.lon]]}
                 pathOptions={{ color: "#16a34a", weight: 3, dashArray: "2 6" }} />
             )}
           </MapContainer>
