@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import {
   Anchor, AlertTriangle, MapPin, Navigation, LifeBuoy, Layers, Loader2, Cloud,
   Route as RouteIcon, Search, Mic, MicOff, Volume2, VolumeX, Crosshair, Wind, Waves,
-  Save, Ship, Phone, MessageCircle, Send, Car, Bike, Train, Footprints, Play, Pause, Square
+  Save, Ship, Phone, MessageCircle, Send, Car, Bike, Train, Footprints, Play, Pause, Square,
+  Bot
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -21,6 +22,7 @@ import { useWeather } from "@/hooks/useWeather";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { floodRisk } from "@/lib/riskEngine";
+import { getActiveProvider } from "@/lib/aiProviders/registry";
 import {
   computeRoute as engineComputeRoute,
   pushVesselLocation,
@@ -174,6 +176,92 @@ function getBearingDifference(b1: number, b2: number): number {
   return diff;
 }
 
+// Custom interfaces & helper functions for real-time live navigation
+interface AIAssistantAdvisory {
+  confidenceScore: number;
+  routeSafetyClass: "Safe" | "Moderate" | "High Risk" | "Critical";
+  weatherImpact: string;
+  anomalyDetected: string;
+  adaptiveBehaviorAdvice: string;
+  movementPrediction: string;
+}
+
+const createNavigationPointer = (bearingDeg: number, isSos: boolean, isBlinking: boolean) => {
+  const color = isSos ? "#dc2626" : "#3b82f6";
+  return L.divIcon({
+    html: `
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
+        <!-- Pulsing halo -->
+        <div style="
+          position: absolute; 
+          width: 32px; 
+          height: 32px; 
+          border-radius: 50%; 
+          background-color: ${color}; 
+          opacity: 0.3; 
+          animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        "></div>
+        <!-- Inner circle -->
+        <div style="
+          position: relative; 
+          width: 18px; 
+          height: 18px; 
+          border-radius: 50%; 
+          border: 2px solid #ffffff; 
+          background-color: ${color}; 
+          box-shadow: 0 0 8px rgba(0,0,0,0.3); 
+          display: flex; 
+          align-items: center; 
+          justify-content: center;
+        ">
+          <!-- Direction arrow -->
+          <svg style="
+            width: 10px; 
+            height: 10px; 
+            color: #ffffff; 
+            transform: rotate(${bearingDeg}deg); 
+            transition: transform 0.2s ease-out;
+          " fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </div>
+      </div>
+      <style>
+        @keyframes pulse-ring {
+          0% { transform: scale(0.5); opacity: 0.8; }
+          80%, 100% { transform: scale(1.3); opacity: 0; }
+        }
+      </style>
+    `,
+    className: "",
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+};
+
+function MapController({ center, isAutoFollow, onMapInteraction }: { center: [number, number]; isAutoFollow: boolean; onMapInteraction: () => void }) {
+  const map = useMap();
+  const lastCenterRef = useRef<[number, number]>([0, 0]);
+
+  useMapEvents({
+    dragstart: onMapInteraction,
+    zoomstart: onMapInteraction,
+  });
+
+  useEffect(() => {
+    if (!isAutoFollow) return;
+    const [lat, lon] = center;
+    const [lastLat, lastLon] = lastCenterRef.current;
+    const dist = haversineDist(lat, lon, lastLat, lastLon);
+    if (dist > 1.5 || lastLat === 0) {
+      map.panTo([lat, lon], { animate: true, duration: 0.5 });
+      lastCenterRef.current = center;
+    }
+  }, [center, isAutoFollow, map]);
+
+  return null;
+}
+
 const VESSEL_ID_KEY = "agnav.vessel_id";
 const VESSEL_REGISTERED_KEY = "agnav.vessel_registered";
 
@@ -192,6 +280,19 @@ export default function AGNav() {
   const lastOffCourseAnnouncedRef = useRef<number>(0);
   const [isMoving, setIsMoving] = useState(false);
   const lastGPSPosRef = useRef<{ lat: number; lon: number; time: number } | null>(null);
+
+  // Real-Time and AI-backed states
+  const [bearing, setBearing] = useState<number>(0);
+  const [speedKn, setSpeedKn] = useState<number>(0);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [isAutoFollow, setIsAutoFollow] = useState(true);
+  const [gpsLocked, setGpsLocked] = useState(false);
+  const [currentRouteIdx, setCurrentRouteIdx] = useState<number>(0);
+  const [aiAdvisory, setAiAdvisory] = useState<AIAssistantAdvisory | null>(null);
+  const [aiAdvisoryLoading, setAiAdvisoryLoading] = useState(false);
+
+  const lastTurnAnnouncementStageRef = useRef<{ index: number; stage: 'none' | 'prep' | 'now' }>({ index: -1, stage: 'none' });
+  const deviationCountRef = useRef<number>(0);
 
   // Layer toggles
   const [showWeather, setShowWeather] = useState(true);
@@ -344,6 +445,7 @@ export default function AGNav() {
           if (simulating) {
             setSimulating(false);
           }
+          setIsNavigating(false);
         }
       } else {
         if (distToDest > 50) lastArrivalAnnouncedRef.current = false;
@@ -358,16 +460,32 @@ export default function AGNav() {
           }
         }
 
+        if (closestIdx !== -1) {
+          setCurrentRouteIdx(closestIdx);
+        }
+
         // Auto-scroll simulation marker index to match closest coordinate during live tracking
         if (simulating && closestIdx !== -1) {
           setSimStepIdx(closestIdx);
         }
 
-        if (minDistance > 150) {
+        const activeRouteIdx = simulating ? simStepIdx : (closestIdx !== -1 ? closestIdx : currentRouteIdx);
+        const activeNav = simulating || (isNavigating && isMoving && gpsLocked);
+
+        // Auto-rerouting & Off-course checks
+        if (minDistance > 80) {
+          if (activeNav) {
+            deviationCountRef.current += 1;
+            if (deviationCountRef.current >= 3 && !simulating) {
+              deviationCountRef.current = 0;
+              autoReroute(lat, lon);
+            }
+          }
+
           const nowTime = Date.now();
           if (nowTime - lastOffCourseAnnouncedRef.current > 25000) {
-            // Only announce off-course drift when simulating or physically moving
-            if (simulating || isMoving) {
+            // Only announce off-course drift when actively navigating and moving
+            if (activeNav) {
               lastOffCourseAnnouncedRef.current = nowTime;
               let destinationName = destination?.label || "your target destination";
               if (destinationName.length > 25) {
@@ -385,7 +503,10 @@ export default function AGNav() {
             }
           }
         } else {
-          let scanIdx = closestIdx + 1;
+          deviationCountRef.current = 0;
+
+          // Scanning ahead for turns
+          let scanIdx = activeRouteIdx + 1;
           let accumulatedDist = 0;
 
           while (scanIdx < route.length - 3 && accumulatedDist < 150) {
@@ -397,31 +518,28 @@ export default function AGNav() {
             const diff = getBearingDifference(b1, b2);
 
             if (Math.abs(diff) > 25) {
-              if (lastTurnAnnouncedIdxRef.current !== scanIdx) {
-                // Only announce turns when simulating or physically moving
-                if (simulating || isMoving) {
-                  lastTurnAnnouncedIdxRef.current = scanIdx;
-                  const roundedDist = Math.round(accumulatedDist);
+              const roundedDist = Math.round(accumulatedDist);
+              const direction = isRoad 
+                ? (diff > 0 ? "right" : "left") 
+                : (diff > 0 ? "starboard" : "port");
+              const actionWord = isRoad ? "turn" : "steer";
 
-                  if (isRoad) {
-                    const direction = diff > 0 ? "right" : "left";
-                    if (roundedDist < 40) {
-                      speak(`Turn ${direction} now.`, voiceOn);
-                      toast.info(`Turn ${direction} now`);
-                    } else {
-                      speak(`In ${roundedDist} meters, turn ${direction}.`, voiceOn);
-                      toast.info(`In ${roundedDist}m, turn ${direction}`);
-                    }
-                  } else {
-                    const direction = diff > 0 ? "starboard" : "port";
-                    if (roundedDist < 40) {
-                      speak(`Steer ${direction} now.`, voiceOn);
-                      toast.info(`Steer ${direction} now`);
-                    } else {
-                      speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
-                      toast.info(`In ${roundedDist}m, steer ${direction}`);
-                    }
-                  }
+              if (activeNav) {
+                const turnRef = lastTurnAnnouncementStageRef.current;
+                if (turnRef.index !== scanIdx) {
+                  lastTurnAnnouncementStageRef.current = { index: scanIdx, stage: 'none' };
+                }
+
+                const currentStage = lastTurnAnnouncementStageRef.current.stage;
+
+                if (roundedDist <= 30 && currentStage !== 'now') {
+                  lastTurnAnnouncementStageRef.current.stage = 'now';
+                  speak(`${actionWord} ${direction} now.`, voiceOn);
+                  toast.info(`${actionWord} ${direction} now`);
+                } else if (roundedDist > 30 && roundedDist <= 120 && currentStage === 'none') {
+                  lastTurnAnnouncementStageRef.current.stage = 'prep';
+                  speak(`In ${roundedDist} meters, ${actionWord} ${direction}.`, voiceOn);
+                  toast.info(`In ${roundedDist}m, ${actionWord} ${direction}`);
                 }
               }
               break;
@@ -438,6 +556,7 @@ export default function AGNav() {
       const level = scoreRisk({ lat, lon }, { rainProb: today?.rainProb, load: { passengers, cargo_kg: cargoKg } }).level;
       pushVesselLocation({
         vessel_id: vesselId, user_id: user?.id, lat, lon,
+        speed_kn: speedKn, heading: bearing,
         risk_level: level,
       }).catch(() => {});
 
@@ -456,7 +575,7 @@ export default function AGNav() {
         speak("Weather spike detected. Consider sheltering.", voiceOn); beep();
       }
     }
-  }, [currentPos, routeResult, navMode, voiceOn, showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, simulating, isMoving]);
+  }, [currentPos, routeResult, navMode, voiceOn, showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, simulating, isMoving, isNavigating, gpsLocked, speedKn, bearing]);
 
   // Live GPS Geolocation Watcher
   useEffect(() => {
@@ -465,6 +584,7 @@ export default function AGNav() {
       async (pos) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
+        setGpsLocked(true);
         
         // Calculate dynamic real-time speed in m/s to filter out stationary jitter
         const now = Date.now();
@@ -475,13 +595,20 @@ export default function AGNav() {
             const dist = haversineDist(lat, lon, prev.lat, prev.lon);
             const calculatedSpeed = dist / dt; // speed in meters per second
             
+            // Set speed in knots
+            setSpeedKn(calculatedSpeed * 1.94384);
+            
             // Filter out minor indoor GPS drift/jitter (less than 0.7 m/s / 2.5 km/h)
             if (calculatedSpeed > 0.7) {
               setIsMoving(true);
+              const brng = getBearing(prev.lat, prev.lon, lat, lon);
+              setBearing(brng);
             } else {
               setIsMoving(false);
             }
           }
+        } else {
+          setBearing(pos.coords.heading || 0);
         }
         lastGPSPosRef.current = { lat, lon, time: now };
 
@@ -490,8 +617,10 @@ export default function AGNav() {
           setCurrentPos({ lat, lon });
         }
       },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
+      () => {
+        setGpsLocked(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 },
     );
     return () => { navigator.geolocation.clearWatch(watchId); };
   }, [simulating]);
@@ -500,26 +629,25 @@ export default function AGNav() {
   useEffect(() => {
     if (!simulating || !routeResult || !routeResult.route || routeResult.route.length === 0) return;
 
-    // Define simulation speeds and intervals based on travelMode
     let intervalMs = 1000;
     let stepSize = 1;
 
     switch (travelMode) {
       case "walking":
         intervalMs = 1500;
-        stepSize = 1; // 1 coordinate step per interval (slow walking)
+        stepSize = 1;
         break;
       case "motorcycle":
         intervalMs = 1000;
-        stepSize = 2; // Fast motorcycle speed
+        stepSize = 2;
         break;
       case "car":
         intervalMs = 800;
-        stepSize = 3; // Standard car driving speed
+        stepSize = 3;
         break;
       case "train":
         intervalMs = 600;
-        stepSize = 4; // High speed rail train
+        stepSize = 4;
         break;
     }
 
@@ -530,6 +658,7 @@ export default function AGNav() {
         if (nextIdx >= route.length - 1) {
           clearInterval(intervalId);
           setSimulating(false);
+          setIsMoving(false);
           const arrivalMsg = navMode === "road" 
             ? "You have arrived at your destination." 
             : "Destination reached. Heave to and drop anchor.";
@@ -538,12 +667,27 @@ export default function AGNav() {
           setCurrentPos({ lat: route[route.length - 1][0], lon: route[route.length - 1][1] });
           return route.length - 1;
         }
+
+        const p1 = route[currIdx];
+        const p2 = route[nextIdx];
+        if (p1 && p2) {
+          const brng = getBearing(p1[0], p1[1], p2[0], p2[1]);
+          setBearing(brng);
+          
+          const dt = intervalMs / 1000;
+          const dist = haversineDist(p1[0], p1[1], p2[0], p2[1]);
+          setSpeedKn((dist / dt) * 1.94384);
+        }
+        setIsMoving(true);
         setCurrentPos({ lat: route[nextIdx][0], lon: route[nextIdx][1] });
         return nextIdx;
       });
     }, intervalMs);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      setIsMoving(false);
+    };
   }, [simulating, routeResult, travelMode, voiceOn, navMode]);
 
   useEffect(() => {
@@ -683,6 +827,122 @@ export default function AGNav() {
   };
 
   // ----- Route -----
+  const generateRuleBasedAdvisory = (route: RouteResult): AIAssistantAdvisory => {
+    const rain = today?.rainProb || 0;
+    const isWater = navMode === "water";
+    
+    let score = 95 - (route.risk_score * 40);
+    if (rain > 70) score -= 15;
+    if (passengers > 12) score -= 10;
+    if (cargoKg > 600) score -= 8;
+    score = Math.max(10, Math.min(100, Math.round(score)));
+
+    let safetyClass: "Safe" | "Moderate" | "High Risk" | "Critical" = "Safe";
+    if (score < 40) safetyClass = "Critical";
+    else if (score < 60) safetyClass = "High Risk";
+    else if (score < 80) safetyClass = "Moderate";
+
+    const weatherImpact = rain > 50 
+      ? `High rain probability (${rain}%) may degrade visibility and cause slick surfaces/high river waves.` 
+      : "Weather conditions are favorable with stable visibility.";
+
+    const anomalyDetected = isWater && rain > 60 
+      ? "Volta Basin flood warning: high water flow rates expected." 
+      : (cargoKg > 800 ? "Heavy cargo load may reduce steering responsiveness." : "None");
+
+    const adaptiveBehaviorAdvice = isWater
+      ? `Piloting tip: Keep vessel speed under ${rain > 50 ? "8" : "12"} knots. Secure all cargo and distribute weight evenly.`
+      : `Driving tip: Reduce speed on curves. Maintain a safe following distance of ${rain > 50 ? "50" : "30"} meters.`;
+
+    const movementPrediction = rain > 60
+      ? "Conditions are predicted to deteriorate slightly over the next 4 hours as rain clouds settle."
+      : "Conditions are expected to remain stable and clear for the next 6 hours.";
+
+    return {
+      confidenceScore: score,
+      routeSafetyClass: safetyClass,
+      weatherImpact,
+      anomalyDetected,
+      adaptiveBehaviorAdvice,
+      movementPrediction
+    };
+  };
+
+  const fetchAIRouteAdvisory = async (route: RouteResult) => {
+    if (!route || !route.route || route.route.length === 0) return;
+    setAiAdvisoryLoading(true);
+    try {
+      const provider = getActiveProvider();
+      const prompt = `You are the AGNav AI Navigation Co-Pilot.
+Analyze the following navigation route and environmental context:
+- Mode: ${navMode}
+- Start Location: ${startLocationText || (navMode === "road" ? "Current Location" : "Vessel Home")}
+- Destination: ${searchText || farmGpsText || "Target Point"}
+- Total Distance: ${(route.distance_m / 1000).toFixed(1)} km
+- Total Duration: ${(route.duration_s / 60).toFixed(0)} mins
+- Environmental Risk Score (Rule-based): ${route.risk_score} (Level: ${route.risk_level})
+- Current Weather / Rain Probability: ${today?.rainProb || 0}%
+- Passengers: ${passengers}, Cargo: ${cargoKg} kg
+
+Generate a JSON response assessing the route safety, weather constraints, potential anomalies, and driving/piloting recommendations. Return ONLY valid, raw JSON without markdown syntax wrapper. Return exactly this JSON schema:
+{
+  "confidenceScore": number (0 to 100 representing safety confidence),
+  "routeSafetyClass": "Safe" | "Moderate" | "High Risk" | "Critical",
+  "weatherImpact": "concise description of weather impact",
+  "anomalyDetected": "hazard/anomaly name or 'None'",
+  "adaptiveBehaviorAdvice": "actionable driving/sailing speed or behavior tips based on cargo load and environment",
+  "movementPrediction": "expected conditions along path in the next 3-6 hours"
+}`;
+
+      const text = await provider.chatCompletion([
+        { role: "system", content: "You are the AGNav AI assistant. You reply ONLY with a single JSON object. Do not include markdown codeblocks or triple backticks." },
+        { role: "user", content: prompt }
+      ]);
+
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const data: AIAssistantAdvisory = JSON.parse(cleanJson);
+      setAiAdvisory(data);
+    } catch (err) {
+      console.warn("AI Advisory edge call failed, using rule-based fallback:", err);
+      const localAdvisory = generateRuleBasedAdvisory(route);
+      setAiAdvisory(localAdvisory);
+    } finally {
+      setAiAdvisoryLoading(false);
+    }
+  };
+
+  const autoReroute = async (currentLat: number, currentLon: number) => {
+    let target: { lat: number; lon: number; label: string } | null = destination;
+    if (!target && farmTarget) target = { ...farmTarget, label: `Farm ${farmTarget.lat.toFixed(4)}, ${farmTarget.lon.toFixed(4)}` };
+    if (!target) return;
+    
+    setRouteBusy(true);
+    try {
+      const result = await engineComputeRoute({
+        start: { lat: currentLat, lon: currentLon },
+        end: { lat: target.lat, lon: target.lon },
+        vessel_id: vesselId, user_id: user?.id,
+        load: { passengers, cargo_kg: cargoKg },
+        rainProb: today?.rainProb,
+      });
+      setRouteResult(result);
+      lastTurnAnnouncedIdxRef.current = -1;
+      lastArrivalAnnouncedRef.current = false;
+      lastOffCourseAnnouncedRef.current = 0;
+      lastTurnAnnouncementStageRef.current = { index: -1, stage: 'none' };
+      setCurrentRouteIdx(0);
+      toast.success("Route recalculated automatically");
+      speak("Rerouting. A new path has been calculated.", voiceOn);
+      
+      // Refresh AI advisory
+      fetchAIRouteAdvisory(result);
+    } catch (err: any) {
+      console.error("Auto-rerouting failed:", err);
+    } finally {
+      setRouteBusy(false);
+    }
+  };
+
   const computeRoute = async () => {
     let target: { lat: number; lon: number; label: string } | null = destination;
     if (!target && farmTarget) target = { ...farmTarget, label: `Farm ${farmTarget.lat.toFixed(4)}, ${farmTarget.lon.toFixed(4)}` };
@@ -707,12 +967,19 @@ export default function AGNav() {
       lastTurnAnnouncedIdxRef.current = -1;
       lastArrivalAnnouncedRef.current = false;
       lastOffCourseAnnouncedRef.current = 0;
+      lastTurnAnnouncementStageRef.current = { index: -1, stage: 'none' };
+      setCurrentRouteIdx(0);
       setSimStepIdx(0);
       setSimulating(false);
+      setIsNavigating(false);
+      
       const km = (result.distance_m / 1000).toFixed(1);
       const min = (result.duration_s / 60).toFixed(0);
       toast.success(`Route ${km} km · ${min} min · risk ${result.risk_level}`);
       speak(`Route ready. ${km} kilometres. About ${min} minutes. Risk ${result.risk_level}.`, voiceOn);
+
+      // Async AI route assessment
+      fetchAIRouteAdvisory(result);
     } catch (err: any) { toast.error(err.message || "Routing failed"); }
     finally { setRouteBusy(false); }
   };
@@ -1152,77 +1419,172 @@ export default function AGNav() {
               <Button size="sm" variant="ghost" onClick={() => { setDestination(null); setRouteResult(null); setSimStepIdx(0); setSimulating(false); }}>Clear</Button>
             </div>
 
-            {/* SIMULATION GPS PLAYER CONTROLS (Available for both marine and road route navigation) */}
+            {/* SIMULATION GPS PLAYER CONTROLS & AI CO-PILOT ADVISORY */}
             {routeResult && (
-              <div className="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-lg space-y-2 mt-2 text-left">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-emerald-700 flex items-center gap-1">
-                    <Navigation className="h-3.5 w-3.5 animate-pulse" /> Live Simulator Guidance
-                  </span>
-                  <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-emerald-800 uppercase font-bold">
-                    {navMode === "road" ? `${travelMode} speed` : "water route"}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1.5">
-                    {simulating ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSimulating(false);
-                          speak("Navigation simulation paused.", voiceOn);
-                        }}
-                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
-                      >
-                        <Pause className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSimulating(true);
-                          speak(`Starting real-time navigator simulation.`, voiceOn);
-                        }}
-                        className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 px-3"
-                      >
-                        <Play className="h-4 w-4 fill-current" /> Start Navigation
-                      </Button>
-                    )}
-                    {(simulating || simStepIdx > 0) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSimulating(false);
-                          setSimStepIdx(0);
-                          if (routeResult.route && routeResult.route.length > 0) {
-                            setCurrentPos({ lat: routeResult.route[0][0], lon: routeResult.route[0][1] });
-                          }
-                          speak("Guidance reset to starting point.", voiceOn);
-                          toast.info("Navigator reset to start position");
-                        }}
-                        className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
-                      >
-                        <Square className="h-3.5 w-3.5 fill-current" />
-                      </Button>
-                    )}
+              <div className="space-y-3">
+                <div className="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-lg space-y-3 mt-2 text-left">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                      <Navigation className="h-3.5 w-3.5 animate-pulse" /> Active Navigation Control
+                    </span>
+                    <span className="font-mono bg-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] text-emerald-800 uppercase font-bold">
+                      {navMode === "road" ? `${travelMode} mode` : "water route"}
+                    </span>
                   </div>
 
-                  <div className="flex-1 space-y-1">
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>Progress</span>
-                      <span>{routeResult.route ? Math.round((simStepIdx / (routeResult.route.length - 1)) * 100) : 0}%</span>
-                    </div>
-                    <div className="w-full bg-emerald-500/20 h-1.5 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-emerald-600 h-full transition-all duration-300"
-                        style={{ width: `${routeResult.route ? (simStepIdx / (routeResult.route.length - 1)) * 100 : 0}%` }}
+                  <div className="flex flex-col gap-2">
+                    {/* Mode toggles */}
+                    <div className="flex items-center justify-between text-xs border-b border-emerald-500/10 pb-2">
+                      <span className="text-muted-foreground">Simulation Mode</span>
+                      <Switch
+                        checked={simulating}
+                        onCheckedChange={(checked) => {
+                          setSimulating(checked);
+                          if (checked) {
+                            setIsNavigating(false);
+                            speak("Simulation mode activated.", voiceOn);
+                          } else {
+                            if (position.lat && position.lon) {
+                              setCurrentPos({ lat: position.lat, lon: position.lon });
+                            }
+                            speak("Live navigation mode activated.", voiceOn);
+                          }
+                        }}
                       />
                     </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1.5">
+                        {simulating ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSimulating(false);
+                              speak("Navigation simulation paused.", voiceOn);
+                            }}
+                            className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
+                          >
+                            <Pause className="h-4 w-4" />
+                          </Button>
+                        ) : isNavigating ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              setIsNavigating(false);
+                              speak("Live navigation stopped.", voiceOn);
+                            }}
+                            className="h-9 px-3 flex items-center gap-1 font-semibold text-xs"
+                          >
+                            <Square className="h-3.5 w-3.5 mr-1" /> Stop
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setIsNavigating(true);
+                              setIsAutoFollow(true);
+                              speak(`Starting live navigation guidance.`, voiceOn);
+                            }}
+                            className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 px-3 text-xs font-semibold"
+                          >
+                            <Play className="h-3.5 w-3.5 fill-current" /> Start
+                          </Button>
+                        )}
+
+                        {simulating && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSimulating(false);
+                              setSimStepIdx(0);
+                              if (routeResult.route && routeResult.route.length > 0) {
+                                setCurrentPos({ lat: routeResult.route[0][0], lon: routeResult.route[0][1] });
+                              }
+                              speak("Guidance reset to starting point.", voiceOn);
+                              toast.info("Navigator reset to start position");
+                            }}
+                            className="h-9 w-9 p-0 border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-700"
+                          >
+                            <Square className="h-3.5 w-3.5 fill-current" />
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                          <span>Progress</span>
+                          <span>{routeResult.route ? Math.round((activeRouteIdx / (routeResult.route.length - 1)) * 100) : 0}%</span>
+                        </div>
+                        <div className="w-full bg-emerald-500/20 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-emerald-600 h-full transition-all duration-300"
+                            style={{ width: `${routeResult.route ? (activeRouteIdx / (routeResult.route.length - 1)) * 100 : 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                {/* AI CO-PILOT ADVISORY CARD */}
+                <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-amber-500/5 shadow-sm">
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                        <Bot className="h-4 w-4 text-emerald-600 animate-pulse" /> AI Co-Pilot Advisor
+                      </span>
+                      {aiAdvisoryLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                      ) : aiAdvisory ? (
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[9px] font-bold uppercase ${
+                            aiAdvisory.routeSafetyClass === "Safe" ? "text-green-600 border-green-200 bg-green-50" :
+                            aiAdvisory.routeSafetyClass === "Moderate" ? "text-yellow-600 border-yellow-200 bg-yellow-50" :
+                            aiAdvisory.routeSafetyClass === "High Risk" ? "text-orange-600 border-orange-200 bg-orange-50" :
+                            "text-red-600 border-red-200 bg-red-50"
+                          }`}
+                        >
+                          {aiAdvisory.routeSafetyClass} (Conf: {aiAdvisory.confidenceScore}%)
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    {aiAdvisoryLoading ? (
+                      <div className="py-4 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-1.5">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        Synthesizing environmental route intelligence...
+                      </div>
+                    ) : aiAdvisory ? (
+                      <div className="space-y-2 text-xs">
+                        <div className="bg-background/60 p-2 rounded border border-border/40">
+                          <span className="font-semibold text-muted-foreground block text-[10px] uppercase">Weather Impact</span>
+                          <p className="text-foreground text-[11px] leading-snug">{aiAdvisory.weatherImpact}</p>
+                        </div>
+                        <div className="bg-background/60 p-2 rounded border border-border/40">
+                          <span className="font-semibold text-muted-foreground block text-[10px] uppercase">Adaptive Advice</span>
+                          <p className="text-foreground text-[11px] leading-snug">{aiAdvisory.adaptiveBehaviorAdvice}</p>
+                        </div>
+                        <div className="bg-background/60 p-2 rounded border border-border/40">
+                          <span className="font-semibold text-muted-foreground block text-[10px] uppercase">Anomaly & Prediction</span>
+                          <p className="text-foreground text-[11px] leading-snug">
+                            {aiAdvisory.anomalyDetected !== "None" ? (
+                              <span className="text-destructive font-semibold">Anomaly: {aiAdvisory.anomalyDetected}. </span>
+                            ) : null}
+                            {aiAdvisory.movementPrediction}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="py-2 text-center text-[11px] text-muted-foreground">
+                        No route analysis available. Compute a route to get AI advisory.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
@@ -1312,9 +1674,42 @@ export default function AGNav() {
           <div className="flex items-center gap-2 ml-auto"><Layers className="h-3.5 w-3.5 text-muted-foreground" /><span className="text-xs text-muted-foreground">Toggle base layer top-right</span></div>
         </div>
 
-        <div className="rounded-lg overflow-hidden border h-[340px] sm:h-[480px] lg:h-[62vh] w-full">
+        <div className="relative rounded-lg overflow-hidden border h-[340px] sm:h-[480px] lg:h-[62vh] w-full">
+          {/* Floating GPS Lock status & telemetry badge */}
+          <div className="absolute top-4 left-4 z-[1000] pointer-events-none flex flex-col gap-1.5">
+            <Badge className={`shadow-md text-[10px] font-bold py-1 px-2 border flex items-center gap-1.5 ${
+              gpsLocked 
+                ? "bg-green-500/90 text-white border-green-400" 
+                : "bg-red-500/90 text-white border-red-400 animate-pulse"
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full bg-white ${gpsLocked ? "animate-ping" : ""}`} />
+              {gpsLocked ? "GPS LOCKED" : "GPS DISCONNECTED"}
+            </Badge>
+            {gpsLocked && speedKn > 0 && (
+              <Badge className="bg-background/90 text-foreground border shadow-md text-[10px] font-mono py-0.5 px-1.5">
+                SPEED: {speedKn.toFixed(1)} KN · HDG: {bearing.toFixed(0)}°
+              </Badge>
+            )}
+          </div>
+
+          {/* Floating Recenter button */}
+          {!isAutoFollow && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setIsAutoFollow(true);
+                speak("Recentered on your location.", voiceOn);
+              }}
+              className="absolute bottom-4 right-4 z-[1000] bg-background/95 hover:bg-background border shadow-md font-semibold text-xs flex items-center gap-1"
+            >
+              <Crosshair className="h-4 w-4 text-primary" /> Recenter
+            </Button>
+          )}
+
           <MapContainer center={center} zoom={destination || farmTarget ? 11 : 7} scrollWheelZoom style={{ height: "100%", width: "100%" }}>
             <FlyTo lat={center[0]} lon={center[1]} zoom={destination || farmTarget ? 11 : 7} />
+            <MapController center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} isAutoFollow={isAutoFollow} onMapInteraction={() => setIsAutoFollow(false)} />
+            
             {pickOnMap && <MapClickPicker onPick={onMapPick} />}
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked={navMode === "road"} name="Streets"><TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
@@ -1360,20 +1755,21 @@ export default function AGNav() {
               </CircleMarker>
             )}
 
-            {/* Pulsating outer blue halo glow when not in SOS mode */}
-            {!(sosStatus && sosStatus.status !== "RESOLVED") && blink && (
-              <CircleMarker 
-                center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} 
-                radius={16}
-                pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.25, weight: 0 }}
-              />
+            {/* Custom Rotated Navigation Pointer (Blue Dot) */}
+            {currentPos.lat && currentPos.lon && (
+              <Marker 
+                position={[currentPos.lat, currentPos.lon]}
+                icon={createNavigationPointer(bearing, sosStatus && sosStatus.status !== "RESOLVED", blink)}
+              >
+                <Popup>
+                  <div className="text-xs space-y-1">
+                    <p className="font-bold">You · {vesselId}</p>
+                    <p>Speed: {speedKn.toFixed(1)} knots</p>
+                    <p>Bearing: {bearing.toFixed(0)}°</p>
+                  </div>
+                </Popup>
+              </Marker>
             )}
-            {/* Vessel marker (blink red while SOS active, blink blue normally) */}
-            <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={10}
-              pathOptions={{ color: sosStatus && sosStatus.status !== "RESOLVED" ? (blink ? "#dc2626" : "#fca5a5") : (blink ? "#3b82f6" : "#2563eb"),
-                fillColor: sosStatus && sosStatus.status !== "RESOLVED" ? "#dc2626" : "#2563eb", fillOpacity: 0.85, weight: 2 }}>
-              <Popup>You · {vesselId}</Popup>
-            </CircleMarker>
 
             {destination && <Marker position={[destination.lat, destination.lon]}><Popup>Destination · {destination.label}</Popup></Marker>}
             {farmTarget && (
@@ -1388,8 +1784,25 @@ export default function AGNav() {
               <Polyline positions={boatTrail} pathOptions={{ color: "#16a34a", weight: 3, dashArray: "4 6" }} />
             )}
 
+            {/* Glowing gold logo route line for remaining path */}
+            {routeResult && routeResult.route && (
+              <Polyline
+                positions={routeResult.route.slice(activeRouteIdx)}
+                pathOptions={{ color: "#d4af37", weight: 6, opacity: 0.95 }}
+              />
+            )}
+
+            {/* Faded completed path line */}
+            {routeResult && routeResult.route && activeRouteIdx > 0 && (
+              <Polyline
+                positions={routeResult.route.slice(0, activeRouteIdx + 1)}
+                pathOptions={{ color: "#94a3b8", weight: 4, opacity: 0.5, dashArray: "4 4" }}
+              />
+            )}
+
+            {/* Risk segment overlay */}
             {routeResult && routeResult.risk_segments.map((s, i) => (
-              <Polyline key={`seg-${i}`} positions={s.coords} pathOptions={{ color: segmentColour(s.level), weight: 6, opacity: 0.9 }} />
+              <Polyline key={`seg-${i}`} positions={s.coords} pathOptions={{ color: segmentColour(s.level), weight: 3, opacity: 0.4 }} />
             ))}
             {routeResult && routeResult.alternatives.map((a, i) => (
               <Polyline key={`alt-${i}`} positions={a} pathOptions={{ color: "#94a3b8", weight: 3, opacity: 0.6, dashArray: "6 6" }} />
