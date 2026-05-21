@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import {
   Anchor, AlertTriangle, MapPin, Navigation, LifeBuoy, Layers, Loader2, Cloud,
   Route as RouteIcon, Search, Mic, MicOff, Volume2, VolumeX, Crosshair, Wind, Waves,
-  Save, Ship, Phone, MessageCircle, Send,
+  Save, Ship, Phone, MessageCircle, Send, Car,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -235,6 +235,7 @@ export default function AGNav() {
   // Voice
   const [voiceOn, setVoiceOn] = useState(true);
   const [listening, setListening] = useState(false);
+  const [navMode, setNavMode] = useState<"water" | "road">("water");
 
   // Load
   const [passengers, setPassengers] = useState<number>(1);
@@ -309,15 +310,19 @@ export default function AGNav() {
           setBoatTrail((t) => [...t.slice(-200), [lat, lon]]);
         }
 
-        // Turn-by-turn Voice Navigator (purposely styled for sea travel using nautical terms)
+        // Turn-by-turn Voice Navigator (configurable for sea/road modes)
         if (routeResult && routeResult.route && routeResult.route.length > 2) {
           const route = routeResult.route;
           const distToDest = haversineDist(lat, lon, route[route.length - 1][0], route[route.length - 1][1]);
+          const isRoad = navMode === "road";
           
           if (distToDest < 30) {
             if (!lastArrivalAnnouncedRef.current) {
               lastArrivalAnnouncedRef.current = true;
-              speak("Destination reached. Heave to and drop anchor.", voiceOn);
+              const arrivalMsg = isRoad 
+                ? "You have arrived at your destination." 
+                : "Destination reached. Heave to and drop anchor.";
+              speak(arrivalMsg, voiceOn);
               toast.success("Destination reached");
             }
           } else {
@@ -337,7 +342,10 @@ export default function AGNav() {
               const nowTime = Date.now();
               if (nowTime - lastOffCourseAnnouncedRef.current > 45000) {
                 lastOffCourseAnnouncedRef.current = nowTime;
-                speak("Warning. You are off course. Realign heading to route.", voiceOn);
+                const offRouteMsg = isRoad
+                  ? "Warning. You are off route. Recalculating directions."
+                  : "Warning. You are off course. Realign heading to route.";
+                speak(offRouteMsg, voiceOn);
                 toast.warning("Off course warning");
               }
             } else {
@@ -355,15 +363,26 @@ export default function AGNav() {
                 if (Math.abs(diff) > 25) {
                   if (lastTurnAnnouncedIdxRef.current !== scanIdx) {
                     lastTurnAnnouncedIdxRef.current = scanIdx;
-                    const direction = diff > 0 ? "starboard" : "port";
                     const roundedDist = Math.round(accumulatedDist);
 
-                    if (roundedDist < 40) {
-                      speak(`Steer ${direction} now.`, voiceOn);
-                      toast.info(`Steer ${direction} now`);
+                    if (isRoad) {
+                      const direction = diff > 0 ? "right" : "left";
+                      if (roundedDist < 40) {
+                        speak(`Turn ${direction} now.`, voiceOn);
+                        toast.info(`Turn ${direction} now`);
+                      } else {
+                        speak(`In ${roundedDist} meters, turn ${direction}.`, voiceOn);
+                        toast.info(`In ${roundedDist}m, turn ${direction}`);
+                      }
                     } else {
-                      speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
-                      toast.info(`In ${roundedDist}m, steer ${direction}`);
+                      const direction = diff > 0 ? "starboard" : "port";
+                      if (roundedDist < 40) {
+                        speak(`Steer ${direction} now.`, voiceOn);
+                        toast.info(`Steer ${direction} now`);
+                      } else {
+                        speak(`In ${roundedDist} meters, steer ${direction}.`, voiceOn);
+                        toast.info(`In ${roundedDist}m, steer ${direction}`);
+                      }
                     }
                   }
                   break;
@@ -404,7 +423,7 @@ export default function AGNav() {
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
     );
     return () => { navigator.geolocation.clearWatch(watchId); };
-  }, [showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, voiceOn, routeResult]);
+  }, [showLiveTrack, today, passengers, cargoKg, vesselId, user?.id, voiceOn, routeResult, navMode]);
 
   useEffect(() => {
     if (passengers > 20 || cargoKg > 1000) {
@@ -737,6 +756,37 @@ export default function AGNav() {
           <Button variant="outline" onClick={toggleVoiceInput} className="h-11">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
           <Button variant="outline" onClick={() => setVoiceOn((v) => !v)} className="h-11">{voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
           <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11"><Crosshair className="h-4 w-4" /></Button>
+        </div>
+        <div className="flex items-center justify-between border-t border-border/50 pt-2 text-xs">
+          <span className="text-muted-foreground font-medium flex items-center gap-1">
+            <Navigation className="h-3 w-3" /> Navigation Profile
+          </span>
+          <div className="flex bg-muted p-0.5 rounded-lg border border-border">
+            <Button
+              variant={navMode === "water" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setNavMode("water");
+                speak("Switched to water transport navigation. Marine voice director active.", voiceOn);
+                toast.info("Marine navigator active (Nautical director)");
+              }}
+              className="h-7 text-[11px] px-2.5 flex items-center gap-1 font-semibold"
+            >
+              <Waves className="h-3.5 w-3.5" /> Marine Mode
+            </Button>
+            <Button
+              variant={navMode === "road" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => {
+                setNavMode("road");
+                speak("Switched to road transport navigation. Road voice director active.", voiceOn);
+                toast.info("Road driving navigator active (Road director)");
+              }}
+              className="h-7 text-[11px] px-2.5 flex items-center gap-1 font-semibold"
+            >
+              <Car className="h-3.5 w-3.5" /> Road Driving Mode
+            </Button>
+          </div>
         </div>
         {destination && (
           <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">

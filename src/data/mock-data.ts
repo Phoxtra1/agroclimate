@@ -46,15 +46,37 @@ export const crops = [
   { id: "cassava", name: "Cassava", icon: "🥔" },
 ];
 
-export const weeklyForecast: WeatherDay[] = [
-  { day: "Today", date: "Feb 21", icon: "☀️", tempHigh: 34, tempLow: 23, rainProb: 15, description: "Sunny and warm", humidity: 62, wind: 8 },
-  { day: "Sat", date: "Feb 22", icon: "⛅", tempHigh: 33, tempLow: 22, rainProb: 30, description: "Partly cloudy", humidity: 65, wind: 10 },
-  { day: "Sun", date: "Feb 23", icon: "🌧️", tempHigh: 30, tempLow: 22, rainProb: 75, description: "Rain expected", humidity: 80, wind: 12 },
-  { day: "Mon", date: "Feb 24", icon: "🌧️", tempHigh: 28, tempLow: 21, rainProb: 85, description: "Heavy rain likely", humidity: 88, wind: 15 },
-  { day: "Tue", date: "Feb 25", icon: "⛅", tempHigh: 31, tempLow: 22, rainProb: 40, description: "Clearing up", humidity: 70, wind: 9 },
-  { day: "Wed", date: "Feb 26", icon: "☀️", tempHigh: 33, tempLow: 23, rainProb: 10, description: "Sunny", humidity: 58, wind: 7 },
-  { day: "Thu", date: "Feb 27", icon: "☀️", tempHigh: 35, tempLow: 24, rainProb: 5, description: "Hot and dry", humidity: 50, wind: 6 },
-];
+const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function generateWeeklyForecast(): WeatherDay[] {
+  const forecast: WeatherDay[] = [];
+  const baseData = [
+    { icon: "☀️", tempHigh: 34, tempLow: 23, rainProb: 15, description: "Sunny and warm", humidity: 62, wind: 8 },
+    { icon: "⛅", tempHigh: 33, tempLow: 22, rainProb: 30, description: "Partly cloudy", humidity: 65, wind: 10 },
+    { icon: "🌧️", tempHigh: 30, tempLow: 22, rainProb: 75, description: "Rain expected", humidity: 80, wind: 12 },
+    { icon: "🌧️", tempHigh: 28, tempLow: 21, rainProb: 85, description: "Heavy rain likely", humidity: 88, wind: 15 },
+    { icon: "⛅", tempHigh: 31, tempLow: 22, rainProb: 40, description: "Clearing up", humidity: 70, wind: 9 },
+    { icon: "☀️", tempHigh: 33, tempLow: 23, rainProb: 10, description: "Sunny", humidity: 58, wind: 7 },
+    { icon: "☀️", tempHigh: 35, tempLow: 24, rainProb: 5, description: "Hot and dry", humidity: 50, wind: 6 },
+  ];
+
+  const now = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    const dayName = i === 0 ? "Today" : weekdays[d.getDay()];
+    const dateString = `${months[d.getMonth()]} ${d.getDate()}`;
+    forecast.push({
+      day: dayName,
+      date: dateString,
+      ...baseData[i]
+    });
+  }
+  return forecast;
+}
+
+export const weeklyForecast: WeatherDay[] = generateWeeklyForecast();
 
 export const cropCalendars: CropCalendarEntry[] = [
   {

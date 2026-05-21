@@ -14,7 +14,7 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
     return (
       <div className="bg-card rounded-xl p-5 shadow-sm text-center">
         <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-        <p className="text-sm text-muted-foreground mt-2">Generating AI advisory…</p>
+        <p className="text-sm text-muted-foreground mt-2">Generating environmental advisory…</p>
       </div>
     );
   }
@@ -23,7 +23,7 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
     return (
       <div className="bg-card rounded-xl p-5 shadow-sm text-center">
         <Sprout className="h-8 w-8 mx-auto text-primary/40" />
-        <p className="text-sm text-muted-foreground mt-2">Get AI-powered crop, livestock & fish farming recommendations</p>
+        <p className="text-sm text-muted-foreground mt-2">Get crop, livestock & fish farming recommendations</p>
         <Button size="sm" className="mt-3" onClick={onRefresh}>
           <Lightbulb className="h-4 w-4 mr-1" /> Get Advisory
         </Button>
@@ -121,7 +121,7 @@ export function AICropAdvisory({ advisory, loading, onRefresh }: Props) {
 
       {/* Tip */}
       <div className="bg-primary/10 rounded-xl p-4">
-        <p className="text-sm font-semibold text-primary">💡 AI Tip</p>
+        <p className="text-sm font-semibold text-primary">💡 Pro Tip</p>
         <p className="text-sm text-muted-foreground mt-1">{advisory.tip}</p>
       </div>
 

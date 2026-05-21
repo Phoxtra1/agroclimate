@@ -212,27 +212,14 @@ export default function Alerts() {
     return (
       <div
         key={alert.id}
-        className={`rounded-xl border p-4 shadow-sm transition-all duration-300 ${
-          isAi
-            ? "border-primary/30 bg-primary/5 hover:border-primary/50 relative overflow-hidden group shadow-md"
-            : "border-border bg-card"
-        }`}
+        className="rounded-xl border p-4 shadow-sm transition-all duration-300 border-border bg-card"
       >
-        {isAi && (
-          <div className="absolute top-0 right-0 h-24 w-24 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/15 transition-all animate-pulse" />
-        )}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold">{alert.title}</h3>
               <Badge variant="outline">{filterLabel(inferAlertFilter(alert))}</Badge>
-              {isAi ? (
-                <Badge className="bg-primary text-primary-foreground border-transparent animate-pulse flex items-center gap-1 text-[10px]">
-                  <Sparkles className="h-3 w-3" /> Odeneho AI Advisory
-                </Badge>
-              ) : (
-                !alert.isRead && <span className="h-2 w-2 rounded-full bg-destructive" />
-              )}
+              {!alert.isRead && <span className="h-2 w-2 rounded-full bg-destructive" />}
               {feedback && (
                 <Badge variant="secondary" className="capitalize">
                   {feedback}

@@ -525,17 +525,17 @@ function severityBg(s: Severity): string {
   switch (s) {
     case "Critical": return "bg-destructive/10 border-destructive/20";
     case "High": return "bg-destructive/5 border-destructive/15";
-    case "Moderate": return "bg-accent border-accent";
+    case "Moderate": return "bg-warning/10 border-warning/20";
     case "Low": return "bg-muted border-border";
   }
 }
 
 function airQualityColor(level: AirQualityStatus["level"]): string {
   switch (level) {
-    case "Hazardous": return "bg-destructive/10 text-destructive";
-    case "Poor": return "bg-destructive/5 text-destructive";
-    case "Moderate": return "bg-accent text-accent-foreground";
-    case "Good": return "bg-primary/10 text-primary";
+    case "Hazardous": return "bg-destructive/10 text-destructive border border-destructive/20";
+    case "Poor": return "bg-destructive/5 text-destructive border border-destructive/10";
+    case "Moderate": return "bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/50";
+    case "Good": return "bg-primary/10 text-primary border border-primary/20";
   }
 }
 
@@ -873,11 +873,6 @@ export default function EnvironmentalMonitor() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{d.type}</span>
                     <Badge variant="outline" className={`text-[10px] ${severityColor(d.severity)}`}>{d.severity}</Badge>
-                    {(d as any).isAiBacked && (
-                      <Badge className="bg-primary/10 text-primary border-primary/20 text-[8px] h-4 flex items-center gap-0.5">
-                        <Sparkles className="h-2 w-2" /> AI Backed
-                      </Badge>
-                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
                 </div>
@@ -901,11 +896,6 @@ export default function EnvironmentalMonitor() {
               <div className="flex items-center gap-2 mb-1.5">
                 <impact.icon className={`h-4 w-4 ${severityColor(impact.status)}`} />
                 <span className="text-sm font-medium text-foreground">{impact.sector}</span>
-                {(impact as any).isAiBacked && (
-                  <Badge className="bg-primary/10 text-primary border-primary/20 text-[8px] h-4 flex items-center gap-0.5">
-                    <Sparkles className="h-2 w-2" /> AI Backed
-                  </Badge>
-                )}
                 <Badge variant="outline" className={`text-[10px] ml-auto ${severityColor(impact.status)}`}>
                   {impact.status}
                 </Badge>
@@ -963,7 +953,7 @@ export default function EnvironmentalMonitor() {
               <ul className="space-y-1.5">
                 {envState.airQuality.risks.map((r, i) => (
                   <li key={i} className="text-xs text-muted-foreground flex items-start gap-1.5">
-                    <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0 text-accent-foreground" />
+                    <AlertTriangle className="h-3 w-3 mt-0.5 flex-shrink-0 text-amber-500" />
                     <span>{r}</span>
                   </li>
                 ))}
