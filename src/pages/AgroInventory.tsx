@@ -559,7 +559,7 @@ export default function AgroInventory() {
                       <TableCell className="font-medium p-3">{r.crop_name}</TableCell>
                       <TableCell className="p-3">{r.quantity} {r.unit}</TableCell>
                       <TableCell className="p-3"><Badge variant="outline" className="text-[10px]">{r.quality_grade || "N/A"}</Badge></TableCell>
-                      <TableCell className="p-3 text-muted-foreground text-xs">{r.harvest_date || "—"}</TableCell>
+                      <TableCell className="p-3 text-muted-foreground text-xs">{r.harvest_date || "N/A"}</TableCell>
                       <TableCell className="text-right p-3">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("harvest_records", r.id)}>
                           <Trash2 className="h-4 w-4 text-destructive/70" />
@@ -641,7 +641,7 @@ export default function AgroInventory() {
                       <TableCell className="p-3">{r.quantity_sold} {r.unit}</TableCell>
                       <TableCell className="p-3">{formatCurrency(r.price_per_unit || 0)}</TableCell>
                       <TableCell className="p-3 font-semibold text-emerald-600">{formatCurrency((r.quantity_sold || 0) * (r.price_per_unit || 0))}</TableCell>
-                      <TableCell className="p-3 text-muted-foreground text-xs">{r.buyer_name || "—"}</TableCell>
+                      <TableCell className="p-3 text-muted-foreground text-xs">{r.buyer_name || "N/A"}</TableCell>
                       <TableCell className="text-right p-3">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("sales_records", r.id)}>
                           <Trash2 className="h-4 w-4 text-destructive/70" />

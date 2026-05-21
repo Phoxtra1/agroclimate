@@ -51,9 +51,14 @@ function getDeterministicAgroMetrics(tempHigh: number, tempLow: number, humidity
   return { rainMm, evapotranspiration, soilMoisture, soilTemperature };
 }
 
-// Map mock forecast to include deterministic agricultural metrics
+// Map mock forecast to include deterministic agricultural metrics and dynamic current dates
 const enrichMockForecast = (list: WeatherDay[]): WeatherDay[] => {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const now = new Date();
+
   return list.map((item, index) => {
+    const targetDate = new Date(now.getTime() + index * 24 * 60 * 60 * 1000);
     const tempHigh = item.tempHigh;
     const tempLow = item.tempLow;
     const humidity = item.humidity;
@@ -65,6 +70,8 @@ const enrichMockForecast = (list: WeatherDay[]): WeatherDay[] => {
 
     return {
       ...item,
+      day: index === 0 ? "Today" : days[targetDate.getDay()],
+      date: `${months[targetDate.getMonth()]} ${targetDate.getDate()}`,
       weatherCode,
       rainMm: item.rainMm ?? agro.rainMm,
       evapotranspiration: item.evapotranspiration ?? agro.evapotranspiration,

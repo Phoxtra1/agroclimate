@@ -393,10 +393,10 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                     <I label="Buyer" v={selected.buyer_name || "You"} />
                     <I label="Quantity" v={`${Number(selected.quantity_needed).toLocaleString()} ${selected.unit}`} />
                     <I label="Target price" v={formatMarketPrice(selected.target_price, selected.unit, selected.price_label)} />
-                    <I label="Region" v={selected.region || "—"} />
-                    <I label="Quality" v={selected.quality || "—"} />
-                    <I label="Grade" v={selected.grade || "—"} />
-                    <I label="Moisture" v={selected.moisture || "—"} />
+                    <I label="Region" v={selected.region || "N/A"} />
+                    <I label="Quality" v={selected.quality || "N/A"} />
+                    <I label="Grade" v={selected.grade || "N/A"} />
+                    <I label="Moisture" v={selected.moisture || "N/A"} />
                     <I label="Delivery" v={`${selected.delivery_start || "?"} → ${selected.delivery_end || "?"}`} />
                   </div>
                   {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
@@ -426,10 +426,10 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                   <I label="Buyer" v={selected.buyer_name || "Buyer"} />
                   <I label="Quantity" v={`${Number(selected.quantity_needed).toLocaleString()} ${selected.unit}`} />
                   <I label="Target price" v={formatMarketPrice(selected.target_price, selected.unit, selected.price_label)} />
-                  <I label="Region" v={selected.region || "—"} />
-                  <I label="Quality" v={selected.quality || "—"} />
-                  <I label="Grade" v={selected.grade || "—"} />
-                  <I label="Moisture" v={selected.moisture || "—"} />
+                  <I label="Region" v={selected.region || "N/A"} />
+                  <I label="Quality" v={selected.quality || "N/A"} />
+                  <I label="Grade" v={selected.grade || "N/A"} />
+                  <I label="Moisture" v={selected.moisture || "N/A"} />
                   <I label="Delivery" v={`${selected.delivery_start || "?"} → ${selected.delivery_end || "?"}`} />
                 </div>
                 {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}

@@ -856,7 +856,7 @@ export default function AGNav() {
             {showWind && today && (
               <CircleMarker center={[currentPos.lat || 7.95, currentPos.lon || -1.03]} radius={Math.max(6, ((today as any).windSpeed || 4))}
                 pathOptions={{ color: "#0891b2", fillColor: "#0891b2", fillOpacity: 0.4 }}>
-                <Popup>Wind {(today as any).windSpeed || "—"} m/s {(today as any).windDir != null ? `· ${(today as any).windDir}°` : ""}</Popup>
+                <Popup>Wind {(today as any).windSpeed || 0} m/s {(today as any).windDir != null ? `· ${(today as any).windDir}°` : ""}</Popup>
               </CircleMarker>
             )}
 

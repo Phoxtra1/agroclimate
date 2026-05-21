@@ -242,9 +242,9 @@ export default function Aquaculture() {
                     <CardContent className="space-y-3">
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div className="flex items-center gap-2"><Fish className="h-4 w-4 text-muted-foreground" /><span>{pond.stock_count} fish</span></div>
-                        <div className="flex items-center gap-2"><Thermometer className="h-4 w-4 text-muted-foreground" /><span>{pond.water_temp ?? "—"}°C</span></div>
-                        <div className="flex items-center gap-2"><Droplets className="h-4 w-4 text-muted-foreground" /><span className={phStatus.color}>pH: {pond.ph_level ?? "—"}</span></div>
-                        <div className="flex items-center gap-2"><Wind className="h-4 w-4 text-muted-foreground" /><span>O₂: {pond.dissolved_oxygen ?? "—"} mg/L</span></div>
+                        <div className="flex items-center gap-2"><Thermometer className="h-4 w-4 text-muted-foreground" /><span>{pond.water_temp ?? "N/A"}°C</span></div>
+                        <div className="flex items-center gap-2"><Droplets className="h-4 w-4 text-muted-foreground" /><span className={phStatus.color}>pH: {pond.ph_level ?? "N/A"}</span></div>
+                        <div className="flex items-center gap-2"><Wind className="h-4 w-4 text-muted-foreground" /><span>O₂: {pond.dissolved_oxygen ?? "N/A"} mg/L</span></div>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border pt-3">
                         <div className="flex items-center gap-1">

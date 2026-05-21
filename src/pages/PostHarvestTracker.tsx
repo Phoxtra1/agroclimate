@@ -44,7 +44,7 @@ function OverviewPanel({ entries }: { entries: HarvestEntry[] }) {
       <Card><CardContent className="pt-4">
         <div className="flex items-center gap-2 text-muted-foreground text-xs"><Sprout className="h-4 w-4" /> Recent harvests</div>
         <p className="text-2xl font-bold mt-1">{recent.length}</p>
-        <p className="text-xs text-muted-foreground truncate">{recent.map((r) => r.crop_name).join(", ") || "—"}</p>
+        <p className="text-xs text-muted-foreground truncate">{recent.map((r) => r.crop_name).join(", ") || "None"}</p>
       </CardContent></Card>
     </div>
   );
@@ -247,7 +247,7 @@ function HarvestList({ entries, onAdvice, onDelete }: { entries: HarvestEntry[];
                         {riskBadge(risk.level)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {risk.days} day{risk.days === 1 ? "" : "s"} since harvest · {e.storage_method || "—"} · {e.storage_location || "no location"}
+                        {risk.days} day{risk.days === 1 ? "" : "s"} since harvest · {e.storage_method || "N/A"} · {e.storage_location || "no location"}
                       </p>
                       <p className="text-xs mt-1">{risk.message}</p>
                       {e.photos && e.photos.length > 0 && (
@@ -291,7 +291,7 @@ function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; ope
         <div className="space-y-3 text-sm">
           <p><b>Crop:</b> {entry.crop_name}</p>
           <p><b>Days stored:</b> {risk.days}</p>
-          <p><b>Storage method:</b> {entry.storage_method || "—"}</p>
+          <p><b>Storage method:</b> {entry.storage_method || "N/A"}</p>
           <p><b>Risk level:</b> {risk.level}</p>
           <p className="text-muted-foreground text-xs">We'll send this context to Odeneho AI for a detailed recommendation.</p>
         </div>

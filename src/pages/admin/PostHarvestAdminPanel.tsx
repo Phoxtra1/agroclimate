@@ -61,7 +61,7 @@ export default function PostHarvestAdminPanel() {
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{entries.length}</p><p className="text-xs text-muted-foreground">Total entries</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold text-red-500">{aggregates.totalDanger}</p><p className="text-xs text-muted-foreground">High-risk</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{new Set(entries.map((e) => e.user_id)).size}</p><p className="text-xs text-muted-foreground">Active farmers</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{aggregates.top[0]?.[0] || "—"}</p><p className="text-xs text-muted-foreground">Most-affected crop</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{aggregates.top[0]?.[0] || "N/A"}</p><p className="text-xs text-muted-foreground">Most-affected crop</p></CardContent></Card>
       </div>
 
       <Card>
@@ -103,7 +103,7 @@ export default function PostHarvestAdminPanel() {
                         {e.risk_override && <Badge variant="outline" className="text-[10px]">override</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {risk.days}d · {e.storage_method || "—"} · {e.storage_location || "—"} · user {e.user_id.slice(0, 8)}
+                        {risk.days}d · {e.storage_method || "N/A"} · {e.storage_location || "N/A"} · user {e.user_id.slice(0, 8)}
                       </p>
                     </div>
                     <div className="shrink-0">

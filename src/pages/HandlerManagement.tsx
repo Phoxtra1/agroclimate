@@ -253,7 +253,7 @@ export default function HandlerManagement() {
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">Handler account created! Share these credentials:</p>
                   <div className="bg-muted p-3 rounded-lg text-sm space-y-1">
-                    <p><strong>Email:</strong> {newHandler.email || "—"}</p>
+                    <p><strong>Email:</strong> {newHandler.email || "N/A"}</p>
                     <p><strong>Login:</strong> {window.location.origin}</p>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(inviteLink); toast({ title: "Copied!" }); }}>
@@ -395,7 +395,7 @@ export default function HandlerManagement() {
                           <span>Handler: {getHandlerName(t.handler_id)}</span>
                           {t.field_location && <span>• {t.field_location}</span>}
                           {t.deadline && <span>• Due: {format(new Date(t.deadline), "dd MMM, HH:mm")}</span>}
-                          {t.quantity_label && <span>• {t.quantity_completed ?? "—"}/{t.quantity_expected} {t.quantity_label}</span>}
+                          {t.quantity_label && <span>• {t.quantity_completed ?? 0}/{t.quantity_expected} {t.quantity_label}</span>}
                           <span>• Evidence: {taskEvidence.length}</span>
                         </div>
                       </div>
