@@ -24,7 +24,7 @@ export default function Landing() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regPhone, setRegPhone] = useState("");
-  const [farmerType, setFarmerType] = useState("smallholder");
+  const [accountType, setAccountType] = useState("farmer");
   const [droneOwnership, setDroneOwnership] = useState(false);
   const [droneType, setDroneType] = useState("");
   const [loading, setLoading] = useState(false);
@@ -81,10 +81,10 @@ export default function Landing() {
     e.preventDefault();
     setLoading(true);
     const extraData = {
-      role: farmerType === "driver" ? "driver" : "user",
-      farmer_type: farmerType,
-      drone_ownership: droneOwnership,
-      drone_type: droneOwnership ? droneType : null,
+      role: accountType === "driver" ? "driver" : accountType === "buyer" ? "buyer" : "user",
+      account_type: accountType,
+      drone_ownership: accountType === "farmer" ? droneOwnership : false,
+      drone_type: (accountType === "farmer" && droneOwnership) ? droneType : null,
       phone: regPhone
     };
     const { error } = await signUp(regEmail.trim(), regPassword, regName, extraData);
@@ -189,36 +189,37 @@ export default function Landing() {
                         <Input placeholder="Password (min 6 chars)" type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required minLength={6} />
                         
                         <div>
-                          <label className="text-xs font-medium mb-1.5 block">I am a</label>
-                          <Select value={farmerType} onValueChange={setFarmerType}>
+                          <label className="text-xs font-medium mb-1.5 block">I am registering as a</label>
+                          <Select value={accountType} onValueChange={setAccountType}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="smallholder">Smallholder Farmer</SelectItem>
-                              <SelectItem value="commercial">Commercial Farmer</SelectItem>
-                              <SelectItem value="cooperative">Cooperative Member</SelectItem>
-                              <SelectItem value="surveyor">Land Surveyor</SelectItem>
-                              <SelectItem value="forestry">Forestry Agent</SelectItem>
-                              <SelectItem value="extension">Extension Officer</SelectItem>
+                              <SelectItem value="farmer">Farmer</SelectItem>
+                              <SelectItem value="buyer">Buyer</SelectItem>
                               <SelectItem value="driver">Transport Driver</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="drone"
-                            checked={droneOwnership}
-                            onCheckedChange={(checked) => setDroneOwnership(checked === true)}
-                          />
-                          <label htmlFor="drone" className="text-xs">I own/operate a drone</label>
-                        </div>
+                        {accountType === "farmer" && (
+                          <>
+                            <div className="flex items-center space-x-2 mt-2">
+                              <Checkbox
+                                id="drone"
+                                checked={droneOwnership}
+                                onCheckedChange={(checked) => setDroneOwnership(checked === true)}
+                              />
+                              <label htmlFor="drone" className="text-xs">I own/operate a drone</label>
+                            </div>
 
-                        {droneOwnership && (
-                          <Input
-                            placeholder="Drone type/model (optional)"
-                            value={droneType}
-                            onChange={(e) => setDroneType(e.target.value)}
-                          />
+                            {droneOwnership && (
+                              <Input
+                                placeholder="Drone type/model (optional)"
+                                value={droneType}
+                                onChange={(e) => setDroneType(e.target.value)}
+                                className="mt-2"
+                              />
+                            )}
+                          </>
                         )}
 
                         <Button type="submit" className="w-full" disabled={loading}>

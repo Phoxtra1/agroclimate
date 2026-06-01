@@ -146,6 +146,22 @@ function DriverRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function BuyerRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { role, roleLoading } = useUserRole();
+  const isPreview = isPreviewEnvironment();
+
+  if (loading || roleLoading) return <LoadingScreen />;
+  
+  if (user && !isPreview) {
+    if (role === "user") return <Navigate to="/dashboard" replace />;
+    if (role === "driver") return <Navigate to="/agtrans-partner/dashboard" replace />;
+    if (role === "handler") return <Navigate to="/handlers" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { role, roleLoading } = useUserRole();
@@ -217,12 +233,12 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Public Marketplace (buyer-facing) — does NOT require auth to browse */}
-      <Route path="/marketplace" element={<MarketplaceHome />} />
-      <Route path="/marketplace/supply" element={<MarketplaceSupplyPage />} />
-      <Route path="/marketplace/orders" element={<MarketplaceOrderForm />} />
-      <Route path="/marketplace/order-listing" element={<MarketplaceOrderListing />} />
-      <Route path="/marketplace/auth" element={<MarketplaceAuth />} />
-      <Route path="/marketplace/inbox" element={<MarketplaceInbox />} />
+      <Route path="/marketplace" element={<BuyerRoute><MarketplaceHome /></BuyerRoute>} />
+      <Route path="/marketplace/supply" element={<BuyerRoute><MarketplaceSupplyPage /></BuyerRoute>} />
+      <Route path="/marketplace/orders" element={<BuyerRoute><MarketplaceOrderForm /></BuyerRoute>} />
+      <Route path="/marketplace/order-listing" element={<BuyerRoute><MarketplaceOrderListing /></BuyerRoute>} />
+      <Route path="/marketplace/auth" element={<Navigate to="/" replace />} />
+      <Route path="/marketplace/inbox" element={<BuyerRoute><MarketplaceInbox /></BuyerRoute>} />
 
       {/* Handler workspace */}
       <Route path="/handlers" element={<HandlerRoute><HandlerWorkspace /></HandlerRoute>} />

@@ -41,7 +41,7 @@ export default function MarketplaceInbox() {
   }, [user]);
 
   if (loading) return <MarketplaceLayout><p>Loading…</p></MarketplaceLayout>;
-  if (!user) return <Navigate to="/marketplace/auth" replace />;
+  if (!user) return <Navigate to="/" replace />;
 
   return (
     <MarketplaceLayout>

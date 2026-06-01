@@ -15,7 +15,7 @@ export default function MarketplaceHome() {
   if (loading) return null;
   if (!user) {
     // Strict gate — buyers must register / sign in before browsing the marketplace.
-    return <Navigate to="/marketplace/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return (
