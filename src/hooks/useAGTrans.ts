@@ -11,21 +11,37 @@ export interface TransportRequest {
   unit: string;
   pickup_location: string;
   dropoff_location: string;
-  status: "pending" | "accepted" | "in_transit" | "delivered" | "disputed";
+  status: "searching_for_driver" | "driver_matched" | "driver_en_route" | "cargo_picked" | "in_transit" | "near_destination" | "delivered" | "delivery_confirmed" | "cancelled" | "delayed";
   price_offer: number;
   created_at: string;
   notes: string;
+  pickup_time?: string;
+  urgency?: string;
   driver_id?: string;
   tracking_id?: string;
 }
 
 export interface DriverProfile {
   user_id: string;
+  full_name: string;
+  phone_number: string;
   vehicle_type: string;
+  plate_number: string;
   license_number: string;
-  verification_status: "pending" | "verified" | "rejected";
+  license_class: string;
+  region: string;
+  district: string;
+  capacity: string;
+  routes: string;
+  preferred_corridors: string;
+  license_upload_url?: string;
+  availability_status: "online" | "offline";
+  verification_status: "pending" | "verified" | "suspended" | "rejected";
   rating: number;
   total_trips: number;
+  completed_trips: number;
+  cancelled_trips: number;
+  reliability_score: number;
 }
 
 export function useAGTrans() {
@@ -86,7 +102,7 @@ export function useAGTrans() {
       .insert({
         ...payload,
         supplier_id: user.id,
-        status: "pending",
+        status: "searching_for_driver",
         tracking_id
       })
       .select()
@@ -94,8 +110,11 @@ export function useAGTrans() {
 
     if (error) throw error;
     
-    // Broadcast via edge function
-    supabase.functions.invoke("agtrans-broadcast", { body: { request_id: data.id } }).catch(console.error);
+    // Broadcast via edge function using Layered Notification Logic:
+    // FIRST LAYER: Nearby drivers
+    // SECOND LAYER: If no response, expand to district, then region, then national.
+    // This logic runs securely in the backend avoiding client-side spoofing.
+    supabase.functions.invoke("agtrans-broadcast", { body: { request_id: data.id, layer: "nearby" } }).catch(console.error);
 
     return data;
   };
@@ -136,7 +155,11 @@ export function useAGTrans() {
       .insert({
         ...payload,
         user_id: user.id,
-        verification_status: "pending"
+        verification_status: "pending",
+        availability_status: "offline",
+        reliability_score: 100,
+        completed_trips: 0,
+        cancelled_trips: 0
       })
       .select()
       .single();
@@ -146,6 +169,29 @@ export function useAGTrans() {
     return data;
   };
 
+  const toggleAvailability = async (status: "online" | "offline") => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("agtrans_drivers" as any)
+      .update({ availability_status: status })
+      .eq("user_id", user.id);
+    if (!error && driverProfile) {
+      setDriverProfile({ ...driverProfile, availability_status: status });
+    }
+  };
+
+  const confirmDelivery = async (id: string) => {
+    const { error } = await supabase
+      .from("transport_requests" as any)
+      .update({ status: "delivery_confirmed" })
+      .eq("id", id);
+      
+    if (error) throw error;
+    
+    // Update driver reliability metrics and post-harvest tracking systems via edge function
+    supabase.functions.invoke("agtrans-delivery-confirmed", { body: { request_id: id } }).catch(console.error);
+  };
+
   return {
     requests,
     loading,
@@ -153,6 +199,8 @@ export function useAGTrans() {
     createRequest,
     updateRequestStatus,
     updateDriverLocation,
-    createDriverProfile
+    createDriverProfile,
+    toggleAvailability,
+    confirmDelivery
   };
 }

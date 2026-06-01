@@ -92,10 +92,12 @@ function useUserRole() {
         .eq("user_id", user.id);
 
       const roles = (data || []).map((r: any) => r.role);
+      const metaRole = user.user_metadata?.role || user.user_metadata?.account_type;
+
       if (roles.includes("admin")) setRole("admin");
       else if (roles.includes("handler")) setRole("handler");
-      else if (roles.includes("buyer")) setRole("buyer");
-      else if (roles.includes("driver")) setRole("driver");
+      else if (roles.includes("buyer") || metaRole === "buyer") setRole("buyer");
+      else if (roles.includes("driver") || metaRole === "driver") setRole("driver");
       else setRole("user");
       setRoleLoading(false);
     };

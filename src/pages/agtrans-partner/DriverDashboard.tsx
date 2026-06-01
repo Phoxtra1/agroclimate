@@ -5,12 +5,13 @@ import { useAGTrans, TransportRequest } from "@/hooks/useAGTrans";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Package, Clock, Bot } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { MapPin, Package, Clock, Bot, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 export default function DriverDashboard() {
   const { user } = useAuth();
-  const { requests, driverProfile, loading, updateRequestStatus } = useAGTrans();
+  const { requests, driverProfile, loading, updateRequestStatus, toggleAvailability } = useAGTrans();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,11 +39,29 @@ export default function DriverDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Driver Dashboard</h1>
-        <Badge variant={driverProfile.verification_status === "verified" ? "default" : "secondary"}>
-          {driverProfile.verification_status.toUpperCase()}
-        </Badge>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            Driver Dashboard
+            <Badge variant={driverProfile.verification_status === "verified" ? "default" : "secondary"}>
+              {driverProfile.verification_status.toUpperCase()}
+            </Badge>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Welcome back, {driverProfile.full_name || "Partner"}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 bg-card p-2 px-4 rounded-lg border">
+          <span className="text-sm font-medium">Availability</span>
+          <Switch 
+            checked={driverProfile.availability_status === "online"}
+            onCheckedChange={(c) => toggleAvailability(c ? "online" : "offline")}
+            disabled={driverProfile.verification_status !== "verified"}
+          />
+          <Badge variant={driverProfile.availability_status === "online" ? "default" : "secondary"} className="uppercase text-[10px]">
+            {driverProfile.availability_status}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -66,9 +85,11 @@ export default function DriverDashboard() {
         </Card>
       </div>
 
-      {myActiveTrips.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Current Trips</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          {myActiveTrips.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Current Trips</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {myActiveTrips.map(trip => (
               <Card key={trip.id} className="border-primary bg-primary/5">
@@ -133,6 +154,32 @@ export default function DriverDashboard() {
             ))}
           </div>
         )}
+      </div>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bell className="h-5 w-5" /> Notification Center
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="p-3 bg-muted rounded-md text-sm border-l-2 border-primary">
+                  <p className="font-semibold text-primary">System Notice</p>
+                  <p className="text-muted-foreground mt-1 text-xs">Maintain high reliability to receive Layer 1 priority alerts for new delivery requests in your district.</p>
+                </div>
+                {availableRequests.length > 0 && (
+                  <div className="p-3 bg-primary/10 rounded-md text-sm">
+                    <p className="font-semibold">New Logistics Request</p>
+                    <p className="text-muted-foreground mt-1 text-xs">There are {availableRequests.length} new transport requests in your operational zone.</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

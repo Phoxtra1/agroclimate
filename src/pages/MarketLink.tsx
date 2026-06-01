@@ -317,13 +317,15 @@ function ContractsPanel() {
 }
 
 function AGTransSupplierPanel() {
-  const { createRequest, requests } = useAGTrans();
+  const { createRequest, requests, confirmDelivery } = useAGTrans();
   const { user } = useAuth();
   const [cargo, setCargo] = useState("");
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState("kg");
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+  const [pickupTime, setPickupTime] = useState("");
+  const [urgency, setUrgency] = useState("standard");
   const [price, setPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
@@ -340,11 +342,13 @@ function AGTransSupplierPanel() {
         unit,
         pickup_location: pickup,
         dropoff_location: dropoff,
+        pickup_time: pickupTime,
+        urgency,
         price_offer: Number(price),
         notes
       });
       toast.success("Transport request broadcasted to AGTrans network!");
-      setCargo(""); setQty(""); setPickup(""); setDropoff(""); setPrice(""); setNotes("");
+      setCargo(""); setQty(""); setPickup(""); setDropoff(""); setPickupTime(""); setUrgency("standard"); setPrice(""); setNotes("");
     } catch (err: any) {
       toast.error(err.message || "Failed to broadcast request");
     } finally {
@@ -370,6 +374,20 @@ function AGTransSupplierPanel() {
             </div>
             <div><Label>Pickup Location</Label><Input value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Farm or Warehouse address" required /></div>
             <div><Label>Dropoff Location</Label><Input value={dropoff} onChange={(e) => setDropoff(e.target.value)} placeholder="Market or Buyer address" required /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Preferred Pickup Time</Label><Input type="datetime-local" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} required /></div>
+              <div>
+                <Label>Urgency</Label>
+                <Select value={urgency} onValueChange={setUrgency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="express">Express</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div><Label>Price Offer (GHS)</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Your budget" required /></div>
             <div className="sm:col-span-2"><Label>Notes/Instructions</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special handling instructions?" rows={2} /></div>
             <div className="sm:col-span-2"><Button type="submit" disabled={loading} className="w-full">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Broadcast Request"}</Button></div>
@@ -401,6 +419,22 @@ function AGTransSupplierPanel() {
                     {req.status.replace("_", " ")}
                   </Badge>
                   <p className="font-semibold mt-1">GHS {req.price_offer}</p>
+                  {req.status === "delivered" && (
+                    <Button 
+                      size="sm" 
+                      className="mt-2 w-full text-xs" 
+                      onClick={async () => {
+                        try {
+                          await confirmDelivery(req.id);
+                          toast.success("Delivery confirmed securely.");
+                        } catch (e) {
+                          toast.error("Failed to confirm delivery");
+                        }
+                      }}
+                    >
+                      Confirm Delivery
+                    </Button>
+                  )}
                 </div>
               </div>
             ))

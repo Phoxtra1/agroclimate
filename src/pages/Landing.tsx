@@ -26,6 +26,7 @@ export default function Landing() {
   const [regPhone, setRegPhone] = useState("");
   const [accountType, setAccountType] = useState("farmer");
   const [droneOwnership, setDroneOwnership] = useState(false);
+  const [waterTransport, setWaterTransport] = useState(false);
   const [droneType, setDroneType] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -84,6 +85,7 @@ export default function Landing() {
       role: accountType === "driver" ? "driver" : accountType === "buyer" ? "buyer" : "user",
       account_type: accountType,
       drone_ownership: accountType === "farmer" ? droneOwnership : false,
+      water_transport: accountType === "farmer" ? waterTransport : false,
       drone_type: (accountType === "farmer" && droneOwnership) ? droneType : null,
       phone: regPhone
     };
@@ -202,13 +204,23 @@ export default function Landing() {
 
                         {accountType === "farmer" && (
                           <>
-                            <div className="flex items-center space-x-2 mt-2">
-                              <Checkbox
-                                id="drone"
-                                checked={droneOwnership}
-                                onCheckedChange={(checked) => setDroneOwnership(checked === true)}
-                              />
-                              <label htmlFor="drone" className="text-xs">I own/operate a drone</label>
+                            <div className="flex flex-col space-y-2 mt-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="drone"
+                                  checked={droneOwnership}
+                                  onCheckedChange={(checked) => setDroneOwnership(checked === true)}
+                                />
+                                <label htmlFor="drone" className="text-xs">Flight Navigator</label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id="water_transport"
+                                  checked={waterTransport}
+                                  onCheckedChange={(checked) => setWaterTransport(checked === true)}
+                                />
+                                <label htmlFor="water_transport" className="text-xs">Water Transporter</label>
+                              </div>
                             </div>
 
                             {droneOwnership && (

@@ -80,13 +80,13 @@ export default function VerifyEmail() {
 
         <CardContent className="space-y-3">
           {status === "success" && (
-            <Link to="/login">
+            <Link to="/">
               <Button className="w-full">Go to Login</Button>
             </Link>
           )}
 
           {status === "error" && (
-            <Link to="/signup">
+            <Link to="/">
               <Button variant="outline" className="w-full">
                 Try Again
               </Button>
