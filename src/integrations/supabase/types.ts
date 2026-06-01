@@ -93,6 +93,244 @@ export type Database = {
           },
         ]
       }
+      agtrans_drivers: {
+        Row: {
+          availability_status: string
+          cancellations: number | null
+          completed_deliveries: number | null
+          created_at: string
+          disputes: number | null
+          district: string | null
+          full_name: string
+          id: string
+          late_deliveries: number | null
+          license_class: string | null
+          license_url: string | null
+          notes: string | null
+          phone: string
+          plate_number: string
+          preferred_corridors: string[] | null
+          region: string | null
+          reliability_score: number | null
+          route_coverage: string[] | null
+          updated_at: string
+          user_id: string
+          vehicle_capacity_kg: number | null
+          vehicle_type: string
+          verification_status: string
+        }
+        Insert: {
+          availability_status?: string
+          cancellations?: number | null
+          completed_deliveries?: number | null
+          created_at?: string
+          disputes?: number | null
+          district?: string | null
+          full_name: string
+          id?: string
+          late_deliveries?: number | null
+          license_class?: string | null
+          license_url?: string | null
+          notes?: string | null
+          phone: string
+          plate_number: string
+          preferred_corridors?: string[] | null
+          region?: string | null
+          reliability_score?: number | null
+          route_coverage?: string[] | null
+          updated_at?: string
+          user_id: string
+          vehicle_capacity_kg?: number | null
+          vehicle_type: string
+          verification_status?: string
+        }
+        Update: {
+          availability_status?: string
+          cancellations?: number | null
+          completed_deliveries?: number | null
+          created_at?: string
+          disputes?: number | null
+          district?: string | null
+          full_name?: string
+          id?: string
+          late_deliveries?: number | null
+          license_class?: string | null
+          license_url?: string | null
+          notes?: string | null
+          phone?: string
+          plate_number?: string
+          preferred_corridors?: string[] | null
+          region?: string | null
+          reliability_score?: number | null
+          route_coverage?: string[] | null
+          updated_at?: string
+          user_id?: string
+          vehicle_capacity_kg?: number | null
+          vehicle_type?: string
+          verification_status?: string
+        }
+        Relationships: []
+      }
+      agtrans_ratings: {
+        Row: {
+          comment: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          rater_id: string
+          rater_role: string
+          request_id: string
+          score: number
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          rater_id: string
+          rater_role?: string
+          request_id: string
+          score: number
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          rater_id?: string
+          rater_role?: string
+          request_id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agtrans_ratings_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "agtrans_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agtrans_requests: {
+        Row: {
+          agreement_id: string | null
+          buyer_id: string | null
+          created_at: string
+          delivery_lat: number | null
+          delivery_location: string
+          delivery_lon: number | null
+          driver_id: string | null
+          estimated_price: number | null
+          id: string
+          notes: string | null
+          pickup_lat: number | null
+          pickup_location: string
+          pickup_lon: number | null
+          preferred_pickup_at: string | null
+          product_type: string
+          quantity: number
+          status: string
+          supplier_id: string
+          tracking_code: string
+          unit: string
+          updated_at: string
+          urgency: string
+        }
+        Insert: {
+          agreement_id?: string | null
+          buyer_id?: string | null
+          created_at?: string
+          delivery_lat?: number | null
+          delivery_location: string
+          delivery_lon?: number | null
+          driver_id?: string | null
+          estimated_price?: number | null
+          id?: string
+          notes?: string | null
+          pickup_lat?: number | null
+          pickup_location: string
+          pickup_lon?: number | null
+          preferred_pickup_at?: string | null
+          product_type: string
+          quantity?: number
+          status?: string
+          supplier_id: string
+          tracking_code?: string
+          unit?: string
+          updated_at?: string
+          urgency?: string
+        }
+        Update: {
+          agreement_id?: string | null
+          buyer_id?: string | null
+          created_at?: string
+          delivery_lat?: number | null
+          delivery_location?: string
+          delivery_lon?: number | null
+          driver_id?: string | null
+          estimated_price?: number | null
+          id?: string
+          notes?: string | null
+          pickup_lat?: number | null
+          pickup_location?: string
+          pickup_lon?: number | null
+          preferred_pickup_at?: string | null
+          product_type?: string
+          quantity?: number
+          status?: string
+          supplier_id?: string
+          tracking_code?: string
+          unit?: string
+          updated_at?: string
+          urgency?: string
+        }
+        Relationships: []
+      }
+      agtrans_tracking_events: {
+        Row: {
+          created_at: string
+          driver_id: string | null
+          event_type: string
+          id: string
+          lat: number | null
+          lon: number | null
+          note: string | null
+          request_id: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string
+          driver_id?: string | null
+          event_type?: string
+          id?: string
+          lat?: number | null
+          lon?: number | null
+          note?: string | null
+          request_id: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string | null
+          event_type?: string
+          id?: string
+          lat?: number | null
+          lon?: number | null
+          note?: string | null
+          request_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agtrans_tracking_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "agtrans_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buyer_orders: {
         Row: {
           buyer_id: string
@@ -1373,7 +1611,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user" | "handler" | "buyer"
+      app_role: "admin" | "moderator" | "user" | "handler" | "buyer" | "driver"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1501,7 +1739,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user", "handler", "buyer"],
+      app_role: ["admin", "moderator", "user", "handler", "buyer", "driver"],
     },
   },
 } as const
