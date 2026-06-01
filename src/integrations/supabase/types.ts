@@ -14,6 +14,85 @@ export type Database = {
   }
   public: {
     Tables: {
+      agreements: {
+        Row: {
+          agreed_price: number
+          agreed_quantity: number
+          agreement_status: string
+          buyer_id: string
+          buyer_name: string | null
+          created_at: string
+          delivery_terms: string | null
+          id: string
+          listing_id: string | null
+          negotiation_id: string
+          negotiation_summary: string | null
+          order_id: string | null
+          product: string | null
+          supplier_id: string
+          supplier_name: string | null
+          unit: string
+        }
+        Insert: {
+          agreed_price: number
+          agreed_quantity: number
+          agreement_status?: string
+          buyer_id: string
+          buyer_name?: string | null
+          created_at?: string
+          delivery_terms?: string | null
+          id?: string
+          listing_id?: string | null
+          negotiation_id: string
+          negotiation_summary?: string | null
+          order_id?: string | null
+          product?: string | null
+          supplier_id: string
+          supplier_name?: string | null
+          unit: string
+        }
+        Update: {
+          agreed_price?: number
+          agreed_quantity?: number
+          agreement_status?: string
+          buyer_id?: string
+          buyer_name?: string | null
+          created_at?: string
+          delivery_terms?: string | null
+          id?: string
+          listing_id?: string | null
+          negotiation_id?: string
+          negotiation_summary?: string | null
+          order_id?: string | null
+          product?: string | null
+          supplier_id?: string
+          supplier_name?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreements_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "farmer_inputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreements_negotiation_id_fkey"
+            columns: ["negotiation_id"]
+            isOneToOne: false
+            referencedRelation: "negotiations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "buyer_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buyer_orders: {
         Row: {
           buyer_id: string
@@ -27,7 +106,9 @@ export type Database = {
           grade: string | null
           id: string
           moisture: string | null
+          negotiation_status: string | null
           notes: string | null
+          order_status: string | null
           price_label: string | null
           quality: string | null
           quantity_needed: number
@@ -49,7 +130,9 @@ export type Database = {
           grade?: string | null
           id?: string
           moisture?: string | null
+          negotiation_status?: string | null
           notes?: string | null
+          order_status?: string | null
           price_label?: string | null
           quality?: string | null
           quantity_needed?: number
@@ -71,7 +154,9 @@ export type Database = {
           grade?: string | null
           id?: string
           moisture?: string | null
+          negotiation_status?: string | null
           notes?: string | null
+          order_status?: string | null
           price_label?: string | null
           quality?: string | null
           quantity_needed?: number
@@ -229,12 +314,16 @@ export type Database = {
           created_at: string
           crop_name: string
           delivery_timeline: string | null
+          demand_level: string | null
+          estimated_price: number | null
           expected_quantity: number
           harvest_end: string | null
           harvest_start: string | null
           id: string
           image_url: string | null
+          listing_status: string | null
           notes: string | null
+          owner_id: string | null
           price_label: string | null
           quality_grade: string | null
           region: string | null
@@ -253,12 +342,16 @@ export type Database = {
           created_at?: string
           crop_name: string
           delivery_timeline?: string | null
+          demand_level?: string | null
+          estimated_price?: number | null
           expected_quantity?: number
           harvest_end?: string | null
           harvest_start?: string | null
           id?: string
           image_url?: string | null
+          listing_status?: string | null
           notes?: string | null
+          owner_id?: string | null
           price_label?: string | null
           quality_grade?: string | null
           region?: string | null
@@ -277,12 +370,16 @@ export type Database = {
           created_at?: string
           crop_name?: string
           delivery_timeline?: string | null
+          demand_level?: string | null
+          estimated_price?: number | null
           expected_quantity?: number
           harvest_end?: string | null
           harvest_start?: string | null
           id?: string
           image_url?: string | null
+          listing_status?: string | null
           notes?: string | null
+          owner_id?: string | null
           price_label?: string | null
           quality_grade?: string | null
           region?: string | null
@@ -827,6 +924,66 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      negotiations: {
+        Row: {
+          agreed_price: number | null
+          agreed_quantity: number | null
+          buyer_id: string
+          created_at: string
+          id: string
+          last_message_at: string | null
+          listing_id: string | null
+          order_id: string | null
+          status: string
+          supplier_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          agreed_price?: number | null
+          agreed_quantity?: number | null
+          buyer_id: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          listing_id?: string | null
+          order_id?: string | null
+          status?: string
+          supplier_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agreed_price?: number | null
+          agreed_quantity?: number | null
+          buyer_id?: string
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          listing_id?: string | null
+          order_id?: string | null
+          status?: string
+          supplier_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "negotiations_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "farmer_inputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "negotiations_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "buyer_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       post_harvest_entries: {
         Row: {
