@@ -358,6 +358,8 @@ export default function AGNav() {
   // Navigation simulation states
   const [simulating, setSimulating] = useState(false);
   const [simStepIdx, setSimStepIdx] = useState(0);
+  const activeRouteIdx = simulating ? simStepIdx : currentRouteIdx;
+
 
   // Load
   const [passengers, setPassengers] = useState<number>(1);
