@@ -67,7 +67,7 @@ export default function Landing() {
     localStorage.removeItem('supabase.auth.token');
 
     const { error } = await supabase.auth.resetPasswordForEmail(loginEmail.trim().toLowerCase(), {
-      redirectTo: `${window.location.origin}/auth/callback`,
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) {

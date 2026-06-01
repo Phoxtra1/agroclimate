@@ -25,6 +25,10 @@ export default function VerifyEmail() {
         }
 
         if (data.session) {
+          // Sign out immediately so they don't get auto-redirected to the dashboard
+          // This enforces the "login tab to redirect main login page" requirement
+          await supabase.auth.signOut();
+          
           // SUCCESS
           setStatus("success");
           setMessage("Your account is ready. You can now log in and start using AgroClimate.");
