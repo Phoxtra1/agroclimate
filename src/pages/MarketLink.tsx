@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Store, TrendingUp, TrendingDown, Minus, AlertTriangle, Truck, Handshake, Package,
-  Loader2, Image as ImageIcon, Inbox,
+  Loader2, Image as ImageIcon, Inbox, Route
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMarketLink, suggestPrice, type PriceRow } from "@/hooks/useMarketLink";
@@ -21,7 +21,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { SupplyList } from "@/components/market/SupplyList";
 import { ChatPanel } from "@/components/market/ChatPanel";
 import { OrderListing } from "@/components/market/Orders";
+import { CopyButton } from "@/components/CopyButton";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
+import { useAGTrans } from "@/hooks/useAGTrans";
 import { estimateMarketPrice } from "@/lib/pricingEngine";
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
@@ -314,6 +316,101 @@ function ContractsPanel() {
   );
 }
 
+function AGTransSupplierPanel() {
+  const { createRequest, requests } = useAGTrans();
+  const { user } = useAuth();
+  const [cargo, setCargo] = useState("");
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState("kg");
+  const [pickup, setPickup] = useState("");
+  const [dropoff, setDropoff] = useState("");
+  const [price, setPrice] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const myRequests = requests.filter(r => r.supplier_id === user?.id);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await createRequest({
+        cargo_type: cargo,
+        quantity: Number(qty),
+        unit,
+        pickup_location: pickup,
+        dropoff_location: dropoff,
+        price_offer: Number(price),
+        notes
+      });
+      toast.success("Transport request broadcasted to AGTrans network!");
+      setCargo(""); setQty(""); setPickup(""); setDropoff(""); setPrice(""); setNotes("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to broadcast request");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Route className="h-5 w-5 text-primary" /> Create Transport Request
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">Broadcast your logistics needs to verified AGTrans drivers. AI handles optimal routing and pricing validation.</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><Label>Cargo Type</Label><Input value={cargo} onChange={(e) => setCargo(e.target.value)} placeholder="e.g. Maize, Tomatoes" required /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>Quantity</Label><Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
+              <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
+            </div>
+            <div><Label>Pickup Location</Label><Input value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Farm or Warehouse address" required /></div>
+            <div><Label>Dropoff Location</Label><Input value={dropoff} onChange={(e) => setDropoff(e.target.value)} placeholder="Market or Buyer address" required /></div>
+            <div><Label>Price Offer (GHS)</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Your budget" required /></div>
+            <div className="sm:col-span-2"><Label>Notes/Instructions</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special handling instructions?" rows={2} /></div>
+            <div className="sm:col-span-2"><Button type="submit" disabled={loading} className="w-full">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Broadcast Request"}</Button></div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Your Active Requests</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {myRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active transport requests.</p>
+          ) : (
+            myRequests.map(req => (
+              <div key={req.id} className="border rounded-md p-3 flex justify-between items-center bg-card">
+                <div>
+                  <div className="font-semibold">{req.cargo_type} <span className="text-xs font-normal text-muted-foreground">({req.quantity} {req.unit})</span></div>
+                  <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    {req.pickup_location} → {req.dropoff_location}
+                  </div>
+                  <div className="text-xs mt-1 flex items-center gap-1">
+                    Tracking ID: {req.tracking_id} <CopyButton value={req.tracking_id || ""} className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <Badge variant={req.status === "delivered" ? "default" : req.status === "in_transit" ? "secondary" : "outline"} className="uppercase">
+                    {req.status.replace("_", " ")}
+                  </Badge>
+                  <p className="font-semibold mt-1">GHS {req.price_offer}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function MarketLink() {
   const m = useMarketLink();
   const inboxThreads = useMarketInboxThreads();
@@ -365,11 +462,12 @@ export default function MarketLink() {
       <OverviewCards totalSupply={m.totalSupply} totalDemand={m.totalDemand} activeContracts={m.activeContracts} balance={m.balance} />
 
       <Tabs defaultValue="supply" className="w-full">
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-5 w-full">
           <TabsTrigger value="supply">Supply</TabsTrigger>
           <TabsTrigger value="order-listing">Order Listing</TabsTrigger>
           <TabsTrigger value="contracts">Contracts</TabsTrigger>
           <TabsTrigger value="prices">Prices</TabsTrigger>
+          <TabsTrigger value="agtrans">AGTrans (Logistics)</TabsTrigger>
         </TabsList>
 
         {/*
@@ -441,6 +539,10 @@ export default function MarketLink() {
               ))}</div>
             )}
           </CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="agtrans" className="mt-3">
+          <AGTransSupplierPanel />
         </TabsContent>
       </Tabs>
 

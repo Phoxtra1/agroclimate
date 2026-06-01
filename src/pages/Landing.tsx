@@ -80,7 +80,14 @@ export default function Landing() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signUp(regEmail.trim(), regPassword, regName);
+    const extraData = {
+      role: farmerType === "driver" ? "driver" : "user",
+      farmer_type: farmerType,
+      drone_ownership: droneOwnership,
+      drone_type: droneOwnership ? droneType : null,
+      phone: regPhone
+    };
+    const { error } = await signUp(regEmail.trim(), regPassword, regName, extraData);
     if (error) {
       toast({ title: "Registration failed", description: error.message, variant: "destructive" });
     } else {
@@ -192,6 +199,7 @@ export default function Landing() {
                               <SelectItem value="surveyor">Land Surveyor</SelectItem>
                               <SelectItem value="forestry">Forestry Agent</SelectItem>
                               <SelectItem value="extension">Extension Officer</SelectItem>
+                              <SelectItem value="driver">Transport Driver</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

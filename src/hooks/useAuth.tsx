@@ -14,7 +14,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, displayName: string, extraData?: Record<string, any>) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
@@ -169,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, displayName: string) => {
+    async (email: string, password: string, displayName: string, extraData: Record<string, any> = {}) => {
       try {
         const cleanEmail = email.trim().toLowerCase();
 
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: cleanEmail,
           password,
           options: {
-            data: { display_name: displayName },
+            data: { display_name: displayName, ...extraData },
             emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         });

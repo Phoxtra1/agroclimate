@@ -37,6 +37,10 @@ import MarketplaceOrderForm from "./pages/marketplace/MarketplaceOrderForm";
 import MarketplaceOrderListing from "./pages/marketplace/MarketplaceOrderListing";
 import MarketplaceAuth from "./pages/marketplace/MarketplaceAuth";
 import MarketplaceInbox from "./pages/marketplace/MarketplaceInbox";
+import AGTransLayout from "./pages/agtrans-partner/AGTransLayout";
+import DriverOnboarding from "./pages/agtrans-partner/Onboarding";
+import DriverDashboard from "./pages/agtrans-partner/DriverDashboard";
+import TripPage from "./pages/agtrans-partner/TripPage";
 import { installOfflineSync } from "@/lib/offlineQueue";
 
 const queryClient = new QueryClient();
@@ -74,7 +78,7 @@ function AdminAccessFallback() {
 // Hook to check if user has handler role
 function useUserRole() {
   const { user, loading: authLoading } = useAuth();
-  const [role, setRole] = useState<"user" | "handler" | "admin" | "buyer" | null>(null);
+  const [role, setRole] = useState<"user" | "handler" | "admin" | "buyer" | "driver" | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
 
   useEffect(() => {
@@ -91,6 +95,7 @@ function useUserRole() {
       if (roles.includes("admin")) setRole("admin");
       else if (roles.includes("handler")) setRole("handler");
       else if (roles.includes("buyer")) setRole("buyer");
+      else if (roles.includes("driver")) setRole("driver");
       else setRole("user");
       setRoleLoading(false);
     };
@@ -110,6 +115,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (role === "handler" && !isPreview) return <Navigate to="/handlers" replace />;
   // Buyers must NOT enter the farmer dashboard
   if (role === "buyer" && !isPreview) return <Navigate to="/marketplace" replace />;
+  if (role === "driver" && !isPreview) return <Navigate to="/agtrans-partner/dashboard" replace />;
 
   return <AppLayout>{children}</AppLayout>;
 }
@@ -123,6 +129,19 @@ function HandlerRoute({ children }: { children: React.ReactNode }) {
   if (!user && !isPreview) return <Navigate to="/" replace />;
   // Only handlers (or preview) can access handler workspace
   if (role !== "handler" && !isPreview) return <Navigate to="/dashboard" replace />;
+
+  return <>{children}</>;
+}
+
+function DriverRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { role, roleLoading } = useUserRole();
+  const isPreview = isPreviewEnvironment();
+
+  if (loading || roleLoading) return <LoadingScreen />;
+  if (!user && !isPreview) return <Navigate to="/" replace />;
+  
+  if (role !== "driver" && !isPreview) return <Navigate to="/dashboard" replace />;
 
   return <>{children}</>;
 }
@@ -141,7 +160,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   // Authenticated non-admins → correct workspace instead of a blank guarded route
   if (role !== "admin" && !isPreview) {
-    return <Navigate to={role === "handler" ? "/handlers" : role === "buyer" ? "/marketplace" : "/dashboard"} replace />;
+    if (role === "handler") return <Navigate to="/handlers" replace />;
+    if (role === "buyer") return <Navigate to="/marketplace" replace />;
+    if (role === "driver") return <Navigate to="/agtrans-partner/dashboard" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <AppLayout hideSidebar>{children}</AppLayout>;
@@ -181,6 +203,7 @@ function AppRoutes() {
     if (role === "admin") return "/admin";
     if (role === "handler") return "/handlers";
     if (role === "buyer") return "/marketplace";
+    if (role === "driver") return "/agtrans-partner/dashboard";
     return "/dashboard";
   };
 
@@ -203,6 +226,14 @@ function AppRoutes() {
 
       {/* Handler workspace */}
       <Route path="/handlers" element={<HandlerRoute><HandlerWorkspace /></HandlerRoute>} />
+
+      {/* Driver workspace (AGTrans Partner) */}
+      <Route path="/agtrans-partner" element={<DriverRoute><AGTransLayout /></DriverRoute>}>
+        <Route path="onboarding" element={<DriverOnboarding />} />
+        <Route path="dashboard" element={<DriverDashboard />} />
+        <Route path="trip/:id" element={<TripPage />} />
+        <Route index element={<Navigate to="dashboard" replace />} />
+      </Route>
 
       {/* Farmer/user routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
