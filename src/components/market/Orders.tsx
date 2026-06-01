@@ -401,7 +401,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                   </div>
                   {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
                   <div className="flex gap-2 flex-wrap pt-2">
-                    {scope !== "global" && (
+                    {scope !== "marketplace" && (
                       <>
                         <Button variant="outline" onClick={() => setEditing(true)}>
                           <Pencil className="h-4 w-4 mr-1" />Edit
@@ -412,7 +412,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                       </>
                     )}
                     <p className="w-full text-[11px] text-muted-foreground">
-                      {scope === "global" 
+                      {scope === "marketplace" 
                         ? "You own this order. You can edit or delete it from your Place Order page."
                         : "You own this order. Suppliers will negotiate, accept or decline it from their dashboard."}
                     </p>
