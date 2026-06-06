@@ -23,9 +23,10 @@ export default function DriverDashboard() {
   if (loading) return <div>Loading...</div>;
   if (!driverProfile) return null;
 
-  const availableRequests = requests.filter(r => r.status === "pending");
+  const availableRequests = requests.filter(r => r.status === "searching_driver");
   const myActiveTrips = requests.filter(r => r.driver_id === user?.id && r.status === "in_transit");
-  const myCompletedTrips = requests.filter(r => r.driver_id === user?.id && r.status === "delivered");
+  const myCompletedTrips = requests.filter(r => r.driver_id === user?.id && (r.status === "delivered" || r.status === "delivery_confirmed"));
+
 
   const handleAccept = async (id: string) => {
     try {
@@ -79,10 +80,11 @@ export default function DriverDashboard() {
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <p className="text-sm text-muted-foreground mb-1">Driver Rating</p>
-            <p className="text-3xl font-bold text-primary">{driverProfile.rating ? driverProfile.rating.toFixed(1) : "N/A"}</p>
+            <p className="text-sm text-muted-foreground mb-1">Reliability Score</p>
+            <p className="text-3xl font-bold text-primary">{driverProfile.reliability_score?.toFixed(0) || "100"}</p>
           </CardContent>
         </Card>
+
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -96,15 +98,16 @@ export default function DriverDashboard() {
                 <CardContent className="p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-bold">{trip.cargo_type}</h3>
+                      <h3 className="font-bold">{trip.product_type}</h3>
                       <p className="text-sm text-muted-foreground">{trip.quantity} {trip.unit}</p>
                     </div>
                     <Badge>In Transit</Badge>
                   </div>
                   <div className="text-sm space-y-2">
                     <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground"/> From: {trip.pickup_location}</div>
-                    <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary"/> To: {trip.dropoff_location}</div>
+                    <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary"/> To: {trip.delivery_location}</div>
                   </div>
+
                   <Button onClick={() => navigate(`/agtrans-partner/trip/${trip.id}`)} className="w-full mt-2">
                     Open Trip Workspace
                   </Button>
@@ -126,16 +129,17 @@ export default function DriverDashboard() {
                 <CardContent className="p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-bold">{req.cargo_type}</h3>
+                      <h3 className="font-bold">{req.product_type}</h3>
                       <p className="text-sm text-muted-foreground">{req.quantity} {req.unit}</p>
                     </div>
                     <p className="font-bold text-lg text-primary">
-                      GHS {req.price_offer?.toLocaleString() || "Negotiable"}
+                      GHS {req.estimated_price?.toLocaleString() || "Negotiable"}
                     </p>
                   </div>
                   <div className="text-sm space-y-2">
                     <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground"/> Pickup: {req.pickup_location}</div>
-                    <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground"/> Dropoff: {req.dropoff_location}</div>
+                    <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground"/> Dropoff: {req.delivery_location}</div>
+
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
                       <Clock className="h-3 w-3" /> Posted {new Date(req.created_at).toLocaleDateString()}
                     </div>

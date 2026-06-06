@@ -18,7 +18,6 @@ export default function DriverOnboarding() {
   const [vehicle, setVehicle] = useState("");
   const [plateNumber, setPlateNumber] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [license, setLicense] = useState("");
   const [licenseClass, setLicenseClass] = useState("");
   const [corridors, setCorridors] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,17 +28,14 @@ export default function DriverOnboarding() {
     try {
       await createDriverProfile({
         full_name: fullName,
-        phone_number: phone,
+        phone,
         region,
         district,
         vehicle_type: vehicle,
         plate_number: plateNumber,
-        capacity,
-        license_number: license,
-        license_class: licenseClass,
-        preferred_corridors: corridors,
-        // Optional mock upload URL
-        license_upload_url: "https://mock.upload/license.jpg"
+        vehicle_capacity_kg: capacity ? Number(capacity) : 0,
+        license_class: licenseClass || "D",
+        preferred_corridors: corridors ? corridors.split(",").map((s) => s.trim()).filter(Boolean) : [],
       });
       toast.success("Profile submitted for verification");
       navigate("/agtrans-partner/dashboard");
@@ -49,6 +45,7 @@ export default function DriverOnboarding() {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="max-w-2xl mx-auto mt-10">
@@ -86,8 +83,8 @@ export default function DriverOnboarding() {
                 <Input id="vehicle" placeholder="e.g. 10-Ton Truck, 5-Ton Van" value={vehicle} onChange={(e) => setVehicle(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="capacity">Vehicle Capacity</Label>
-                <Input id="capacity" placeholder="e.g. 10 Tons" value={capacity} onChange={(e) => setCapacity(e.target.value)} required />
+                <Label htmlFor="capacity">Vehicle Capacity (kg)</Label>
+                <Input id="capacity" type="number" placeholder="e.g. 10000" value={capacity} onChange={(e) => setCapacity(e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="plateNumber">Plate Number</Label>
@@ -95,20 +92,17 @@ export default function DriverOnboarding() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="corridors">Preferred Delivery Corridors</Label>
-                <Input id="corridors" placeholder="e.g. Kumasi ↔ Accra" value={corridors} onChange={(e) => setCorridors(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="license">Driver's License Number</Label>
-                <Input id="license" placeholder="Enter license number" value={license} onChange={(e) => setLicense(e.target.value)} required />
+                <Input id="corridors" placeholder="e.g. Kumasi ↔ Accra, Tamale ↔ Accra" value={corridors} onChange={(e) => setCorridors(e.target.value)} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="licenseClass">License Class</Label>
                 <Input id="licenseClass" placeholder="e.g. C, D, E" value={licenseClass} onChange={(e) => setLicenseClass(e.target.value)} required />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="licenseFile">Upload License Document (Mock)</Label>
+                <Label htmlFor="licenseFile">Upload License Document (Optional)</Label>
                 <Input id="licenseFile" type="file" accept="image/*,.pdf" />
               </div>
+
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Submitting..." : "Submit Application"}
