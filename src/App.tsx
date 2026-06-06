@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
@@ -143,7 +143,8 @@ function DriverRoute({ children }: { children: React.ReactNode }) {
   if (loading || roleLoading) return <LoadingScreen />;
   if (!user && !isPreview) return <Navigate to="/" replace />;
   
-  if (role !== "driver" && !isPreview) return <Navigate to="/dashboard" replace />;
+  const location = useLocation();
+  if (role !== "driver" && !isPreview && !location.pathname.includes("onboarding")) return <Navigate to="/dashboard" replace />;
 
   return <>{children}</>;
 }

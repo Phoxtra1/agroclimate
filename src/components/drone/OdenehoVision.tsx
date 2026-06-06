@@ -7,7 +7,7 @@ export function OdenehoVision() {
     <Card className="bg-slate-900 border-slate-800 text-slate-100">
       <CardHeader className="py-4 border-b border-slate-800">
         <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-2">
-          <ScanSearch className="h-4 w-4" /> Odeneho Vision Analysis
+          <ScanSearch className="h-4 w-4" /> Vision Analysis
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 space-y-4">

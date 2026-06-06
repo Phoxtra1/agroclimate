@@ -142,6 +142,12 @@ export function useAGTrans() {
       .single();
 
     if (error) throw error;
+    
+    // Auto-update user metadata to include driver role
+    await supabase.auth.updateUser({
+      data: { role: "driver" }
+    });
+
     setDriverProfile(data as unknown as DriverProfile);
     return data;
   };

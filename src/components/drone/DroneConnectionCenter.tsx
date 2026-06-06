@@ -49,7 +49,7 @@ export function DroneConnectionCenter({
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-mono font-bold text-lg text-cyan-400">{droneName}</h3>
-              <p className="text-xs text-slate-500 font-mono">MAVLink / ArduPilot / Odeneho</p>
+              <p className="text-xs text-slate-500 font-mono">MAVLink / ArduPilot / System</p>
             </div>
             <Wifi className={`h-5 w-5 ${isConnected ? 'text-emerald-500' : 'text-slate-600'}`} />
           </div>

@@ -20,8 +20,8 @@ export function DroneOperationsConsole() {
       {/* Top Navigation / Tabs */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <h2 className="text-xl font-mono font-bold text-cyan-400 tracking-wider">ODENEHO MISSION CONTROL</h2>
-          <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">AERIAL INTELLIGENCE CENTER</p>
+          <h2 className="text-xl font-mono font-bold text-cyan-400 tracking-wider">AERIAL CONTROL</h2>
+          <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">FLIGHT OPERATIONS CENTER</p>
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">

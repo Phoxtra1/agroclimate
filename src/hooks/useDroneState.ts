@@ -25,7 +25,7 @@ export interface EnvironmentData {
 
 export const useDroneState = () => {
   const [status, setStatus] = useState<DroneStatus>('disconnected');
-  const [droneName, setDroneName] = useState<string>('Odeneho-X1');
+  const [droneName, setDroneName] = useState<string>('Drone-X1');
   
   const [telemetry, setTelemetry] = useState<TelemetryData>({
     altitude: 0,
@@ -78,7 +78,7 @@ export const useDroneState = () => {
           ...prev,
           windSpeed: Math.max(0, prev.windSpeed + (Math.random() * 1 - 0.5)),
         }));
-      }, 1000);
+      }, 250);
     } else if (status === 'connected') {
       setTelemetry(prev => ({
         ...prev,

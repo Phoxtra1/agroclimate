@@ -26,7 +26,7 @@ export function OdenehoAiAdvisory({ telemetry, environment }: { telemetry: Telem
     <Card className="bg-slate-900 border-slate-800 text-slate-100">
       <CardHeader className="py-4 border-b border-slate-800">
         <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-2">
-          <Bot className="h-4 w-4" /> Odeneho Flight Intelligence
+          <Bot className="h-4 w-4" /> Flight Intelligence
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 space-y-3">
