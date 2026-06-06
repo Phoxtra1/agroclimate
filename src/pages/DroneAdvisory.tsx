@@ -12,6 +12,7 @@ import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { useNewTag } from "@/hooks/useNewTag";
+import { DroneOperationsConsole } from "@/components/drone/DroneOperationsConsole";
 
 interface FlightAdvisory {
   status: "safe" | "caution" | "no_fly";
@@ -81,6 +82,10 @@ export default function DroneAdvisory() {
             {isNew("drone-monitoring") && (
               <Badge variant="secondary" className="ml-1 text-[10px] px-1">New</Badge>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="operations" className="flex items-center gap-2">
+            Operations Console
+            <Badge variant="secondary" className="bg-cyan-900/50 text-cyan-400 border-cyan-800 hover:bg-cyan-900/70 text-[10px] px-1">BETA</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -287,6 +292,11 @@ export default function DroneAdvisory() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        {/* OPERATIONS CONSOLE TAB */}
+        <TabsContent value="operations">
+          <DroneOperationsConsole />
         </TabsContent>
       </Tabs>
     </div>
