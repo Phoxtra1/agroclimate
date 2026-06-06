@@ -1,47 +1,53 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 
 export interface TransportRequest {
   id: string;
   supplier_id: string;
-  cargo_type: string;
+  buyer_id?: string;
+  product_type: string;
   quantity: number;
   unit: string;
   pickup_location: string;
-  dropoff_location: string;
-  status: "searching_for_driver" | "driver_matched" | "driver_en_route" | "cargo_picked" | "in_transit" | "near_destination" | "delivered" | "delivery_confirmed" | "cancelled" | "delayed";
-  price_offer: number;
+  delivery_location: string;
+  status: string;
+  estimated_price?: number;
+  urgency: string;
   created_at: string;
-  notes: string;
-  pickup_time?: string;
-  urgency?: string;
+  updated_at: string;
+  notes?: string;
+  preferred_pickup_at?: string;
   driver_id?: string;
-  tracking_id?: string;
+  tracking_code: string;
+  pickup_lat?: number;
+  pickup_lon?: number;
+  delivery_lat?: number;
+  delivery_lon?: number;
 }
 
 export interface DriverProfile {
+  id: string;
   user_id: string;
   full_name: string;
-  phone_number: string;
+  phone: string;
   vehicle_type: string;
   plate_number: string;
-  license_number: string;
   license_class: string;
-  region: string;
-  district: string;
-  capacity: string;
-  routes: string;
-  preferred_corridors: string;
-  license_upload_url?: string;
+  region?: string;
+  district?: string;
+  vehicle_capacity_kg?: number;
+  route_coverage?: string[];
+  preferred_corridors?: string[];
+  license_url?: string;
   availability_status: "online" | "offline";
   verification_status: "pending" | "verified" | "suspended" | "rejected";
-  rating: number;
-  total_trips: number;
-  completed_trips: number;
-  cancelled_trips: number;
   reliability_score: number;
+  completed_deliveries: number;
+  late_deliveries: number;
+  cancellations: number;
+  disputes: number;
+  notes?: string;
 }
 
 export function useAGTrans() {
@@ -55,36 +61,31 @@ export function useAGTrans() {
       setLoading(false);
       return;
     }
-    
+
     const loadData = async () => {
       setLoading(true);
-      // Fetch driver profile if it exists
       const { data: dp } = await supabase
-        .from("agtrans_drivers" as any)
+        .from("agtrans_drivers")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
-      
-      if (dp) setDriverProfile(dp as DriverProfile);
 
-      // Fetch requests
-      // If driver, show available or their own. If supplier, show their own.
-      // We just fetch all for now or filter by relevance
+      if (dp) setDriverProfile(dp as unknown as DriverProfile);
+
       const { data: reqs } = await supabase
-        .from("transport_requests" as any)
+        .from("agtrans_requests")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(100);
-      
-      setRequests((reqs as TransportRequest[]) || []);
+
+      setRequests((reqs as unknown as TransportRequest[]) || []);
       setLoading(false);
     };
 
     loadData();
 
-    // Subscribe to changes
     const ch = supabase.channel("agtrans-updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "transport_requests" }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_requests" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadData)
       .subscribe();
 
@@ -93,86 +94,62 @@ export function useAGTrans() {
 
   const createRequest = async (payload: Partial<TransportRequest>) => {
     if (!user) throw new Error("Not authenticated");
-    
-    // Auto-generate tracking ID
-    const tracking_id = "TRK-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
     const { data, error } = await supabase
-      .from("transport_requests" as any)
+      .from("agtrans_requests")
       .insert({
         ...payload,
         supplier_id: user.id,
-        status: "searching_for_driver",
-        tracking_id
-      })
+        status: "searching_driver",
+      } as any)
       .select()
       .single();
 
     if (error) throw error;
-    
-    // Broadcast via edge function using Layered Notification Logic:
-    // FIRST LAYER: Nearby drivers
-    // SECOND LAYER: If no response, expand to district, then region, then national.
-    // This logic runs securely in the backend avoiding client-side spoofing.
-    supabase.functions.invoke("agtrans-broadcast", { body: { request_id: data.id, layer: "nearby" } }).catch(console.error);
+
+    supabase.functions.invoke("agtrans-broadcast", { body: { request_id: data.id } }).catch(console.error);
 
     return data;
   };
 
-  const updateRequestStatus = async (id: string, status: TransportRequest["status"], driver_id?: string) => {
+  const updateRequestStatus = async (id: string, status: string, driver_id?: string) => {
     const updates: any = { status };
     if (driver_id) updates.driver_id = driver_id;
 
     const { error } = await supabase
-      .from("transport_requests" as any)
+      .from("agtrans_requests")
       .update(updates)
       .eq("id", id);
-    
+
     if (error) throw error;
-    
+
     if (status === "in_transit") {
-      // Trigger AI route calculation when transit starts
       supabase.functions.invoke("agtrans-ai-advisor", { body: { request_id: id, action: "optimize_route" } }).catch(console.error);
     }
-  };
-
-  const updateDriverLocation = async (id: string, lat: number, lng: number) => {
-    const { error } = await supabase
-      .from("transport_requests" as any)
-      .update({ current_lat: lat, current_lng: lng })
-      .eq("id", id);
-      
-    if (error) throw error;
-    
-    // Trigger AI consistency & tracking check
-    supabase.functions.invoke("agtrans-ai-advisor", { body: { request_id: id, action: "track_location", lat, lng } }).catch(console.error);
   };
 
   const createDriverProfile = async (payload: Partial<DriverProfile>) => {
     if (!user) throw new Error("Not authenticated");
     const { data, error } = await supabase
-      .from("agtrans_drivers" as any)
+      .from("agtrans_drivers")
       .insert({
         ...payload,
         user_id: user.id,
         verification_status: "pending",
         availability_status: "offline",
-        reliability_score: 100,
-        completed_trips: 0,
-        cancelled_trips: 0
-      })
+      } as any)
       .select()
       .single();
-    
+
     if (error) throw error;
-    setDriverProfile(data as DriverProfile);
+    setDriverProfile(data as unknown as DriverProfile);
     return data;
   };
 
   const toggleAvailability = async (status: "online" | "offline") => {
     if (!user) return;
     const { error } = await supabase
-      .from("agtrans_drivers" as any)
+      .from("agtrans_drivers")
       .update({ availability_status: status })
       .eq("user_id", user.id);
     if (!error && driverProfile) {
@@ -182,14 +159,11 @@ export function useAGTrans() {
 
   const confirmDelivery = async (id: string) => {
     const { error } = await supabase
-      .from("transport_requests" as any)
+      .from("agtrans_requests")
       .update({ status: "delivery_confirmed" })
       .eq("id", id);
-      
+
     if (error) throw error;
-    
-    // Update driver reliability metrics and post-harvest tracking systems via edge function
-    supabase.functions.invoke("agtrans-delivery-confirmed", { body: { request_id: id } }).catch(console.error);
   };
 
   return {
@@ -198,9 +172,8 @@ export function useAGTrans() {
     driverProfile,
     createRequest,
     updateRequestStatus,
-    updateDriverLocation,
     createDriverProfile,
     toggleAvailability,
-    confirmDelivery
+    confirmDelivery,
   };
 }
