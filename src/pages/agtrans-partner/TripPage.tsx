@@ -11,24 +11,11 @@ import { supabase } from "@/integrations/supabase/client";
 export default function TripPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { requests, updateRequestStatus, updateDriverLocation } = useAGTrans();
+  const { requests, updateRequestStatus } = useAGTrans();
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
   const trip = requests.find(r => r.id === id);
 
-  useEffect(() => {
-    if (!trip) return;
-
-    // Simulate real-time tracking updates (Mock GPS)
-    const interval = setInterval(() => {
-      // Send mock location to edge function logic periodically
-      const mockLat = 5.6037 + (Math.random() * 0.01);
-      const mockLng = -0.1870 + (Math.random() * 0.01);
-      updateDriverLocation(trip.id, mockLat, mockLng).catch(() => {});
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, [trip, updateDriverLocation]);
 
   useEffect(() => {
     if (trip && trip.status === "in_transit") {
@@ -63,9 +50,10 @@ export default function TripPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            Trip <Badge variant="outline">{trip.tracking_id || trip.id.substring(0,8)}</Badge>
+            Trip <Badge variant="outline">{trip.tracking_code || trip.id.substring(0,8)}</Badge>
           </h1>
-          <p className="text-muted-foreground text-sm">Transporting {trip.quantity} {trip.unit} of {trip.cargo_type}</p>
+          <p className="text-muted-foreground text-sm">Transporting {trip.quantity} {trip.unit} of {trip.product_type}</p>
+
         </div>
         <Badge variant={trip.status === "delivered" ? "default" : "secondary"} className="uppercase">
           {trip.status.replace("_", " ")}
@@ -90,7 +78,7 @@ export default function TripPage() {
                 <div className="relative">
                   <div className="absolute -left-[31px] top-1 h-4 w-4 rounded-full bg-primary" />
                   <p className="text-xs font-semibold text-primary uppercase">Dropoff</p>
-                  <p className="font-medium text-lg">{trip.dropoff_location}</p>
+                  <p className="font-medium text-lg">{trip.delivery_location}</p>
                 </div>
               </div>
             </CardContent>
@@ -128,7 +116,7 @@ export default function TripPage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-xs text-muted-foreground">Type</p>
-                <p className="font-medium">{trip.cargo_type}</p>
+                <p className="font-medium">{trip.product_type}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Quantity</p>
@@ -142,7 +130,7 @@ export default function TripPage() {
               )}
               <div>
                 <p className="text-xs text-muted-foreground">Agreed Rate</p>
-                <p className="font-medium text-primary">GHS {trip.price_offer}</p>
+                <p className="font-medium text-primary">GHS {trip.estimated_price}</p>
               </div>
             </CardContent>
           </Card>

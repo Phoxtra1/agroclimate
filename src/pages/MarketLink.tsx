@@ -337,16 +337,17 @@ function AGTransSupplierPanel() {
     setLoading(true);
     try {
       await createRequest({
-        cargo_type: cargo,
+        product_type: cargo,
         quantity: Number(qty),
         unit,
         pickup_location: pickup,
-        dropoff_location: dropoff,
-        pickup_time: pickupTime,
+        delivery_location: dropoff,
+        preferred_pickup_at: pickupTime || undefined,
         urgency,
-        price_offer: Number(price),
-        notes
+        estimated_price: Number(price),
+        notes,
       });
+
       toast.success("Transport request broadcasted to AGTrans network!");
       setCargo(""); setQty(""); setPickup(""); setDropoff(""); setPickupTime(""); setUrgency("standard"); setPrice(""); setNotes("");
     } catch (err: any) {
@@ -406,19 +407,20 @@ function AGTransSupplierPanel() {
             myRequests.map(req => (
               <div key={req.id} className="border rounded-md p-3 flex justify-between items-center bg-card">
                 <div>
-                  <div className="font-semibold">{req.cargo_type} <span className="text-xs font-normal text-muted-foreground">({req.quantity} {req.unit})</span></div>
+                  <div className="font-semibold">{req.product_type} <span className="text-xs font-normal text-muted-foreground">({req.quantity} {req.unit})</span></div>
                   <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    {req.pickup_location} → {req.dropoff_location}
+                    {req.pickup_location} → {req.delivery_location}
                   </div>
                   <div className="text-xs mt-1 flex items-center gap-1">
-                    Tracking ID: {req.tracking_id} <CopyButton value={req.tracking_id || ""} className="h-4 w-4" />
+                    Tracking ID: {req.tracking_code} <CopyButton value={req.tracking_code || ""} className="h-4 w-4" />
                   </div>
                 </div>
                 <div className="text-right">
                   <Badge variant={req.status === "delivered" ? "default" : req.status === "in_transit" ? "secondary" : "outline"} className="uppercase">
                     {req.status.replace("_", " ")}
                   </Badge>
-                  <p className="font-semibold mt-1">GHS {req.price_offer}</p>
+                  <p className="font-semibold mt-1">GHS {req.estimated_price}</p>
+
                   {req.status === "delivered" && (
                     <Button 
                       size="sm" 

@@ -14,22 +14,23 @@ export default function AdminAGTransPanel() {
   useEffect(() => {
     const loadData = async () => {
       const [{ data: reqs }, { data: drvs }] = await Promise.all([
-        supabase.from("transport_requests" as any).select("*").order("created_at", { ascending: false }).limit(100),
-        supabase.from("agtrans_drivers" as any).select("*").order("user_id").limit(100)
+        supabase.from("agtrans_requests").select("*").order("created_at", { ascending: false }).limit(100),
+        supabase.from("agtrans_drivers").select("*").order("user_id").limit(100)
       ]);
-      setRequests((reqs as TransportRequest[]) || []);
-      setDrivers((drvs as DriverProfile[]) || []);
+      setRequests((reqs as unknown as TransportRequest[]) || []);
+      setDrivers((drvs as unknown as DriverProfile[]) || []);
     };
-    
+
     loadData();
 
     const ch = supabase.channel("admin-agtrans")
-      .on("postgres_changes", { event: "*", schema: "public", table: "transport_requests" }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_requests" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadData)
       .subscribe();
 
     return () => { supabase.removeChannel(ch); };
   }, []);
+
 
   const handleVerifyDriver = async (userId: string, status: "verified" | "rejected") => {
     const { error } = await supabase
