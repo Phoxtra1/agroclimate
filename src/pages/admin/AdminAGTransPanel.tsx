@@ -43,12 +43,13 @@ export default function AdminAGTransPanel() {
 
   const handleResolveDispute = async (reqId: string) => {
     const { error } = await supabase
-      .from("transport_requests" as any)
-      .update({ status: "pending" })
+      .from("agtrans_requests")
+      .update({ status: "searching_driver" })
       .eq("id", reqId);
     if (error) toast.error("Failed to resolve dispute");
-    else toast.success("Dispute resolved, request set to pending");
+    else toast.success("Dispute resolved");
   };
+
 
   const pendingDrivers = drivers.filter(d => d.verification_status === "pending");
   const disputedRequests = requests.filter(r => r.status === "disputed");
@@ -77,7 +78,7 @@ export default function AdminAGTransPanel() {
                 <div key={d.user_id} className="border p-3 rounded-lg flex justify-between items-center">
                   <div>
                     <p className="font-semibold">{d.vehicle_type}</p>
-                    <p className="text-xs text-muted-foreground">License: {d.license_number}</p>
+                    <p className="text-xs text-muted-foreground">License Class: {d.license_class || "—"} • {d.plate_number}</p>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => handleVerifyDriver(d.user_id, "rejected")}>Reject</Button>
@@ -101,8 +102,9 @@ export default function AdminAGTransPanel() {
                 <div key={r.id} className="border p-3 rounded-lg border-destructive bg-destructive/5">
                   <div className="flex justify-between">
                     <div>
-                      <p className="font-semibold">Tracking: {r.tracking_id}</p>
-                      <p className="text-xs">{r.cargo_type} - {r.quantity}{r.unit}</p>
+                      <p className="font-semibold">Tracking: {r.tracking_code}</p>
+                      <p className="text-xs">{r.product_type} - {r.quantity}{r.unit}</p>
+
                     </div>
                     <Button size="sm" variant="outline" onClick={() => handleResolveDispute(r.id)}>Resolve</Button>
                   </div>
@@ -129,11 +131,12 @@ export default function AdminAGTransPanel() {
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
                       </span>
                     </div>
-                    <p className="font-semibold">{r.tracking_id}</p>
-                    <p className="text-xs text-muted-foreground mb-2">{r.cargo_type} • {r.quantity}{r.unit}</p>
+                    <p className="font-semibold">{r.tracking_code}</p>
+                    <p className="text-xs text-muted-foreground mb-2">{r.product_type} • {r.quantity}{r.unit}</p>
                     <div className="text-xs space-y-1">
                       <p>From: {r.pickup_location}</p>
-                      <p>To: {r.dropoff_location}</p>
+                      <p>To: {r.delivery_location}</p>
+
                       <p className="text-primary mt-2">Driver ID: {r.driver_id?.substring(0,8)}</p>
                     </div>
                   </div>
