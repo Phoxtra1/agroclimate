@@ -1,133 +1,148 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { getAdapter } from "@/lib/drone/connectionManager";
+import { ConnectionAdapter, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "@/lib/drone/types";
 
-export type DroneStatus = 'disconnected' | 'connecting' | 'connected' | 'flying' | 'returning' | 'landing' | 'emergency';
-
-export interface TelemetryData {
-  altitude: number; // meters
-  groundSpeed: number; // m/s
-  verticalSpeed: number; // m/s
-  heading: number; // degrees
-  battery: number; // percentage
-  signalStrength: number; // percentage
-  gpsAccuracy: number; // meters
-  flightDuration: number; // seconds
-  distanceCovered: number; // meters
-}
-
+// Back-compat aliases used by existing components
+export type DroneStatus = FlightStatus;
+export interface TelemetryData extends DroneTelemetry {}
 export interface EnvironmentData {
-  windSpeed: number; // km/h
-  windDirection: string; // N, NE, E, etc.
-  temperature: number; // Celsius
-  humidity: number; // percentage
-  rainProbability: number; // percentage
-  visibility: number; // km
+  windSpeed: number;
+  windDirection: string;
+  temperature: number;
+  humidity: number;
+  rainProbability: number;
+  visibility: number;
 }
+
+const INITIAL_TELEMETRY: DroneTelemetry = {
+  lat: undefined, lng: undefined,
+  altitude: 0, groundSpeed: 0, verticalSpeed: 0, heading: 0,
+  battery: 100, signalStrength: 0, gpsAccuracy: 0, gpsFix: "none",
+  flightDuration: 0, distanceCovered: 0, cameraStatus: "off",
+};
 
 export const useDroneState = () => {
-  const [status, setStatus] = useState<DroneStatus>('disconnected');
-  const [droneName, setDroneName] = useState<string>('Drone-X1');
-  
-  const [telemetry, setTelemetry] = useState<TelemetryData>({
-    altitude: 0,
-    groundSpeed: 0,
-    verticalSpeed: 0,
-    heading: 0,
-    battery: 100,
-    signalStrength: 0,
-    gpsAccuracy: 0,
-    flightDuration: 0,
-    distanceCovered: 0,
-  });
+  const [protocol, setProtocol] = useState<DroneProtocol>("simulator");
+  const [status, setStatus] = useState<FlightStatus>("disconnected");
+  const [available, setAvailable] = useState<DiscoveredDrone[]>([]);
+  const [activeDrone, setActiveDrone] = useState<DiscoveredDrone | null>(null);
+  const [telemetry, setTelemetry] = useState<DroneTelemetry>(INITIAL_TELEMETRY);
+  const [missionId, setMissionId] = useState<string | null>(null);
 
   const [environment, setEnvironment] = useState<EnvironmentData>({
-    windSpeed: 15,
-    windDirection: 'NE',
-    temperature: 28,
-    humidity: 65,
-    rainProbability: 10,
-    visibility: 10,
+    windSpeed: 12, windDirection: "NE", temperature: 28, humidity: 65, rainProbability: 10, visibility: 10,
   });
 
-  // Simulate telemetry when flying
+  const adapterRef = useRef<ConnectionAdapter | null>(null);
+  const unsubRef = useRef<Array<() => void>>([]);
+
+  // Acquire adapter on protocol change
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (status === 'flying' || status === 'returning') {
-      interval = setInterval(() => {
-        setTelemetry(prev => {
-          // Add some randomness to simulate live data
-          const newAlt = status === 'flying' ? prev.altitude + (Math.random() * 0.4 - 0.2) : prev.altitude - 1;
-          const newBattery = prev.battery - 0.05; // Battery drops
-          
-          return {
-            ...prev,
-            altitude: Math.max(0, newAlt),
-            groundSpeed: status === 'flying' ? 12 + (Math.random() * 2 - 1) : 15,
-            verticalSpeed: status === 'flying' ? (Math.random() * 0.2 - 0.1) : -1,
-            heading: (prev.heading + (Math.random() * 2 - 1)) % 360,
-            battery: Math.max(0, newBattery),
-            signalStrength: 85 + (Math.random() * 10 - 5),
-            gpsAccuracy: 0.5 + (Math.random() * 0.2),
-            flightDuration: prev.flightDuration + 1,
-            distanceCovered: prev.distanceCovered + prev.groundSpeed,
-          };
+    unsubRef.current.forEach((u) => u());
+    unsubRef.current = [];
+    const adapter = getAdapter(protocol);
+    adapterRef.current = adapter;
+    unsubRef.current.push(adapter.onStatus(setStatus));
+    unsubRef.current.push(adapter.onTelemetry(setTelemetry));
+    return () => { unsubRef.current.forEach((u) => u()); };
+  }, [protocol]);
+
+  const scan = useCallback(async () => {
+    if (!adapterRef.current) return [];
+    const found = await adapterRef.current.scan();
+    setAvailable(found);
+    return found;
+  }, []);
+
+  const connect = useCallback(async (drone?: DiscoveredDrone) => {
+    if (!adapterRef.current) return;
+    const target = drone || available[0];
+    if (!target) {
+      const found = await adapterRef.current.scan();
+      setAvailable(found);
+      if (!found[0]) return;
+      setActiveDrone(found[0]);
+      await adapterRef.current.connect(found[0].id);
+      return;
+    }
+    setActiveDrone(target);
+    await adapterRef.current.connect(target.id);
+  }, [available]);
+
+  const disconnect = useCallback(async () => {
+    await adapterRef.current?.disconnect();
+    setActiveDrone(null);
+    setMissionId(null);
+  }, []);
+
+  const calibrate = useCallback(async () => { await adapterRef.current?.calibrate(); }, []);
+
+  const startMission = useCallback(async (config?: { missionType?: string; name?: string; altitude_m?: number }) => {
+    if (!adapterRef.current) return;
+    await adapterRef.current.startMission();
+    // Persist mission record
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from("drone_missions").insert({
+          user_id: user.id,
+          mission_type: config?.missionType || "monitoring",
+          name: config?.name || `Mission ${new Date().toLocaleString()}`,
+          altitude_m: config?.altitude_m || telemetry.altitude || 50,
+          status: "active",
+          started_at: new Date().toISOString(),
+          target_lat: telemetry.lat ?? null,
+          target_lon: telemetry.lng ?? null,
+        }).select("id").maybeSingle();
+        if (data?.id) setMissionId(data.id);
+      }
+    } catch (e) { /* offline ok */ }
+  }, [telemetry.altitude, telemetry.lat, telemetry.lng]);
+
+  const pauseMission = useCallback(async () => { await adapterRef.current?.pauseMission(); }, []);
+  const resumeMission = useCallback(async () => { await adapterRef.current?.resumeMission(); }, []);
+
+  const returnToHome = useCallback(async () => { await adapterRef.current?.returnToHome(); }, []);
+
+  const emergencyLand = useCallback(async () => {
+    await adapterRef.current?.emergencyLand();
+    if (missionId) {
+      await supabase.from("drone_missions").update({ status: "aborted", completed_at: new Date().toISOString() }).eq("id", missionId);
+      setMissionId(null);
+    }
+  }, [missionId]);
+
+  // Persist telemetry breadcrumbs while flying
+  useEffect(() => {
+    if (status !== "flying" || !missionId) return;
+    const t = setInterval(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await supabase.from("drone_telemetry_logs").insert({
+          user_id: user.id, mission_id: missionId,
+          lat: telemetry.lat, lng: telemetry.lng,
+          altitude_m: telemetry.altitude, ground_speed_ms: telemetry.groundSpeed,
+          vertical_speed_ms: telemetry.verticalSpeed, heading: telemetry.heading,
+          battery_pct: telemetry.battery, signal_strength: telemetry.signalStrength,
+          gps_accuracy_m: telemetry.gpsAccuracy,
         });
+      } catch {}
+    }, 5000);
+    return () => clearInterval(t);
+  }, [status, missionId, telemetry]);
 
-        // Simulate environmental changes slightly
-        setEnvironment(prev => ({
-          ...prev,
-          windSpeed: Math.max(0, prev.windSpeed + (Math.random() * 1 - 0.5)),
-        }));
-      }, 250);
-    } else if (status === 'connected') {
-      setTelemetry(prev => ({
-        ...prev,
-        signalStrength: 95 + (Math.random() * 4 - 2),
-        gpsAccuracy: 0.3 + (Math.random() * 0.1),
-      }));
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [status]);
-
-  const connect = () => {
-    setStatus('connecting');
-    setTimeout(() => {
-      setStatus('connected');
-      setTelemetry(prev => ({ ...prev, signalStrength: 98, gpsAccuracy: 0.4 }));
-    }, 2000);
-  };
-
-  const disconnect = () => setStatus('disconnected');
-  
-  const startMission = () => {
-    if (status === 'connected') {
-      setStatus('flying');
-    }
-  };
-
-  const returnToHome = () => {
-    if (status === 'flying') {
-      setStatus('returning');
-    }
-  };
-
-  const emergencyLand = () => {
-    setStatus('emergency');
-    setTimeout(() => setStatus('disconnected'), 3000);
-  };
+  const droneName = activeDrone?.name || "No Drone";
 
   return {
-    status,
-    droneName,
-    telemetry,
-    environment,
-    connect,
-    disconnect,
-    startMission,
-    returnToHome,
-    emergencyLand
+    protocol, setProtocol,
+    status, telemetry, environment, setEnvironment,
+    available, activeDrone, droneName,
+    missionId,
+    scan, connect, disconnect, calibrate,
+    startMission, pauseMission, resumeMission, returnToHome, emergencyLand,
   };
 };
+
+export type UseDroneState = ReturnType<typeof useDroneState>;
