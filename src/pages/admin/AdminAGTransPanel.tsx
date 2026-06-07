@@ -75,12 +75,27 @@ export default function AdminAGTransPanel() {
           <CardContent className="space-y-3">
             {pendingDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No pending drivers.</p> : (
               pendingDrivers.map(d => (
-                <div key={d.user_id} className="border p-3 rounded-lg flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold">{d.vehicle_type}</p>
-                    <p className="text-xs text-muted-foreground">License Class: {d.license_class || "—"} • {d.plate_number}</p>
+                <div key={d.user_id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-muted/10">
+                  <div className="space-y-1">
+                    <p className="font-semibold text-sm">{d.full_name || "Unknown Partner"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Vehicle: <span className="text-foreground">{d.vehicle_type}</span> ({d.plate_number})
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Phone: <span className="text-foreground">{d.phone}</span> • Class: <span className="text-foreground">{d.license_class || "—"}</span>
+                    </p>
+                    {d.license_url && (
+                      <a 
+                        href={d.license_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium mt-1"
+                      >
+                        View License Document
+                      </a>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full sm:w-auto justify-end">
                     <Button size="sm" variant="outline" onClick={() => handleVerifyDriver(d.user_id, "rejected")}>Reject</Button>
                     <Button size="sm" onClick={() => handleVerifyDriver(d.user_id, "verified")}>Verify</Button>
                   </div>

@@ -51,7 +51,7 @@ export interface DriverProfile {
 }
 
 export function useAGTrans() {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const [requests, setRequests] = useState<TransportRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
@@ -128,12 +128,33 @@ export function useAGTrans() {
     }
   };
 
-  const createDriverProfile = async (payload: Partial<DriverProfile>) => {
+  const createDriverProfile = async (payload: Partial<DriverProfile>, licenseFile?: File) => {
     if (!user) throw new Error("Not authenticated");
+
+    let license_url = undefined;
+    if (licenseFile) {
+      const fileExt = licenseFile.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("agtrans-licenses")
+        .upload(filePath, licenseFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("agtrans-licenses")
+        .getPublicUrl(filePath);
+
+      license_url = urlData.publicUrl;
+    }
+
     const { data, error } = await supabase
       .from("agtrans_drivers")
       .insert({
         ...payload,
+        license_url,
         user_id: user.id,
         verification_status: "pending",
         availability_status: "offline",
@@ -142,11 +163,22 @@ export function useAGTrans() {
       .single();
 
     if (error) throw error;
+
+    // Upsert the driver role into user_roles table
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .upsert({ user_id: user.id, role: "driver" }, { onConflict: "user_id,role" });
+    if (roleError) {
+      console.error("Error setting driver role in user_roles:", roleError);
+    }
     
     // Auto-update user metadata to include driver role
     await supabase.auth.updateUser({
       data: { role: "driver" }
     });
+
+    // Sync auth context session immediately to propagate changes
+    await refreshSession();
 
     setDriverProfile(data as unknown as DriverProfile);
     return data;

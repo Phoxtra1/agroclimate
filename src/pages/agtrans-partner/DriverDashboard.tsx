@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { MapPin, Package, Clock, Bot, Bell } from "lucide-react";
+import { MapPin, Package, Clock, Bot, Bell, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 export default function DriverDashboard() {
@@ -64,6 +64,55 @@ export default function DriverDashboard() {
           </Badge>
         </div>
       </div>
+
+      {/* Verification Status Banner */}
+      {driverProfile.verification_status !== "verified" && (
+        <Card className={`border-l-4 shadow-sm overflow-hidden ${
+          driverProfile.verification_status === "pending" 
+            ? "bg-amber-500/5 border-amber-500 border-y-border border-r-border" 
+            : driverProfile.verification_status === "rejected"
+            ? "bg-red-500/5 border-red-500 border-y-border border-r-border"
+            : "bg-destructive/5 border-destructive border-y-border border-r-border"
+        }`}>
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start gap-3">
+            <div className={`p-2 rounded-lg mt-0.5 ${
+              driverProfile.verification_status === "pending"
+                ? "bg-amber-500/10 text-amber-600"
+                : "bg-red-500/10 text-red-600"
+            }`}>
+              {driverProfile.verification_status === "pending" ? (
+                <Clock className="h-5 w-5 animate-pulse" />
+              ) : (
+                <ShieldAlert className="h-5 w-5" />
+              )}
+            </div>
+            <div className="flex-1 space-y-1">
+              <h3 className={`font-semibold text-sm ${
+                driverProfile.verification_status === "pending"
+                  ? "text-amber-800 dark:text-amber-500"
+                  : "text-red-800 dark:text-red-500"
+              }`}>
+                {driverProfile.verification_status === "pending" 
+                  ? "Profile Verification Pending" 
+                  : driverProfile.verification_status === "rejected"
+                  ? "Profile Verification Rejected"
+                  : "Account Suspended"}
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {driverProfile.verification_status === "pending" && (
+                  "Your onboarding application is currently under review by our operations team. We are verifying your vehicle details and credentials. Access to accepting transport orders and setting yourself online will be enabled immediately upon approval."
+                )}
+                {driverProfile.verification_status === "rejected" && (
+                  "Unfortunately, your verification request has been rejected. This could be due to invalid credentials, incorrect plate numbers, or unreadable document uploads. Please contact administration for clarification."
+                )}
+                {driverProfile.verification_status === "suspended" && (
+                  "Your driver account has been suspended due to policy violations, disputes, or safety concerns. Please contact driver relations to resolve this status."
+                )}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>

@@ -80,29 +80,49 @@ function useUserRole() {
   const { user, loading: authLoading } = useAuth();
   const [role, setRole] = useState<"user" | "handler" | "admin" | "buyer" | "driver" | null>(null);
   const [roleLoading, setRoleLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) { setRole(null); setRoleLoading(false); return; }
 
-    const checkRole = async () => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
-
-      const roles = (data || []).map((r: any) => r.role);
-      const metaRole = user.user_metadata?.role || user.user_metadata?.account_type;
-
-      if (roles.includes("admin")) setRole("admin");
-      else if (roles.includes("handler")) setRole("handler");
-      else if (roles.includes("buyer") || metaRole === "buyer") setRole("buyer");
-      else if (roles.includes("driver") || metaRole === "driver") setRole("driver");
-      else setRole("user");
+    // Optimization: If role is already resolved to a specialized role, skip recheck on path change
+    if (role && role !== "user") {
       setRoleLoading(false);
+      return;
+    }
+
+    const checkRole = async () => {
+      setRoleLoading(true);
+      try {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+
+        const roles = (data || []).map((r: any) => r.role);
+        const metaRole = user.user_metadata?.role || user.user_metadata?.account_type;
+
+        // Double check driver registration profile to instantly sync driver role
+        const { data: driverData } = await supabase
+          .from("agtrans_drivers")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (roles.includes("admin")) setRole("admin");
+        else if (roles.includes("handler")) setRole("handler");
+        else if (roles.includes("buyer") || metaRole === "buyer") setRole("buyer");
+        else if (roles.includes("driver") || metaRole === "driver" || driverData) setRole("driver");
+        else setRole("user");
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+      } finally {
+        setRoleLoading(false);
+      }
     };
     checkRole();
-  }, [user, authLoading]);
+  }, [user, authLoading, location.pathname]);
 
   return { role, roleLoading };
 }
