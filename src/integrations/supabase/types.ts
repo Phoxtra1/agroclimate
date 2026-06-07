@@ -445,17 +445,111 @@ export type Database = {
         }
         Relationships: []
       }
+      drone_ai_detections: {
+        Row: {
+          bounding_box: Json | null
+          captured_at: string
+          category: string
+          created_at: string
+          id: string
+          media_id: string | null
+          mission_id: string | null
+          observation: string
+          recommended_action: string | null
+          risk_score: number | null
+          user_id: string
+        }
+        Insert: {
+          bounding_box?: Json | null
+          captured_at?: string
+          category: string
+          created_at?: string
+          id?: string
+          media_id?: string | null
+          mission_id?: string | null
+          observation: string
+          recommended_action?: string | null
+          risk_score?: number | null
+          user_id: string
+        }
+        Update: {
+          bounding_box?: Json | null
+          captured_at?: string
+          category?: string
+          created_at?: string
+          id?: string
+          media_id?: string | null
+          mission_id?: string | null
+          observation?: string
+          recommended_action?: string | null
+          risk_score?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      drone_media: {
+        Row: {
+          archived: boolean
+          captured_at: string
+          created_at: string
+          drone_id: string | null
+          id: string
+          media_type: string
+          metadata: Json | null
+          mission_id: string | null
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          archived?: boolean
+          captured_at?: string
+          created_at?: string
+          drone_id?: string | null
+          id?: string
+          media_type: string
+          metadata?: Json | null
+          mission_id?: string | null
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          archived?: boolean
+          captured_at?: string
+          created_at?: string
+          drone_id?: string | null
+          id?: string
+          media_type?: string
+          metadata?: Json | null
+          mission_id?: string | null
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       drone_missions: {
         Row: {
           advisory_result: string | null
           altitude_m: number | null
+          area_polygon: Json | null
+          autonomous: boolean | null
+          camera_settings: Json | null
+          completed_at: string | null
           created_at: string
+          drone_id: string | null
           drone_type: string | null
+          estimated_battery_pct: number | null
+          estimated_coverage_ha: number | null
+          estimated_duration_min: number | null
           id: string
           mission_type: string
+          name: string | null
           notes: string | null
           planned_date: string | null
+          route_pattern: string | null
+          speed_ms: number | null
+          started_at: string | null
           status: string
+          success: boolean | null
           target_lat: number | null
           target_location: string | null
           target_lon: number | null
@@ -465,13 +559,26 @@ export type Database = {
         Insert: {
           advisory_result?: string | null
           altitude_m?: number | null
+          area_polygon?: Json | null
+          autonomous?: boolean | null
+          camera_settings?: Json | null
+          completed_at?: string | null
           created_at?: string
+          drone_id?: string | null
           drone_type?: string | null
+          estimated_battery_pct?: number | null
+          estimated_coverage_ha?: number | null
+          estimated_duration_min?: number | null
           id?: string
           mission_type?: string
+          name?: string | null
           notes?: string | null
           planned_date?: string | null
+          route_pattern?: string | null
+          speed_ms?: number | null
+          started_at?: string | null
           status?: string
+          success?: boolean | null
           target_lat?: number | null
           target_location?: string | null
           target_lon?: number | null
@@ -481,16 +588,134 @@ export type Database = {
         Update: {
           advisory_result?: string | null
           altitude_m?: number | null
+          area_polygon?: Json | null
+          autonomous?: boolean | null
+          camera_settings?: Json | null
+          completed_at?: string | null
           created_at?: string
+          drone_id?: string | null
           drone_type?: string | null
+          estimated_battery_pct?: number | null
+          estimated_coverage_ha?: number | null
+          estimated_duration_min?: number | null
           id?: string
           mission_type?: string
+          name?: string | null
           notes?: string | null
           planned_date?: string | null
+          route_pattern?: string | null
+          speed_ms?: number | null
+          started_at?: string | null
           status?: string
+          success?: boolean | null
           target_lat?: number | null
           target_location?: string | null
           target_lon?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      drone_telemetry_logs: {
+        Row: {
+          altitude_m: number | null
+          battery_pct: number | null
+          captured_at: string
+          drone_id: string | null
+          gps_accuracy_m: number | null
+          ground_speed_ms: number | null
+          heading: number | null
+          id: string
+          lat: number | null
+          lng: number | null
+          mission_id: string | null
+          payload: Json | null
+          signal_strength: number | null
+          user_id: string
+          vertical_speed_ms: number | null
+        }
+        Insert: {
+          altitude_m?: number | null
+          battery_pct?: number | null
+          captured_at?: string
+          drone_id?: string | null
+          gps_accuracy_m?: number | null
+          ground_speed_ms?: number | null
+          heading?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          mission_id?: string | null
+          payload?: Json | null
+          signal_strength?: number | null
+          user_id: string
+          vertical_speed_ms?: number | null
+        }
+        Update: {
+          altitude_m?: number | null
+          battery_pct?: number | null
+          captured_at?: string
+          drone_id?: string | null
+          gps_accuracy_m?: number | null
+          ground_speed_ms?: number | null
+          heading?: number | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          mission_id?: string | null
+          payload?: Json | null
+          signal_strength?: number | null
+          user_id?: string
+          vertical_speed_ms?: number | null
+        }
+        Relationships: []
+      }
+      drones: {
+        Row: {
+          created_at: string
+          firmware: string | null
+          id: string
+          last_battery_pct: number | null
+          last_seen_at: string | null
+          metadata: Json | null
+          model: string | null
+          name: string
+          paired_at: string | null
+          protocol: string
+          serial: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          firmware?: string | null
+          id?: string
+          last_battery_pct?: number | null
+          last_seen_at?: string | null
+          metadata?: Json | null
+          model?: string | null
+          name: string
+          paired_at?: string | null
+          protocol?: string
+          serial?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          firmware?: string | null
+          id?: string
+          last_battery_pct?: number | null
+          last_seen_at?: string | null
+          metadata?: Json | null
+          model?: string | null
+          name?: string
+          paired_at?: string | null
+          protocol?: string
+          serial?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
         }
