@@ -60,34 +60,34 @@ export default function DroneAdvisory() {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="p-3 lg:p-6 max-w-[1600px] mx-auto">
+      <div className="flex items-center gap-3 mb-4">
         <Plane className="h-6 w-6 text-primary" />
         <div>
-          <h1 className="text-xl font-bold">Flight Advisory</h1>
-          <p className="text-sm text-muted-foreground">Weather-based flight safety for drones, helicopters & light aircraft</p>
+          <h1 className="text-xl font-bold">Drone Operations &amp; Aerial Intelligence</h1>
+          <p className="text-sm text-muted-foreground">Mission control · Odeneho AI advisory · vision analytics</p>
         </div>
       </div>
 
-      <Tabs defaultValue="advisory" onValueChange={(val) => {
-        if (val === "monitoring") {
-          markVisited("drone-monitoring");
-          markVisited("drone-api");
-        }
+      <Tabs defaultValue="operations" onValueChange={(val) => {
+        if (val === "monitoring") { markVisited("drone-monitoring"); markVisited("drone-api"); }
       }} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="advisory">Flight Evaluation</TabsTrigger>
-          <TabsTrigger value="monitoring">
-            Air Monitoring 
-            {isNew("drone-monitoring") && (
-              <Badge variant="secondary" className="ml-1 text-[10px] px-1">New</Badge>
-            )}
-          </TabsTrigger>
           <TabsTrigger value="operations" className="flex items-center gap-2">
             Operations Console
-            <Badge variant="secondary" className="bg-cyan-900/50 text-cyan-400 border-cyan-800 hover:bg-cyan-900/70 text-[10px] px-1">BETA</Badge>
+            <Badge variant="secondary" className="bg-cyan-900/50 text-cyan-400 border-cyan-800 text-[10px] px-1">LIVE</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="advisory">Flight Evaluation</TabsTrigger>
+          <TabsTrigger value="monitoring">
+            Air Monitoring
+            {isNew("drone-monitoring") && <Badge variant="secondary" className="ml-1 text-[10px] px-1">New</Badge>}
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="operations">
+          <DroneOperationsConsole />
+        </TabsContent>
+
 
         <TabsContent value="advisory">
           <div className="grid lg:grid-cols-2 gap-6">
