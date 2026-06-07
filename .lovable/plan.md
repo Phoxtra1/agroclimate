@@ -1,100 +1,128 @@
-## AGTrans — Agricultural Transport & Logistics Layer
+## Drone Operations & Aerial Intelligence Center
 
-Build AGTrans as an integrated logistics layer inside AgroClimate. Two faces: a **Transport Request** tab inside Market Link (supplier-side) and a dedicated **AGTrans Partner** workspace (driver-side). Admin gets an AGTrans control panel. AI hooks reuse the existing `OdenehoProvider` abstraction.
+Upgrade the existing Flight Advisory page (`src/pages/DroneAdvisory.tsx`) into a full **Drone Operations Console** with aviation-style mission control UI, powered by Odeneho AI. AGNav stays as an embedded map component.
 
----
+### Scope & Approach
 
-### 1. Database (single migration)
-
-New tables (all with proper GRANTs + RLS):
-
-- `agtrans_drivers` — driver profile linked to `auth.users`
-  - fields: full_name, phone, region, district, vehicle_type, plate_number, vehicle_capacity_kg, route_coverage (text[]), preferred_corridors (text[]), license_url, license_class, availability_status (`available|busy|offline`), verification_status (`pending|verified|suspended|rejected`), reliability_score (numeric), completed_deliveries, late_deliveries, cancellations, disputes
-- `agtrans_requests` — supplier transport requests
-  - fields: supplier_id, agreement_id (nullable link to existing `agreements`), pickup_location, pickup_lat/lon, delivery_location, delivery_lat/lon, product_type, quantity, unit, preferred_pickup_at, urgency (`standard|urgent|cold_chain`), status (10 states from spec), driver_id (nullable), buyer_id (nullable for visibility), tracking_code (unique short code), notes, estimated_price
-- `agtrans_request_offers` — driver responses & broadcast layer
-  - fields: request_id, driver_id, action (`notified|accepted|rejected`), notification_layer (`nearby|district|regional|national`), responded_at
-- `agtrans_tracking_events` — checkpoint & GPS history
-  - fields: request_id, driver_id, event_type (`status_change|gps_ping|checkpoint|note`), status, lat, lon, note
-- `agtrans_ratings` — supplier/buyer ratings of driver
-  - fields: request_id, driver_id, rater_id, rater_role (`supplier|buyer`), score (1-5), comment
-- New `app_role` value: `driver` (added via ALTER TYPE)
-- Storage bucket: `agtrans-licenses` (private)
-
-RLS summary:
-- Drivers manage their own driver profile; admins manage all; verified driver lookups visible to suppliers via security-definer function
-- Suppliers manage own requests; assigned driver can read & update status; buyer (if linked) can read; admins all
-- Offers: driver sees their own, supplier sees offers on own requests, admin all
-- Tracking events: driver inserts for assigned trips, supplier/buyer/admin read
-- Ratings: rater creates own; driver and admin read
-
-### 2. Edge functions
-
-- `agtrans-broadcast` — given a request_id, picks drivers by route corridor + region, inserts offers in layered fashion (nearby → district → regional → national) with time gates. Invoked on request creation and via cron-style retry from client polling.
-- `agtrans-ai-advisor` — uses Lovable AI Gateway (`google/gemini-2.5-flash`) via existing `OdenehoProvider` pattern; returns route risk, ETA estimate, driver-match recommendation, spoilage risk. Reuses `src/lib/aiProviders`.
-
-### 3. Frontend — Supplier face (inside Market Link)
-
-- Extend `src/components/market/MarketplaceLayout.tsx` panel: add **AGTrans** tab after Prices.
-- New page `src/pages/marketplace/MarketplaceAGTrans.tsx` titled **"Transport Request"**:
-  - List of user's transport requests with status badges + copy tracking code button
-  - "New Transport Request" dialog (pickup, destination, product, qty, pickup time, urgency, optional link to existing agreement/order)
-  - Detail drawer: live status, driver card (when matched), AI advisory card, tracking timeline, delivery confirmation action
-  - Realtime subscription on `agtrans_requests` + `agtrans_tracking_events`
-
-### 4. Frontend — Driver face (AGTrans Partner)
-
-- **Auth integration**: extend existing signup form (`src/pages/Index.tsx` or wherever auth lives) — add **Account Type** dropdown: `Farmer | Buyer | Driver`. On driver signup, route to `/agtrans-partner/onboarding`.
-- New layout `src/components/AgTransPartnerLayout.tsx` (mirrors AppLayout styling)
-- New pages:
-  - `/agtrans-partner/onboarding` — "Join Agro-Logistics Network" multi-step form (profile, vehicle, corridors, license upload). Creates `agtrans_drivers` row in `pending` status.
-  - `/agtrans-partner/pending` — verification waiting screen
-  - `/agtrans-partner` — driver dashboard: Available Requests, Assigned Trips, Trip History, Earnings stub, Availability toggle, Notification Center
-  - `/agtrans-partner/trip/:id` — pickup/delivery details, cargo info, status update buttons (Picked → In Transit → Near Destination → Delivered), GPS ping via `navigator.geolocation`, navigation hand-off (Google Maps link), copy tracking ID
-
-### 5. Frontend — Buyer visibility
-
-- Add **"Track Delivery"** card on buyer order detail (existing `MarketplaceOrderListing` / order pages) showing read-only status timeline + ETA. No control actions.
-
-### 6. Frontend — Admin
-
-- Add `AGTrans` nav item in admin sidebar
-- New page `src/pages/admin/AGTransPanel.tsx` with tabs:
-  - Driver Approvals (verify/reject/suspend, view license)
-  - Live Deliveries (filterable list, status, route)
-  - Disputes (low-rating + flagged requests)
-  - Analytics (counts, avg delivery time, reliability distribution) — simple cards initially
-
-### 7. Routing & access control
-
-- Update `src/App.tsx` with new routes
-- Route guard hook `useRequireRole(role)` — drivers blocked from `/dashboard`, redirected to `/agtrans-partner`; farmers blocked from partner UI
-- Use existing `has_role` SQL function pattern (extend `app_role` enum)
-
-### 8. Reusable utilities
-
-- `src/components/CopyButton.tsx` — universal copy button with toast confirmation (used on tracking codes, driver IDs, request refs)
-- `src/lib/agtrans/statusFlow.ts` — central status enum, colors, allowed transitions, labels
-- `src/lib/agtrans/notificationLayers.ts` — broadcast layer logic constants
-- `src/hooks/useAgTransRequests.ts`, `useAgTransDriverProfile.ts`, `useAgTransTrip.ts` — data hooks with realtime
-- AI: extend `OdenehoProvider` interface with `generateLogisticsAdvisory(request, driver?)` returning `{ etaMinutes, routeRisk, recommendation, spoilageRisk }`. Implement in `lovableProvider.ts` via existing edge function pattern.
-
-### 9. AGNav placeholder
-
-- Scaffolds-only: `src/lib/agnav/waterTransport.ts` with type stubs and TODO comments. No UI yet — architecture-ready only as spec requests.
-
-### 10. Memory
-
-Save new memory file `mem://features/agtrans` describing the architecture so future sessions don't break it.
+Given the size (10 feature blocks), I'll deliver a **complete, production-ready scaffold** with real working logic where possible and clearly-architected simulation layers where physical hardware is required (drones aren't connectable from a browser without native bridges). Everything is wired so real MAVLink/DJI/Pixhawk bridges can be plugged into the same interfaces later.
 
 ---
 
-### Out of scope for MVP (noted in code)
+### 1. New Route & Layout
 
-- Real-time GPS streaming (uses periodic pings via tracking events)
-- Payments / pay-as-you-go billing (admin tracking column only)
-- Twilio SMS driver dispatch (uses in-app notifications via existing `user_alerts`)
-- Full cold-chain sensor integration (urgency flag only)
-- AGNav UI (architecture stubs only)
+- Replace `/drone-advisory` page with a new **Mission Control** layout:
+  ```text
+  ┌─────────────────────────────────────────────────────┐
+  │  Header: Drone status • Battery • Signal • AI Alert │
+  ├──────────────────────────┬──────────────────────────┤
+  │  LIVE VIDEO PANEL        │  AGNav MAP (live pos)    │
+  │  (telemetry overlay)     │  (waypoints, route, RTH) │
+  ├──────────────────────────┴──────────────────────────┤
+  │  Telemetry strip (alt, speed, GPS, wind, etc.)     │
+  ├─────────────────────────────────────────────────────┤
+  │  Tabs: Connection | Mission | Vision AI | Media |   │
+  │        Analytics | Advisory                         │
+  └─────────────────────────────────────────────────────┘
+  ```
+- Dark aviation theme using existing design tokens; HUD-style monospace readouts for telemetry.
 
-These are wired so they can be added later without rework.
+### 2. Drone Connection Layer (`src/lib/drone/`)
+
+- `src/lib/drone/types.ts` — `DroneConnection`, `DroneTelemetry`, `FlightStatus`, protocols (`wifi | mavlink | ardupilot | pixhawk | dji | custom`).
+- `src/lib/drone/connectionManager.ts` — pluggable adapter pattern:
+  - `ConnectionAdapter` interface (scan/connect/disconnect/sendCommand/onTelemetry).
+  - `SimulatorAdapter` — generates realistic telemetry for demo/testing.
+  - Stubs `MavlinkAdapter`, `DjiAdapter`, `PixhawkAdapter` that throw "requires native bridge" with clear pathway for future wiring.
+- `useDrone()` React hook exposing connection state, telemetry stream, and commands.
+
+### 3. Connection Center UI
+
+Buttons: Scan, Connect, Disconnect, Pair, Calibrate, Start/Pause/Resume Mission, RTH, Emergency Land. Status cards: name, model, battery %, signal, camera, GPS, firmware, flight status.
+
+### 4. Live Flight View
+
+- `<LiveVideoPanel />` — `<video>` element with fallback placeholder; supports WebRTC stream URL.
+- Controls: Fullscreen (Fullscreen API), PiP (`requestPictureInPicture`), Screenshot (canvas capture), Record (MediaRecorder).
+- Telemetry HUD overlay (altitude, speed, distance, heading, battery, duration) rendered as absolutely-positioned semi-transparent panels.
+
+### 5. AGNav Integration
+
+- Embed existing AGNav as a `<MissionMap />` component on the right pane; pass live drone position, waypoints, mission boundary, home position, RTH path.
+- Add map layer toggles (satellite/terrain/climate/flood/crop health) using existing AGNav layer system where present.
+
+### 6. Telemetry Dashboard
+
+- Real-time telemetry cards bound to telemetry stream (updates every 500 ms).
+- Environmental data pulled from existing `useWeather` hook tied to drone's current GPS.
+
+### 7. Odeneho AI Flight Advisory Engine
+
+- New edge function `supabase/functions/odeneho-flight-ops/index.ts` using Lovable AI (`google/gemini-3-flash-preview`) with structured tool-calling output.
+- Inputs: telemetry snapshot + weather + mission context.
+- Outputs: risk scores, alerts (high wind, rain risk, low battery, signal loss, unsafe altitude, RTH recommendation, route optimization).
+- Frontend hook `useFlightAdvisor()` polls every 30 s while flying; emits Live AI Alert Banner.
+
+### 8. Odeneho Vision Module
+
+- Edge function `supabase/functions/odeneho-vision/index.ts` — accepts captured frame (base64) + context, uses `google/gemini-2.5-pro` (multimodal).
+- Detects: crop stress, pest damage, disease, flood, dry zones, nutrient deficiency, erosion, water accumulation, fire risk, vegetation health.
+- Returns observations, risk scores, recommended actions, optional bounding-box hints (drawn over live frame).
+
+### 9. Mission Planning Center
+
+- New tables (see Technical Details).
+- Form: name, mission type (mapping, inspection, irrigation, flood, pest, survey, spraying), farm selector, area polygon (draw on AGNav), altitude, speed, route pattern (grid/perimeter/spiral/manual), camera settings.
+- Estimators: flight time, battery use, coverage area (calculated client-side from area + speed + altitude).
+
+### 10. Drone Media Center
+
+- Reuse existing storage bucket pattern; add `drone-media` storage bucket (private) for images/videos/logs/AI reports.
+- Browser UI: grid of captures, filters (mission, date, type), actions: download, share (link copy), export (zip), archive (flag).
+
+### 11. Analytics Dashboard
+
+- Aggregations from `drone_missions`, telemetry logs, AI detections: total missions, flight time, distance, area surveyed, crop health index, risk counts, fleet utilization, battery performance, mission success rate.
+
+### 12. Future-Ready
+
+- Fleet/multi-drone schema in place (`drone_id` on missions, fleet table).
+- `useFleet()` hook stub. Autonomous mission flag on missions table.
+
+---
+
+### Technical Details
+
+**Database migration** (one migration, with GRANTs + RLS):
+- Extend existing `drone_missions` (add: drone_id, mission_type, area_polygon jsonb, altitude_m, speed_ms, route_pattern, status, started_at, completed_at, estimated_battery_pct, estimated_duration_min, estimated_coverage_ha, success).
+- New tables:
+  - `drones` — user_id, name, model, protocol, firmware, serial, paired_at, status, last_seen, last_battery_pct.
+  - `drone_telemetry_logs` — mission_id, captured_at, lat, lng, alt_m, speed_ms, heading, battery_pct, signal, gps_fix.
+  - `drone_media` — user_id, mission_id, type (image/video/log/report), storage_path, captured_at, metadata jsonb.
+  - `drone_ai_detections` — mission_id, captured_at, category, observation, risk_score, recommended_action, bounding_box jsonb, media_id.
+- Storage bucket: `drone-media` (private). RLS so users see only their own.
+
+**Edge functions**:
+- `odeneho-flight-ops` — flight advisory (text → structured JSON).
+- `odeneho-vision` — multimodal image analysis.
+- Both use AI SDK + `LOVABLE_API_KEY` already configured.
+
+**Frontend files**:
+- `src/pages/DroneAdvisory.tsx` — rewritten as Mission Control shell.
+- `src/components/drone/`:
+  - `LiveVideoPanel.tsx`, `TelemetryHUD.tsx`, `MissionMap.tsx`, `ConnectionPanel.tsx`, `MissionPlanner.tsx`, `VisionPanel.tsx`, `MediaCenter.tsx`, `AnalyticsPanel.tsx`, `AdvisoryBanner.tsx`, `FloatingControls.tsx`.
+- `src/hooks/`: `useDrone.ts`, `useFlightAdvisor.ts`, `useDroneVision.ts`, `useMissions.ts`, `useDroneMedia.ts`.
+- `src/lib/drone/`: types, adapters, simulator.
+
+**Honest constraint**: Real drone connection (MAVLink/DJI/Pixhawk) from a browser requires a native companion app or WebUSB/WebSerial bridge. The simulator adapter gives a fully functional demo; protocol adapters are scaffolded with clear "connect your bridge here" entry points so plugging real hardware later is a localized change.
+
+**No mocked AI**: Both edge functions hit real Lovable AI. Only the drone telemetry source is simulated when no hardware bridge is connected.
+
+---
+
+### Out of Scope (will not be built in this pass)
+
+- Native mobile bridge app for real MAVLink/DJI radios.
+- Live RTMP/WebRTC ingest server (UI is ready for stream URL; you supply the source).
+- Real-time multi-user mission collaboration.
+
+Say **continue** and I'll execute the full build in one pass: migration → edge functions → drone lib → hooks → components → page integration.
