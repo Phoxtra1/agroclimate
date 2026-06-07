@@ -1,11 +1,64 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Clock, Battery, Map } from 'lucide-react';
+import React, { useMemo, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Route, Clock, Battery, Map, Loader2, CheckCircle } from "lucide-react";
+import { useMissions } from "@/hooks/useMissions";
+import { useToast } from "@/hooks/use-toast";
+import { CopyButton } from "@/components/CopyButton";
+
+const MISSION_TYPES = [
+  { v: "mapping", l: "Farm Mapping" },
+  { v: "inspection", l: "Crop Inspection" },
+  { v: "irrigation", l: "Irrigation Assessment" },
+  { v: "flood", l: "Flood Assessment" },
+  { v: "pest", l: "Pest Surveillance" },
+  { v: "survey", l: "Aerial Survey" },
+  { v: "spraying", l: "Spraying Mission" },
+];
 
 export function MissionPlanning() {
+  const [name, setName] = useState("");
+  const [type, setType] = useState("mapping");
+  const [altitude, setAltitude] = useState(50);
+  const [speed, setSpeed] = useState(10);
+  const [areaHa, setAreaHa] = useState(12);
+  const [pattern, setPattern] = useState("grid");
+  const [saving, setSaving] = useState(false);
+  const { missions, create } = useMissions();
+  const { toast } = useToast();
+
+  const estimates = useMemo(() => {
+    // Simple coverage model: time = area / (speed * swath); swath ~ altitude*0.7
+    const swath = Math.max(5, altitude * 0.7);
+    const areaM2 = areaHa * 10000;
+    const timeSec = areaM2 / Math.max(0.1, speed * swath);
+    const min = timeSec / 60;
+    const batteryPct = Math.min(100, min * 4); // ~4%/min
+    return { min, batteryPct };
+  }, [altitude, speed, areaHa]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await create({
+        name: name || `${type} mission`,
+        mission_type: type,
+        altitude_m: altitude,
+        speed_ms: speed,
+        route_pattern: pattern,
+        estimated_battery_pct: estimates.batteryPct,
+        estimated_duration_min: estimates.min,
+        estimated_coverage_ha: areaHa,
+      });
+      toast({ title: "Mission saved" });
+      setName("");
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
@@ -17,62 +70,89 @@ export function MissionPlanning() {
           </CardHeader>
           <CardContent className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-slate-500">MISSION NAME</label>
-                <Input placeholder="e.g. North Field Survey" className="bg-slate-950 border-slate-800 text-slate-300 font-mono" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-slate-500">MISSION TYPE</label>
-                <Select defaultValue="mapping">
-                  <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-300 font-mono">
-                    <SelectValue placeholder="Select Type" />
-                  </SelectTrigger>
+              <Field label="Mission Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="North Field Survey" className="bg-slate-950 border-slate-800 text-slate-300 font-mono" /></Field>
+              <Field label="Mission Type">
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-300 font-mono"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-800 text-slate-300 font-mono">
-                    <SelectItem value="mapping">Farm Mapping</SelectItem>
-                    <SelectItem value="inspection">Crop Inspection</SelectItem>
-                    <SelectItem value="spraying">Spraying Mission</SelectItem>
+                    {MISSION_TYPES.map((m) => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-slate-500">ALTITUDE (m)</label>
-                <Input type="number" defaultValue={50} className="bg-slate-950 border-slate-800 text-slate-300 font-mono" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-slate-500">SPEED (m/s)</label>
-                <Input type="number" defaultValue={10} className="bg-slate-950 border-slate-800 text-slate-300 font-mono" />
-              </div>
+              </Field>
+              <Field label="Altitude (m)"><Input type="number" min={10} max={400} value={altitude} onChange={(e) => setAltitude(Number(e.target.value))} className="bg-slate-950 border-slate-800 text-slate-300 font-mono" /></Field>
+              <Field label="Speed (m/s)"><Input type="number" min={1} max={25} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} className="bg-slate-950 border-slate-800 text-slate-300 font-mono" /></Field>
+              <Field label="Coverage (ha)"><Input type="number" min={0.1} value={areaHa} onChange={(e) => setAreaHa(Number(e.target.value))} className="bg-slate-950 border-slate-800 text-slate-300 font-mono" /></Field>
+              <Field label="Route Pattern">
+                <Select value={pattern} onValueChange={setPattern}>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-300 font-mono"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-800 text-slate-300 font-mono">
+                    <SelectItem value="grid">Grid (mapping)</SelectItem>
+                    <SelectItem value="perimeter">Perimeter</SelectItem>
+                    <SelectItem value="spiral">Spiral</SelectItem>
+                    <SelectItem value="waypoint">Waypoints</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
             </div>
-            <Button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-mono mt-4">
-              GENERATE FLIGHT PLAN
+            <Button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-mono mt-2" onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+              SAVE FLIGHT PLAN
             </Button>
           </CardContent>
         </Card>
+
+        {missions.length > 0 && (
+          <Card className="bg-slate-900 border-slate-800 text-slate-100">
+            <CardHeader className="py-3 border-b border-slate-800">
+              <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400">Saved Missions</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 space-y-2 max-h-64 overflow-y-auto">
+              {missions.map((m) => (
+                <div key={m.id} className="bg-slate-950 border border-slate-800 rounded p-2 text-[11px] font-mono flex items-center justify-between">
+                  <div className="min-w-0">
+                    <div className="text-slate-200 truncate">{m.name || m.mission_type}</div>
+                    <div className="text-slate-500 text-[10px]">{m.mission_type} · {m.altitude_m}m · {m.estimated_coverage_ha?.toFixed(1) || "—"} ha · {m.status}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-slate-600 truncate max-w-[80px]">{m.id.slice(0, 8)}</span>
+                    <CopyButton value={m.id} className="h-5 w-5" />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="space-y-6">
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
-          <CardHeader className="py-4 border-b border-slate-800">
-            <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400">
-              Estimates
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-xs font-mono text-slate-500 flex items-center gap-2"><Clock className="h-4 w-4" /> FLIGHT TIME</span>
-              <span className="text-sm font-mono text-slate-300">14m 30s</span>
-            </div>
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-xs font-mono text-slate-500 flex items-center gap-2"><Battery className="h-4 w-4" /> BATTERY EST.</span>
-              <span className="text-sm font-mono text-slate-300">32% required</span>
-            </div>
-            <div className="flex justify-between items-center pb-2">
-              <span className="text-xs font-mono text-slate-500 flex items-center gap-2"><Map className="h-4 w-4" /> COVERAGE</span>
-              <span className="text-sm font-mono text-slate-300">12.4 Hectares</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="bg-slate-900 border-slate-800 text-slate-100 h-fit">
+        <CardHeader className="py-4 border-b border-slate-800">
+          <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400">Estimates</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 space-y-4 text-xs font-mono">
+          <Row icon={<Clock className="h-4 w-4" />} label="Flight Time" value={`${Math.floor(estimates.min)}m ${Math.round((estimates.min%1)*60)}s`} />
+          <Row icon={<Battery className="h-4 w-4" />} label="Battery Est." value={`${estimates.batteryPct.toFixed(0)}%`} />
+          <Row icon={<Map className="h-4 w-4" />} label="Coverage" value={`${areaHa.toFixed(1)} ha`} />
+          <Row icon={<Route className="h-4 w-4" />} label="Pattern" value={pattern.toUpperCase()} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] font-mono text-slate-500 uppercase">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Row({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex justify-between items-center border-b border-slate-800 pb-2 last:border-0">
+      <span className="text-slate-500 flex items-center gap-2">{icon} {label}</span>
+      <span className="text-slate-200">{value}</span>
     </div>
   );
 }
