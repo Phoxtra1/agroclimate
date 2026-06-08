@@ -206,7 +206,7 @@ export function useAGTrans() {
 
     const { data, error } = await supabase
       .from("agtrans_drivers")
-      .insert({
+      .upsert({
         ...driverPayload,
         license_url,
         user_id: user.id,
@@ -218,7 +218,7 @@ export function useAGTrans() {
         cancellations: 0,
         cancelled_trips: 0,
         disputes: 0,
-      } as any)
+      } as any, { onConflict: "user_id" })
       .select()
       .single();
 
