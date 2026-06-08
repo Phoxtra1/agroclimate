@@ -111,6 +111,13 @@ export default function DriverOnboarding() {
         </CardHeader>
         <CardContent className="p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-8">
+            {validationMessage && (
+              <Alert variant="destructive" className="border-destructive/40 bg-destructive/5">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Onboarding details need attention</AlertTitle>
+                <AlertDescription>{validationMessage}</AlertDescription>
+              </Alert>
+            )}
             
             {/* Section 1: Personal & Location Details */}
             <div className="space-y-4">
