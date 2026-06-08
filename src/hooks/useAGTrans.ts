@@ -212,12 +212,6 @@ export function useAGTrans() {
         user_id: user.id,
         verification_status: "pending",
         availability_status: "offline",
-        reliability_score: 100,
-        completed_deliveries: 0,
-        late_deliveries: 0,
-        cancellations: 0,
-        cancelled_trips: 0,
-        disputes: 0,
       } as any, { onConflict: "user_id" })
       .select()
       .single();
