@@ -125,6 +125,7 @@ export function MissionPlanning() {
           <CardContent className="p-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Mission Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="North Field Survey" className="bg-slate-950 border-slate-800 text-slate-300 font-mono" /></Field>
+              <Field label="Farm Boundary Name"><Input value={farmName} onChange={(e) => setFarmName(e.target.value)} placeholder="North Field" className="bg-slate-950 border-slate-800 text-slate-300 font-mono" /></Field>
               <Field label="Mission Type">
                 <Select value={type} onValueChange={setType}>
                   <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-300 font-mono"><SelectValue /></SelectTrigger>
@@ -148,6 +149,43 @@ export function MissionPlanning() {
                 </Select>
               </Field>
             </div>
+            <Field label="Farm Boundary Coordinates">
+              <Textarea
+                value={boundary}
+                onChange={(e) => setBoundary(e.target.value)}
+                placeholder={"lat,lng\nlat,lng\nlat,lng"}
+                className="min-h-[110px] bg-slate-950 border-slate-800 text-slate-300 font-mono text-xs"
+              />
+            </Field>
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-mono" onClick={generateRoute} disabled={generating}>
+              {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              GENERATE ODENEHO AI ROUTE
+            </Button>
+            {aiRoute && (
+              <div className="rounded-lg border border-cyan-900/50 bg-cyan-950/20 p-3 font-mono text-xs text-slate-200 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-cyan-300 uppercase tracking-widest text-[10px]">AI Route Ready</div>
+                    <p className="mt-1 text-slate-300">{aiRoute.coverage_summary}</p>
+                  </div>
+                  <CopyButton value={JSON.stringify(aiRoute.waypoints)} className="h-7 w-7 text-slate-400" />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
+                  <span>Pattern <b className="text-slate-100">{aiRoute.route_pattern.toUpperCase()}</b></span>
+                  <span>Waypoints <b className="text-slate-100">{aiRoute.waypoints.length}</b></span>
+                  <span>Coverage <b className="text-slate-100">{aiRoute.estimated_coverage_ha.toFixed(1)} ha</b></span>
+                  <span>Spacing <b className="text-slate-100">{aiRoute.waypoint_spacing_m?.toFixed(0) || "—"}m</b></span>
+                </div>
+                <div className="max-h-28 overflow-y-auto space-y-1">
+                  {aiRoute.waypoints.slice(0, 8).map((point, index) => (
+                    <div key={`${point.lat}-${point.lng}-${index}`} className="flex items-center justify-between gap-2 border-t border-cyan-900/30 pt-1 text-[10px]">
+                      <span className="flex items-center gap-1 text-cyan-200"><Navigation className="h-3 w-3" /> WP{index + 1}</span>
+                      <span className="text-slate-400 truncate">{point.lat.toFixed(5)}, {point.lng.toFixed(5)} · {point.altitude_m}m · {point.action}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <Button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-mono mt-2" onClick={save} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}
               SAVE FLIGHT PLAN
@@ -185,8 +223,8 @@ export function MissionPlanning() {
         <CardContent className="p-4 space-y-4 text-xs font-mono">
           <Row icon={<Clock className="h-4 w-4" />} label="Flight Time" value={`${Math.floor(estimates.min)}m ${Math.round((estimates.min%1)*60)}s`} />
           <Row icon={<Battery className="h-4 w-4" />} label="Battery Est." value={`${estimates.batteryPct.toFixed(0)}%`} />
-          <Row icon={<Map className="h-4 w-4" />} label="Coverage" value={`${areaHa.toFixed(1)} ha`} />
-          <Row icon={<Route className="h-4 w-4" />} label="Pattern" value={pattern.toUpperCase()} />
+          <Row icon={<Map className="h-4 w-4" />} label="Coverage" value={`${estimates.coverageHa.toFixed(1)} ha`} />
+          <Row icon={<Route className="h-4 w-4" />} label="Pattern" value={estimates.pattern.toUpperCase()} />
         </CardContent>
       </Card>
     </div>
