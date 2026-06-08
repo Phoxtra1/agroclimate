@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Route, Clock, Battery, Map, Loader2, CheckCircle } from "lucide-react";
+import { Route, Clock, Battery, Map, Loader2, CheckCircle, Sparkles, Navigation } from "lucide-react";
 import { useMissions } from "@/hooks/useMissions";
 import { useToast } from "@/hooks/use-toast";
 import { CopyButton } from "@/components/CopyButton";
+import { supabase } from "@/integrations/supabase/client";
 
 const MISSION_TYPES = [
   { v: "mapping", l: "Farm Mapping" },
@@ -18,6 +20,20 @@ const MISSION_TYPES = [
   { v: "spraying", l: "Spraying Mission" },
 ];
 
+const DEFAULT_BOUNDARY = "5.60370,-0.18700\n5.60480,-0.18180\n5.59990,-0.18090\n5.59870,-0.18640";
+
+type GeneratedRoute = {
+  route_pattern: string;
+  estimated_coverage_ha: number;
+  estimated_duration_min: number;
+  estimated_battery_pct: number;
+  waypoint_spacing_m?: number;
+  waypoints: Array<{ lat: number; lng: number; altitude_m: number; action: string }>;
+  advisory_notes: string[];
+  coverage_summary: string;
+  boundary?: Array<{ lat: number; lng: number }>;
+};
+
 export function MissionPlanning() {
   const [name, setName] = useState("");
   const [type, setType] = useState("mapping");
@@ -25,6 +41,10 @@ export function MissionPlanning() {
   const [speed, setSpeed] = useState(10);
   const [areaHa, setAreaHa] = useState(12);
   const [pattern, setPattern] = useState("grid");
+  const [farmName, setFarmName] = useState("North Field");
+  const [boundary, setBoundary] = useState(DEFAULT_BOUNDARY);
+  const [aiRoute, setAiRoute] = useState<GeneratedRoute | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const { missions, create } = useMissions();
   const { toast } = useToast();
@@ -36,8 +56,40 @@ export function MissionPlanning() {
     const timeSec = areaM2 / Math.max(0.1, speed * swath);
     const min = timeSec / 60;
     const batteryPct = Math.min(100, min * 4); // ~4%/min
-    return { min, batteryPct };
-  }, [altitude, speed, areaHa]);
+    return {
+      min: aiRoute?.estimated_duration_min ?? min,
+      batteryPct: aiRoute?.estimated_battery_pct ?? batteryPct,
+      coverageHa: aiRoute?.estimated_coverage_ha ?? areaHa,
+      pattern: aiRoute?.route_pattern ?? pattern,
+    };
+  }, [altitude, speed, areaHa, aiRoute, pattern]);
+
+  const generateRoute = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("odeneho-route-generator", {
+        body: {
+          farmName,
+          missionType: type,
+          routePreference: pattern,
+          altitude,
+          speed,
+          boundary,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setAiRoute(data.route as GeneratedRoute);
+      setAreaHa(Number(data.route?.estimated_coverage_ha || areaHa));
+      setPattern(data.route?.route_pattern || pattern);
+      toast({ title: "Odeneho route generated", description: `${data.route?.waypoints?.length || 0} mission waypoint(s) ready.` });
+    } catch (e: any) {
+      toast({ title: "Route generation failed", description: e.message || "Check farm boundary coordinates.", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -48,9 +100,11 @@ export function MissionPlanning() {
         altitude_m: altitude,
         speed_ms: speed,
         route_pattern: pattern,
+        area_polygon: aiRoute ? { boundary: aiRoute.boundary, waypoints: aiRoute.waypoints, source: "odeneho-ai" } : null,
+        camera_settings: aiRoute ? { advisory_notes: aiRoute.advisory_notes, coverage_summary: aiRoute.coverage_summary, waypoint_spacing_m: aiRoute.waypoint_spacing_m } : {},
         estimated_battery_pct: estimates.batteryPct,
         estimated_duration_min: estimates.min,
-        estimated_coverage_ha: areaHa,
+        estimated_coverage_ha: estimates.coverageHa,
       });
       toast({ title: "Mission saved" });
       setName("");
