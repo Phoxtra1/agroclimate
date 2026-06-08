@@ -224,11 +224,11 @@ export function useAGTrans() {
 
     if (error) throw error;
 
-    // Upsert the driver role into user_roles table
+    // Assign the driver role after the profile exists; ignore duplicate role rows.
     const { error: roleError } = await supabase
       .from("user_roles")
-      .upsert({ user_id: user.id, role: "driver" }, { onConflict: "user_id,role" });
-    if (roleError) {
+      .insert({ user_id: user.id, role: "driver" });
+    if (roleError && roleError.code !== "23505") {
       console.error("Error setting driver role in user_roles:", roleError);
     }
     
