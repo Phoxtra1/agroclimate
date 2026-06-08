@@ -46,9 +46,51 @@ export interface DriverProfile {
   completed_deliveries: number;
   late_deliveries: number;
   cancellations: number;
+  cancelled_trips?: number;
   disputes: number;
   notes?: string;
 }
+
+const cleanText = (value?: string) => (value || "").trim();
+
+const normalizeCorridors = (value?: string[] | null) =>
+  Array.from(new Set((value || []).map((item) => cleanText(item)).filter(Boolean))).slice(0, 25);
+
+const validateDriverPayload = (payload: Partial<DriverProfile>) => {
+  const capacity = Number(payload.vehicle_capacity_kg || 0);
+  const corridors = normalizeCorridors(payload.preferred_corridors || payload.route_coverage || []);
+  const missing: string[] = [];
+
+  if (!cleanText(payload.full_name)) missing.push("Full name");
+  if (!cleanText(payload.phone)) missing.push("Phone number");
+  if (!cleanText(payload.region)) missing.push("Operational region");
+  if (!cleanText(payload.district)) missing.push("Base district");
+  if (!cleanText(payload.vehicle_type)) missing.push("Vehicle type");
+  if (!cleanText(payload.plate_number)) missing.push("License plate number");
+  if (!cleanText(payload.license_class)) missing.push("Driver license class");
+  if (!Number.isFinite(capacity) || capacity <= 0) missing.push("Vehicle capacity above 0 kg");
+  if (corridors.length === 0) missing.push("At least one preferred transit corridor");
+
+  const phone = cleanText(payload.phone);
+  if (phone && !/^\+?[0-9\s().-]{7,20}$/.test(phone)) missing.push("A valid phone number");
+
+  if (missing.length > 0) {
+    throw new Error(`Driver onboarding incomplete: ${missing.join(", ")}.`);
+  }
+
+  return {
+    full_name: cleanText(payload.full_name),
+    phone,
+    region: cleanText(payload.region),
+    district: cleanText(payload.district),
+    vehicle_type: cleanText(payload.vehicle_type),
+    plate_number: cleanText(payload.plate_number).toUpperCase(),
+    vehicle_capacity_kg: capacity,
+    license_class: cleanText(payload.license_class).toUpperCase(),
+    preferred_corridors: corridors,
+    route_coverage: corridors,
+  };
+};
 
 export function useAGTrans() {
   const { user, refreshSession } = useAuth();
@@ -131,6 +173,18 @@ export function useAGTrans() {
   const createDriverProfile = async (payload: Partial<DriverProfile>, licenseFile?: File) => {
     if (!user) throw new Error("Not authenticated");
 
+    const driverPayload = validateDriverPayload(payload);
+
+    if (licenseFile) {
+      const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+      if (!allowed.includes(licenseFile.type)) {
+        throw new Error("Driver license must be a JPG, PNG, WebP, or PDF file.");
+      }
+      if (licenseFile.size > 10 * 1024 * 1024) {
+        throw new Error("Driver license file must be 10MB or smaller.");
+      }
+    }
+
     let license_url = undefined;
     if (licenseFile) {
       const fileExt = licenseFile.name.split(".").pop();
@@ -153,11 +207,17 @@ export function useAGTrans() {
     const { data, error } = await supabase
       .from("agtrans_drivers")
       .insert({
-        ...payload,
+        ...driverPayload,
         license_url,
         user_id: user.id,
         verification_status: "pending",
         availability_status: "offline",
+        reliability_score: 100,
+        completed_deliveries: 0,
+        late_deliveries: 0,
+        cancellations: 0,
+        cancelled_trips: 0,
+        disputes: 0,
       } as any)
       .select()
       .single();
