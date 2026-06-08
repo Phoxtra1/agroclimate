@@ -292,12 +292,6 @@ export default function DroneAdvisory() {
               </Card>
             ))}
           </div>
-        </TabsContent>
-
-        {/* OPERATIONS CONSOLE TAB */}
-        <TabsContent value="operations">
-          <DroneOperationsConsole />
-        </TabsContent>
       </Tabs>
     </div>
   );

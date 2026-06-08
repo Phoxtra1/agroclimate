@@ -61,6 +61,18 @@ export interface AIEnvironmentalAssessment {
   };
 }
 
+export interface AIAgroRiskAssessment {
+  floodScore: number;
+  waterloggingScore: number;
+  erosionScore: number;
+  landslideScore: number;
+  climateScore: number;
+  vulnerabilityScore: number;
+  terrainAnalysis: string;
+  suitability: { crop: string; suitability: "high" | "medium" | "low"; notes: string }[];
+  recommendations: string[];
+}
+
 export interface OdenehoProvider {
   id: string;
   generateSummary(req: SummaryRequest): Promise<string>;
@@ -70,6 +82,7 @@ export interface OdenehoProvider {
   chatCompletion(messages: ChatMessage[]): Promise<string>;
   generateAlertsAdvisory(location: string, forecast: any[]): Promise<AIAlertAdvisory[]>;
   generateEnvironmentalAssessment(location: string, forecast: any[]): Promise<AIEnvironmentalAssessment>;
+  generateAgroRiskAssessment(location: string, lat: number, lon: number, boundary?: [number, number][], forecast?: any[]): Promise<AIAgroRiskAssessment>;
 }
 
 export function levelFromScore(score: number): RiskLevel {

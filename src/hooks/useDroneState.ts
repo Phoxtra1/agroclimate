@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAdapter } from "@/lib/drone/connectionManager";
 import { ConnectionAdapter, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "@/lib/drone/types";
+import { useToast } from "@/hooks/use-toast";
 
 // Back-compat aliases used by existing components
 export type DroneStatus = FlightStatus;
@@ -23,6 +24,7 @@ const INITIAL_TELEMETRY: DroneTelemetry = {
 };
 
 export const useDroneState = () => {
+  const { toast } = useToast();
   const [protocol, setProtocol] = useState<DroneProtocol>("simulator");
   const [status, setStatus] = useState<FlightStatus>("disconnected");
   const [available, setAvailable] = useState<DiscoveredDrone[]>([]);
@@ -132,6 +134,56 @@ export const useDroneState = () => {
     }, 5000);
     return () => clearInterval(t);
   }, [status, missionId, telemetry]);
+
+  // Track and save drone location at all times in real-time
+  useEffect(() => {
+    if (telemetry.lat != null && telemetry.lng != null && ["flying", "returning", "landing", "emergency", "connected", "armed", "paused"].includes(status)) {
+      localStorage.setItem(
+        "last_known_drone_pos",
+        JSON.stringify({
+          lat: telemetry.lat,
+          lng: telemetry.lng,
+          altitude: telemetry.altitude,
+          timestamp: new Date().toISOString(),
+          droneName: activeDrone?.name || "Odeneho Drone",
+        })
+      );
+    }
+  }, [telemetry.lat, telemetry.lng, telemetry.altitude, status, activeDrone]);
+
+  // Automatic weather degradation simulation
+  useEffect(() => {
+    if (status !== "flying") {
+      // Reset to safe levels when not flying
+      setEnvironment({
+        windSpeed: 12,
+        windDirection: "NE",
+        temperature: 28,
+        humidity: 65,
+        rainProbability: 10,
+        visibility: 10,
+      });
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setEnvironment({
+        windSpeed: 38, // Heavy wind
+        windDirection: "WSW",
+        temperature: 24,
+        humidity: 92,
+        rainProbability: 95, // Heavy rain
+        visibility: 3, // Poor visibility
+      });
+      toast({
+        title: "CRITICAL WEATHER ALERT",
+        description: "Wind became heavy (38 km/h) with signs of heavy rain in flight area. Emergency landing recommended!",
+        variant: "destructive",
+      });
+    }, 20000); // 20 seconds of flight
+
+    return () => clearTimeout(timer);
+  }, [status, toast]);
 
   const droneName = activeDrone?.name || "No Drone";
 

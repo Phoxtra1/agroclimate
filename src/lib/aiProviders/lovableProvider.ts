@@ -137,5 +137,51 @@ Do not wrap your output in markdown code blocks like \`\`\`json. Return only the
       console.error("Failed to parse AI Environmental Assessment response:", text, e);
       throw e;
     }
+  },
+  async generateAgroRiskAssessment(location: string, lat: number, lon: number, boundary?: [number, number][], forecast?: any[]): Promise<AIAgroRiskAssessment> {
+    const boundaryStr = boundary ? JSON.stringify(boundary) : "Not specified";
+    const prompt = `Analyze the environmental and terrain risks for the agricultural plot/location at: ${location} (Coordinates: Lat ${lat}, Lon ${lon}).
+Boundary vertices: ${boundaryStr}.
+7-Day weather forecast: ${JSON.stringify(forecast)}.
+
+Perform a comprehensive AgroRisk analysis. You must output the following metrics:
+- floodScore: Risk of flooding (0 to 100)
+- waterloggingScore: Risk of water ponding or poor drainage (0 to 100)
+- erosionScore: Risk of soil erosion from rain, wind, and terrain slope (0 to 100)
+- landslideScore: Risk of slope failure/landslide (0 to 100)
+- climateScore: Risk from temperature extremes, droughts, or humidity stress (0 to 100)
+- vulnerabilityScore: Combined farm vulnerability index (0 to 100)
+- terrainAnalysis: Summary of the terrain topography (slopes, hills, valleys) and how it affects risk
+- suitability: Array of crop suitability mappings. For each crop (e.g. Maize, Cassava, Rice, Yam, Cocoa, Vegetables), specify a suitability level ("high", "medium", or "low") and explanatory notes.
+- recommendations: List of 4-6 specific, actionable agricultural recommendations for this location.
+
+Respond ONLY with a valid, clean JSON object with the following schema:
+{
+  "floodScore": number,
+  "waterloggingScore": number,
+  "erosionScore": number,
+  "landslideScore": number,
+  "climateScore": number,
+  "vulnerabilityScore": number,
+  "terrainAnalysis": string,
+  "suitability": [
+    { "crop": string, "suitability": "high" | "medium" | "low", "notes": string }
+  ],
+  "recommendations": [string]
+}
+Do not wrap your output in markdown code blocks like \`\`\`json. Return only the raw JSON.`;
+
+    const text = await lovableProvider.chatCompletion([
+      { role: "system", content: "You are an expert agricultural risk intelligence and terrain analysis engine. Return only clean raw JSON as requested, without any markdown formatting or surrounding backticks." },
+      { role: "user", content: prompt }
+    ]);
+
+    try {
+      const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      return JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("Failed to parse AI AgroRisk Assessment response:", text, e);
+      throw e;
+    }
   }
 };

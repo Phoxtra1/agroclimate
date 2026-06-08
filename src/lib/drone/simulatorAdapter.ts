@@ -1,6 +1,6 @@
-import { ConnectionAdapter, DiscoveredDrone, DroneTelemetry, FlightStatus } from "./types";
+import { ConnectionAdapter, DiscoveredDrone, DroneTelemetry, FlightStatus, DroneProtocol } from "./types";
 
-export function createSimulatorAdapter(): ConnectionAdapter {
+export function createSimulatorAdapter(protocol: DroneProtocol = "simulator"): ConnectionAdapter {
   let status: FlightStatus = "disconnected";
   let telemetry: DroneTelemetry = {
     lat: 5.6037, lng: -0.1870, altitude: 0, groundSpeed: 0, verticalSpeed: 0, heading: 0,
@@ -31,23 +31,64 @@ export function createSimulatorAdapter(): ConnectionAdapter {
         if (status === "returning" && telemetry.altitude < 1) setStatus("connected");
       }
       if (status !== "disconnected") {
-        telemetry.signalStrength = 85 + Math.random() * 10;
-        telemetry.gpsAccuracy = 0.4 + Math.random() * 0.4;
+        // Customize signal, accuracy, gps fix by protocol
+        if (protocol === "dji") {
+          telemetry.signalStrength = 98 + Math.random() * 2;
+          telemetry.gpsAccuracy = 0.2 + Math.random() * 0.1;
+        } else if (protocol === "wifi") {
+          telemetry.signalStrength = 75 + Math.random() * 15;
+          telemetry.gpsAccuracy = 1.2 + Math.random() * 0.8;
+        } else {
+          telemetry.signalStrength = 85 + Math.random() * 10;
+          telemetry.gpsAccuracy = 0.4 + Math.random() * 0.4;
+        }
         telemetry.gpsFix = "3d";
       }
       emit();
     }, 500);
   };
 
+  const labelMap: Record<DroneProtocol, string> = {
+    simulator: "Built-in Simulator",
+    wifi: "Wi-Fi Connection",
+    mavlink: "MAVLink Connection",
+    ardupilot: "ArduPilot Connection",
+    pixhawk: "Pixhawk Connection",
+    dji: "DJI SDK Connection",
+    custom: "Custom Connection",
+  };
+
+  const scanMap: Record<DroneProtocol, DiscoveredDrone[]> = {
+    simulator: [
+      { id: "sim-x1", name: "Odeneho Sim-X1", model: "Simulated Quad", protocol: "simulator", signal: 98, firmware: "sim-1.0" },
+      { id: "sim-x2", name: "Odeneho Sim-X2", model: "Simulated Hex", protocol: "simulator", signal: 92, firmware: "sim-1.0" },
+    ],
+    wifi: [
+      { id: "wifi-drone-x1", name: "Odeneho Wi-Fi Drone X-Pro", model: "Wi-Fi Quadcopter", protocol: "wifi", signal: 95, firmware: "wifi-2.4" },
+    ],
+    mavlink: [
+      { id: "mav-drone-px4", name: "PX4 Quadcopter via MAVLink", model: "MAVLink UAV", protocol: "mavlink", signal: 88, firmware: "PX4-v1.14" },
+    ],
+    ardupilot: [
+      { id: "ardu-drone-hex", name: "ArduCopter Hexa", model: "ArduPilot Hexacopter", protocol: "ardupilot", signal: 90, firmware: "ArduCopter-4.4" },
+    ],
+    pixhawk: [
+      { id: "pix-drone-v5", name: "Pixhawk v5 Hexa", model: "Pixhawk UAV", protocol: "pixhawk", signal: 92, firmware: "PX4-v1.13" },
+    ],
+    dji: [
+      { id: "dji-drone-m3", name: "DJI Inspire 3 (Mock)", model: "DJI Inspire 3", protocol: "dji", signal: 99, firmware: "DJI-v3.0" },
+    ],
+    custom: [
+      { id: "custom-drone-c1", name: "Custom Drone Bridge", model: "Custom Protocol UAV", protocol: "custom", signal: 85, firmware: "custom-1.0" },
+    ],
+  };
+
   return {
-    id: "simulator",
-    label: "Built-in Simulator",
+    id: protocol,
+    label: labelMap[protocol] || "Drone Connection",
     async scan(): Promise<DiscoveredDrone[]> {
       await new Promise((r) => setTimeout(r, 600));
-      return [
-        { id: "sim-x1", name: "Odeneho Sim-X1", model: "Simulated Quad", protocol: "simulator", signal: 98, firmware: "sim-1.0" },
-        { id: "sim-x2", name: "Odeneho Sim-X2", model: "Simulated Hex", protocol: "simulator", signal: 92, firmware: "sim-1.0" },
-      ];
+      return scanMap[protocol] || [];
     },
     async connect() {
       setStatus("connecting");

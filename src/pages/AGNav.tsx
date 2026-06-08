@@ -1715,7 +1715,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
             {pickOnMap && <MapClickPicker onPick={onMapPick} />}
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked={navMode === "road"} name="Streets"><TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="Satellite"><TileLayer attribution="Tiles © Esri" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="Satellite"><TileLayer attribution="Tiles © Esri" url="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
               <LayersControl.BaseLayer checked={navMode === "water"} name="AGNav (terrain)"><TileLayer attribution="© OpenTopoMap" url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
             </LayersControl>
 
