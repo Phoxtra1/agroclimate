@@ -9,6 +9,7 @@ import { OdenehoVision } from "./OdenehoVision";
 import { MissionPlanning } from "./MissionPlanning";
 import { DroneMediaCenter } from "./DroneMediaCenter";
 import { DroneAnalytics } from "./DroneAnalytics";
+import { FleetManagement } from "./FleetManagement";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function DroneOperationsConsole() {
@@ -25,7 +26,7 @@ export function DroneOperationsConsole() {
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
           <TabsList className="bg-slate-900 border border-slate-800 p-1 w-full lg:w-auto justify-start overflow-x-auto">
-            {["mission-control", "planning", "intelligence", "media", "analytics"].map((id) => (
+            {["mission-control", "fleet", "planning", "intelligence", "media", "analytics"].map((id) => (
               <TabsTrigger key={id} value={id} className="font-mono text-[10px] sm:text-xs data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-400 uppercase">
                 {id.replace("-", " ")}
               </TabsTrigger>
@@ -54,6 +55,8 @@ export function DroneOperationsConsole() {
             </div>
           </div>
         </TabsContent>
+
+        <TabsContent value="fleet" className="m-0"><FleetManagement /></TabsContent>
 
         <TabsContent value="planning" className="m-0"><MissionPlanning /></TabsContent>
 
