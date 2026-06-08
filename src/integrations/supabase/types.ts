@@ -97,6 +97,7 @@ export type Database = {
         Row: {
           availability_status: string
           cancellations: number | null
+          cancelled_trips: number | null
           completed_deliveries: number | null
           created_at: string
           disputes: number | null
@@ -122,6 +123,7 @@ export type Database = {
         Insert: {
           availability_status?: string
           cancellations?: number | null
+          cancelled_trips?: number | null
           completed_deliveries?: number | null
           created_at?: string
           disputes?: number | null
@@ -147,6 +149,7 @@ export type Database = {
         Update: {
           availability_status?: string
           cancellations?: number | null
+          cancelled_trips?: number | null
           completed_deliveries?: number | null
           created_at?: string
           disputes?: number | null

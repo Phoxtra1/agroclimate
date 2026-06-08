@@ -4,9 +4,47 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAGTrans } from "@/hooks/useAGTrans";
 import { toast } from "sonner";
-import { Truck, Upload, User, Briefcase, FileText, CheckCircle2 } from "lucide-react";
+import { Truck, Upload, User, Briefcase, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+
+const splitCorridors = (value: string) => value.split(",").map((s) => s.trim()).filter(Boolean);
+
+const validateDriverForm = (values: {
+  fullName: string;
+  phone: string;
+  region: string;
+  district: string;
+  vehicle: string;
+  plateNumber: string;
+  capacity: string;
+  licenseClass: string;
+  corridors: string;
+  licenseFile: File | null;
+}) => {
+  const missing: string[] = [];
+  const capacityKg = Number(values.capacity);
+  const routes = splitCorridors(values.corridors);
+
+  if (!values.fullName.trim()) missing.push("Full Name");
+  if (!values.phone.trim()) missing.push("Phone Number");
+  if (!values.region.trim()) missing.push("Operational Region");
+  if (!values.district.trim()) missing.push("Base District");
+  if (!values.vehicle.trim()) missing.push("Vehicle Type");
+  if (!values.plateNumber.trim()) missing.push("License Plate Number");
+  if (!values.licenseClass.trim()) missing.push("Driver License Class");
+  if (!Number.isFinite(capacityKg) || capacityKg <= 0) missing.push("Vehicle Capacity above 0 kg");
+  if (routes.length === 0) missing.push("Preferred Transit Corridors");
+
+  if (values.phone.trim() && !/^\+?[0-9\s().-]{7,20}$/.test(values.phone.trim())) missing.push("Valid phone number format");
+  if (values.licenseFile && values.licenseFile.size > 10 * 1024 * 1024) missing.push("License file 10MB or smaller");
+  if (values.licenseFile && !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(values.licenseFile.type)) {
+    missing.push("License file as JPG, PNG, WebP, or PDF");
+  }
+
+  return missing.length ? `Please complete or correct: ${missing.join(", ")}.` : "";
+};
 
 export default function DriverOnboarding() {
   const { createDriverProfile } = useAGTrans();
@@ -22,9 +60,18 @@ export default function DriverOnboarding() {
   const [corridors, setCorridors] = useState("");
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [validationMessage, setValidationMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = validateDriverForm({ fullName, phone, region, district, vehicle, plateNumber, capacity, licenseClass, corridors, licenseFile });
+    if (validationError) {
+      setValidationMessage(validationError);
+      toast.error(validationError);
+      return;
+    }
+
+    setValidationMessage("");
     setLoading(true);
     try {
       await createDriverProfile({
@@ -36,7 +83,7 @@ export default function DriverOnboarding() {
         plate_number: plateNumber,
         vehicle_capacity_kg: capacity ? Number(capacity) : 0,
         license_class: licenseClass || "D",
-        preferred_corridors: corridors ? corridors.split(",").map((s) => s.trim()).filter(Boolean) : [],
+        preferred_corridors: splitCorridors(corridors),
       }, licenseFile || undefined);
       toast.success("Profile submitted for verification");
       navigate("/agtrans-partner/dashboard");
@@ -64,6 +111,13 @@ export default function DriverOnboarding() {
         </CardHeader>
         <CardContent className="p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-8">
+            {validationMessage && (
+              <Alert variant="destructive" className="border-destructive/40 bg-destructive/5">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Onboarding details need attention</AlertTitle>
+                <AlertDescription>{validationMessage}</AlertDescription>
+              </Alert>
+            )}
             
             {/* Section 1: Personal & Location Details */}
             <div className="space-y-4">
