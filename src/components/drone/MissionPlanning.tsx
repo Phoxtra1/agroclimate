@@ -176,6 +176,7 @@ export function MissionPlanning() {
                   <span>Coverage <b className="text-slate-100">{aiRoute.estimated_coverage_ha.toFixed(1)} ha</b></span>
                   <span>Spacing <b className="text-slate-100">{aiRoute.waypoint_spacing_m?.toFixed(0) || "—"}m</b></span>
                 </div>
+                <CoveragePreview boundaryText={boundary} aiRoute={aiRoute} />
                 <div className="max-h-28 overflow-y-auto space-y-1">
                   {aiRoute.waypoints.slice(0, 8).map((point, index) => (
                     <div key={`${point.lat}-${point.lng}-${index}`} className="flex items-center justify-between gap-2 border-t border-cyan-900/30 pt-1 text-[10px]">
@@ -245,6 +246,60 @@ function Row({ icon, label, value }: { icon: React.ReactNode; label: string; val
     <div className="flex justify-between items-center border-b border-slate-800 pb-2 last:border-0">
       <span className="text-slate-500 flex items-center gap-2">{icon} {label}</span>
       <span className="text-slate-200">{value}</span>
+    </div>
+  );
+}
+
+function parseBoundary(text: string): Array<{ lat: number; lng: number }> {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean).map((line) => {
+    const [a, b] = line.split(/[,\s]+/).map(Number);
+    return Number.isFinite(a) && Number.isFinite(b) ? { lat: a, lng: b } : null;
+  }).filter(Boolean) as Array<{ lat: number; lng: number }>;
+}
+
+function CoveragePreview({ boundaryText, aiRoute }: { boundaryText: string; aiRoute: GeneratedRoute }) {
+  const boundary = (aiRoute.boundary && aiRoute.boundary.length >= 3) ? aiRoute.boundary : parseBoundary(boundaryText);
+  const points = [...boundary, ...aiRoute.waypoints];
+  if (points.length === 0) return null;
+  const lats = points.map((p) => p.lat), lngs = points.map((p) => p.lng);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const W = 360, H = 200, pad = 14;
+  const x = (lng: number) => pad + ((lng - minLng) / Math.max(1e-9, maxLng - minLng)) * (W - pad * 2);
+  const y = (lat: number) => H - (pad + ((lat - minLat) / Math.max(1e-9, maxLat - minLat)) * (H - pad * 2));
+  const polyStr = boundary.map((p) => `${x(p.lng)},${y(p.lat)}`).join(" ");
+  const pathStr = aiRoute.waypoints.map((p, i) => `${i === 0 ? "M" : "L"}${x(p.lng)},${y(p.lat)}`).join(" ");
+
+  return (
+    <div className="rounded-md border border-cyan-900/40 bg-slate-950 p-2">
+      <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+        <span>COVERAGE PREVIEW</span>
+        <span>{aiRoute.estimated_coverage_ha.toFixed(1)} ha · {aiRoute.waypoints.length} WP</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40">
+        <defs>
+          <pattern id="cov" patternUnits="userSpaceOnUse" width="8" height="8">
+            <path d="M0 8 L8 0" stroke="rgba(34,211,238,0.25)" strokeWidth="1" />
+          </pattern>
+        </defs>
+        {boundary.length >= 3 && (
+          <polygon points={polyStr} fill="url(#cov)" stroke="#22d3ee" strokeWidth={1.5} strokeDasharray="4 3" />
+        )}
+        {aiRoute.waypoints.length > 1 && (
+          <path d={pathStr} fill="none" stroke="#34d399" strokeWidth={1.5} />
+        )}
+        {aiRoute.waypoints.map((p, i) => (
+          <g key={i}>
+            <circle cx={x(p.lng)} cy={y(p.lat)} r={3} fill="#facc15" stroke="#0f172a" strokeWidth={1} />
+            {i === 0 && <text x={x(p.lng) + 5} y={y(p.lat) - 5} fontSize={8} fill="#facc15" fontFamily="monospace">START</text>}
+          </g>
+        ))}
+      </svg>
+      <div className="flex gap-3 mt-1 text-[9px] font-mono text-slate-500">
+        <span><span className="inline-block w-2 h-2 bg-cyan-500/40 mr-1" />Boundary</span>
+        <span><span className="inline-block w-2 h-0.5 bg-emerald-400 mr-1 align-middle" />Flight path</span>
+        <span><span className="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1 align-middle" />Waypoints</span>
+      </div>
     </div>
   );
 }
