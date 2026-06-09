@@ -138,5 +138,19 @@ export function useDroneFleet() {
     return stored.length >= 2 ? stored : [...stored, ...virtualFleet(tick).slice(0, 4 - stored.length)];
   }, [latestLogs, storedDrones, tick]);
 
-  return { fleet, loading, onlineCount: fleet.filter((drone) => drone.status !== "offline").length };
+  const alerts = useMemo(() => {
+    const now = Date.now();
+    const out: Array<{ id: string; droneId: string; droneName: string; severity: "warning" | "critical"; type: "battery" | "connection" | "stale" | "signal"; message: string; at: string }> = [];
+    fleet.forEach((d) => {
+      const seenMs = d.lastSeenAt ? now - new Date(d.lastSeenAt).getTime() : 0;
+      if (d.status === "offline") out.push({ id: `${d.id}-off`, droneId: d.id, droneName: d.name, severity: "critical", type: "connection", message: "Connection lost — drone is offline.", at: new Date().toISOString() });
+      if (d.battery <= 15) out.push({ id: `${d.id}-bat-c`, droneId: d.id, droneName: d.name, severity: "critical", type: "battery", message: `Critical battery ${d.battery.toFixed(0)}% — initiate RTH.`, at: new Date().toISOString() });
+      else if (d.battery <= 25) out.push({ id: `${d.id}-bat-w`, droneId: d.id, droneName: d.name, severity: "warning", type: "battery", message: `Low battery ${d.battery.toFixed(0)}% — plan landing soon.`, at: new Date().toISOString() });
+      if (d.connectionHealth < 45) out.push({ id: `${d.id}-sig`, droneId: d.id, droneName: d.name, severity: d.connectionHealth < 30 ? "critical" : "warning", type: "signal", message: `Weak link ${d.connectionHealth.toFixed(0)}% — reposition for better signal.`, at: new Date().toISOString() });
+      if (seenMs > 30000) out.push({ id: `${d.id}-stale`, droneId: d.id, droneName: d.name, severity: "warning", type: "stale", message: `Telemetry stale (${Math.round(seenMs/1000)}s old).`, at: new Date().toISOString() });
+    });
+    return out;
+  }, [fleet]);
+
+  return { fleet, loading, alerts, onlineCount: fleet.filter((drone) => drone.status !== "offline").length };
 }

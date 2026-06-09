@@ -10,6 +10,7 @@ import { MissionPlanning } from "./MissionPlanning";
 import { DroneMediaCenter } from "./DroneMediaCenter";
 import { DroneAnalytics } from "./DroneAnalytics";
 import { FleetManagement } from "./FleetManagement";
+import { ConnectionProcedure } from "./ConnectionProcedure";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function DroneOperationsConsole() {
@@ -40,6 +41,7 @@ export function DroneOperationsConsole() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-1 space-y-4 flex flex-col">
               <DroneConnectionCenter {...droneState} />
+              <ConnectionProcedure />
               <OdenehoAiAdvisory telemetry={droneState.telemetry} environment={droneState.environment} status={droneState.status} />
             </div>
             <div className="lg:col-span-3 space-y-4">

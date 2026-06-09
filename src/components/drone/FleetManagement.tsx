@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Battery, Crosshair, Radio, Route, Satellite, Signal, Wifi } from "lucide-react";
+import { AlertTriangle, Battery, Crosshair, Radio, Route, Satellite, Signal, Wifi } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -16,11 +16,12 @@ const statusClass: Record<string, string> = {
 };
 
 export function FleetManagement() {
-  const { fleet, loading, onlineCount } = useDroneFleet();
+  const { fleet, loading, onlineCount, alerts } = useDroneFleet();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => fleet.find((drone) => drone.id === selectedId) || fleet[0], [fleet, selectedId]);
   const avgBattery = fleet.length ? fleet.reduce((sum, drone) => sum + drone.battery, 0) / fleet.length : 0;
   const avgSignal = fleet.length ? fleet.reduce((sum, drone) => sum + drone.connectionHealth, 0) / fleet.length : 0;
+  const critical = alerts.filter((a) => a.severity === "critical").length;
 
   return (
     <div className="space-y-4">
@@ -30,6 +31,30 @@ export function FleetManagement() {
         <FleetStat icon={<Battery className="h-4 w-4" />} label="Avg Battery" value={`${avgBattery.toFixed(0)}%`} />
         <FleetStat icon={<Signal className="h-4 w-4" />} label="Avg Link" value={`${avgSignal.toFixed(0)}%`} />
       </div>
+
+      {alerts.length > 0 && (
+        <Card className="bg-slate-900 border-amber-900/60 text-slate-100">
+          <CardHeader className="py-3 border-b border-amber-900/40">
+            <CardTitle className="text-sm font-mono uppercase tracking-widest text-amber-300 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Fleet Health Alerts
+              <Badge variant="outline" className="ml-2 border-amber-700 text-amber-300 text-[10px]">{alerts.length}</Badge>
+              {critical > 0 && <Badge variant="outline" className="border-red-700 text-red-300 text-[10px] animate-pulse">{critical} CRITICAL</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 max-h-44 overflow-y-auto space-y-1">
+            {alerts.map((a) => (
+              <button key={a.id} onClick={() => setSelectedId(a.droneId)}
+                className={`w-full text-left text-[11px] font-mono px-3 py-2 rounded border ${a.severity === "critical" ? "border-red-800 bg-red-950/40 text-red-200" : "border-amber-800 bg-amber-950/30 text-amber-200"} hover:brightness-125`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold truncate">{a.droneName}</span>
+                  <span className="text-[9px] uppercase opacity-70">{a.type}</span>
+                </div>
+                <div className="opacity-90">{a.message}</div>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card className="xl:col-span-2 bg-slate-900 border-slate-800 text-slate-100">
