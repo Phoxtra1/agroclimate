@@ -294,10 +294,6 @@ export default function DroneAdvisory() {
           </div>
         </TabsContent>
 
-        {/* OPERATIONS CONSOLE TAB */}
-        <TabsContent value="operations">
-          <DroneOperationsConsole />
-        </TabsContent>
       </Tabs>
     </div>
   );
