@@ -11,6 +11,9 @@ import { DroneMediaCenter } from "./DroneMediaCenter";
 import { DroneAnalytics } from "./DroneAnalytics";
 import { FleetManagement } from "./FleetManagement";
 import { ConnectionProcedure } from "./ConnectionProcedure";
+import { ConnectionDiagnostics } from "./ConnectionDiagnostics";
+import { FleetThresholdsPanel } from "./FleetThresholdsPanel";
+import { AircraftRegistry } from "./AircraftRegistry";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function DroneOperationsConsole() {
@@ -23,11 +26,11 @@ export function DroneOperationsConsole() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-3">
         <div>
           <h2 className="text-lg sm:text-xl font-mono font-bold text-cyan-400 tracking-wider">AERIAL CONTROL</h2>
-          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">DRONE OPERATIONS &amp; AERIAL INTELLIGENCE · POWERED BY ODENEHO AI</p>
+          <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">UNIVERSAL AIR OPERATIONS · POWERED BY ODENEHO AI &amp; AIR INTEGRATION HUB</p>
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
           <TabsList className="bg-slate-900 border border-slate-800 p-1 w-full lg:w-auto justify-start overflow-x-auto">
-            {["mission-control", "fleet", "planning", "intelligence", "media", "analytics"].map((id) => (
+            {["mission-control", "fleet", "registry", "planning", "intelligence", "media", "analytics", "settings"].map((id) => (
               <TabsTrigger key={id} value={id} className="font-mono text-[10px] sm:text-xs data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-400 uppercase">
                 {id.replace("-", " ")}
               </TabsTrigger>
@@ -41,6 +44,7 @@ export function DroneOperationsConsole() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-1 space-y-4 flex flex-col">
               <DroneConnectionCenter {...droneState} />
+              <ConnectionDiagnostics diagnostics={droneState.diagnostics} protocol={droneState.protocol} status={droneState.status} />
               <ConnectionProcedure />
               <OdenehoAiAdvisory telemetry={droneState.telemetry} environment={droneState.environment} status={droneState.status} />
             </div>
@@ -59,7 +63,7 @@ export function DroneOperationsConsole() {
         </TabsContent>
 
         <TabsContent value="fleet" className="m-0"><FleetManagement /></TabsContent>
-
+        <TabsContent value="registry" className="m-0"><AircraftRegistry /></TabsContent>
         <TabsContent value="planning" className="m-0"><MissionPlanning /></TabsContent>
 
         <TabsContent value="intelligence" className="m-0">
@@ -71,6 +75,13 @@ export function DroneOperationsConsole() {
 
         <TabsContent value="media" className="m-0"><DroneMediaCenter /></TabsContent>
         <TabsContent value="analytics" className="m-0"><DroneAnalytics /></TabsContent>
+
+        <TabsContent value="settings" className="m-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <FleetThresholdsPanel />
+            <ConnectionDiagnostics diagnostics={droneState.diagnostics} protocol={droneState.protocol} status={droneState.status} />
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
