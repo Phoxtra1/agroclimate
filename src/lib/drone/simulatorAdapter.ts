@@ -1,4 +1,4 @@
-import { ConnectionAdapter, DiscoveredDrone, DroneTelemetry, FlightStatus } from "./types";
+import { ConnectionAdapter, ConnectionDiagnostics, DiscoveredDrone, DroneTelemetry, FlightStatus } from "./types";
 
 export function createSimulatorAdapter(): ConnectionAdapter {
   let status: FlightStatus = "disconnected";
@@ -7,11 +7,14 @@ export function createSimulatorAdapter(): ConnectionAdapter {
     battery: 100, signalStrength: 0, gpsAccuracy: 5, gpsFix: "none",
     flightDuration: 0, distanceCovered: 0, cameraStatus: "off",
   };
+  let diag: ConnectionDiagnostics = { transport: "simulator", framesReceived: 0, bytesReceived: 0 };
   const tListeners = new Set<(t: DroneTelemetry) => void>();
   const sListeners = new Set<(s: FlightStatus) => void>();
+  const dListeners = new Set<(d: ConnectionDiagnostics) => void>();
   let interval: ReturnType<typeof setInterval> | null = null;
 
   const emit = () => tListeners.forEach((cb) => cb({ ...telemetry }));
+  const emitDiag = () => dListeners.forEach((cb) => cb({ ...diag }));
   const setStatus = (s: FlightStatus) => { status = s; sListeners.forEach((cb) => cb(s)); };
 
   const startTick = () => {
@@ -35,6 +38,7 @@ export function createSimulatorAdapter(): ConnectionAdapter {
         telemetry.gpsAccuracy = 0.4 + Math.random() * 0.4;
         telemetry.gpsFix = "3d";
       }
+      diag.lastFrameAt = Date.now(); diag.framesReceived += 1; diag.bytesReceived += 96; emitDiag();
       emit();
     }, 500);
   };
@@ -44,6 +48,7 @@ export function createSimulatorAdapter(): ConnectionAdapter {
     label: "Built-in Simulator",
     async scan(): Promise<DiscoveredDrone[]> {
       await new Promise((r) => setTimeout(r, 600));
+      diag.endpoint = "in-memory"; emitDiag();
       return [
         { id: "sim-x1", name: "Odeneho Sim-X1", model: "Simulated Quad", protocol: "simulator", signal: 98, firmware: "sim-1.0" },
         { id: "sim-x2", name: "Odeneho Sim-X2", model: "Simulated Hex", protocol: "simulator", signal: 92, firmware: "sim-1.0" },
@@ -54,12 +59,15 @@ export function createSimulatorAdapter(): ConnectionAdapter {
       await new Promise((r) => setTimeout(r, 900));
       telemetry.cameraStatus = "ready";
       telemetry.gpsFix = "3d";
+      diag.connectedAt = Date.now(); diag.lastHandshakeAt = Date.now(); emitDiag();
       setStatus("connected");
       startTick();
     },
     async disconnect() {
       if (interval) { clearInterval(interval); interval = null; }
       telemetry = { ...telemetry, altitude: 0, groundSpeed: 0, flightDuration: 0, distanceCovered: 0, cameraStatus: "off", gpsFix: "none" };
+      diag = { transport: "simulator", framesReceived: 0, bytesReceived: 0 };
+      emitDiag();
       setStatus("disconnected");
     },
     async calibrate() {
@@ -82,7 +90,9 @@ export function createSimulatorAdapter(): ConnectionAdapter {
       telemetry.altitude = 0;
       setStatus("connected");
     },
-    onTelemetry(cb) { tListeners.add(cb); cb({ ...telemetry }); return () => tListeners.delete(cb); },
-    onStatus(cb) { sListeners.add(cb); cb(status); return () => sListeners.delete(cb); },
+    onTelemetry(cb)   { tListeners.add(cb); cb({ ...telemetry }); return () => { tListeners.delete(cb); }; },
+    onStatus(cb)      { sListeners.add(cb); cb(status); return () => { sListeners.delete(cb); }; },
+    onDiagnostics(cb) { dListeners.add(cb); cb({ ...diag }); return () => { dListeners.delete(cb); }; },
+    getDiagnostics()  { return { ...diag }; },
   };
 }

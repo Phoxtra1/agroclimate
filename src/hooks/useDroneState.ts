@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAdapter } from "@/lib/drone/connectionManager";
-import { ConnectionAdapter, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "@/lib/drone/types";
+import { ConnectionAdapter, ConnectionDiagnostics, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "@/lib/drone/types";
+
 
 // Back-compat aliases used by existing components
 export type DroneStatus = FlightStatus;
@@ -29,6 +30,7 @@ export const useDroneState = () => {
   const [activeDrone, setActiveDrone] = useState<DiscoveredDrone | null>(null);
   const [telemetry, setTelemetry] = useState<DroneTelemetry>(INITIAL_TELEMETRY);
   const [missionId, setMissionId] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<ConnectionDiagnostics>({ transport: "none", framesReceived: 0, bytesReceived: 0 });
 
   const [environment, setEnvironment] = useState<EnvironmentData>({
     windSpeed: 12, windDirection: "NE", temperature: 28, humidity: 65, rainProbability: 10, visibility: 10,
@@ -45,8 +47,10 @@ export const useDroneState = () => {
     adapterRef.current = adapter;
     unsubRef.current.push(adapter.onStatus(setStatus));
     unsubRef.current.push(adapter.onTelemetry(setTelemetry));
+    if (adapter.onDiagnostics) unsubRef.current.push(adapter.onDiagnostics(setDiagnostics));
     return () => { unsubRef.current.forEach((u) => u()); };
   }, [protocol]);
+
 
   const scan = useCallback(async () => {
     if (!adapterRef.current) return [];
@@ -139,10 +143,11 @@ export const useDroneState = () => {
     protocol, setProtocol,
     status, telemetry, environment, setEnvironment,
     available, activeDrone, droneName,
-    missionId,
+    missionId, diagnostics,
     scan, connect, disconnect, calibrate,
     startMission, pauseMission, resumeMission, returnToHome, emergencyLand,
   };
 };
 
 export type UseDroneState = ReturnType<typeof useDroneState>;
+

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { DroneTelemetry, FlightStatus } from "@/lib/drone/types";
+import { useFleetThresholds, type FleetThresholds } from "./useFleetThresholds";
 
 export interface FleetDrone {
   id: string;
@@ -39,8 +40,7 @@ const virtualFleet = (tick: number): FleetDrone[] =>
     const status: FleetDrone["status"] = index === 2 && tick % 60 < 14 ? "returning" : index === 3 && tick % 90 < 18 ? "paused" : "flying";
     return {
       id: `fleet-sim-${index + 1}`,
-      name,
-      model: index === 1 ? "Agro Hex Surveyor" : "Agro Quad Pro",
+      name, model: index === 1 ? "Agro Hex Surveyor" : "Agro Quad Pro",
       protocol: "simulator",
       status,
       battery: telemetry.battery,
@@ -51,6 +51,7 @@ const virtualFleet = (tick: number): FleetDrone[] =>
   });
 
 export function useDroneFleet() {
+  const { thresholds } = useFleetThresholds();
   const [tick, setTick] = useState(0);
   const [storedDrones, setStoredDrones] = useState<any[]>([]);
   const [latestLogs, setLatestLogs] = useState<Record<string, any>>({});
@@ -63,43 +64,27 @@ export function useDroneFleet() {
 
   useEffect(() => {
     let mounted = true;
-
     const refresh = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          if (mounted) setLoading(false);
-          return;
-        }
-
+        if (!user) { if (mounted) setLoading(false); return; }
         const [{ data: drones }, { data: logs }] = await Promise.all([
           supabase.from("drones").select("*").eq("user_id", user.id).order("last_seen_at", { ascending: false, nullsFirst: false }).limit(20),
           supabase.from("drone_telemetry_logs").select("*").eq("user_id", user.id).order("captured_at", { ascending: false }).limit(100),
         ]);
-
         if (!mounted) return;
         setStoredDrones(drones || []);
         const byDrone: Record<string, any> = {};
-        (logs || []).forEach((log: any) => {
-          if (log.drone_id && !byDrone[log.drone_id]) byDrone[log.drone_id] = log;
-        });
+        (logs || []).forEach((log: any) => { if (log.drone_id && !byDrone[log.drone_id]) byDrone[log.drone_id] = log; });
         setLatestLogs(byDrone);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      } finally { if (mounted) setLoading(false); }
     };
-
     refresh();
-    const channel = supabase
-      .channel("drone-fleet-live")
+    const channel = supabase.channel("drone-fleet-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "drones" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "drone_telemetry_logs" }, refresh)
       .subscribe();
-
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
+    return () => { mounted = false; supabase.removeChannel(channel); };
   }, []);
 
   const fleet = useMemo<FleetDrone[]>(() => {
@@ -107,8 +92,7 @@ export function useDroneFleet() {
       const log = latestLogs[drone.id];
       const fallback = makeTelemetry(index + 5, tick);
       const telemetry: DroneTelemetry = {
-        lat: log?.lat ?? fallback.lat,
-        lng: log?.lng ?? fallback.lng,
+        lat: log?.lat ?? fallback.lat, lng: log?.lng ?? fallback.lng,
         altitude: Number(log?.altitude_m ?? fallback.altitude),
         groundSpeed: Number(log?.ground_speed_ms ?? fallback.groundSpeed),
         verticalSpeed: Number(log?.vertical_speed_ms ?? fallback.verticalSpeed),
@@ -117,40 +101,37 @@ export function useDroneFleet() {
         signalStrength: Number(log?.signal_strength ?? fallback.signalStrength),
         gpsAccuracy: Number(log?.gps_accuracy_m ?? fallback.gpsAccuracy),
         gpsFix: log ? "3d" : fallback.gpsFix,
-        flightDuration: fallback.flightDuration,
-        distanceCovered: fallback.distanceCovered,
+        flightDuration: fallback.flightDuration, distanceCovered: fallback.distanceCovered,
         cameraStatus: drone.status === "flying" ? "recording" : "ready",
       };
-
       return {
-        id: drone.id,
-        name: drone.name,
-        model: drone.model || "Registered drone",
+        id: drone.id, name: drone.name, model: drone.model || "Registered aircraft",
         protocol: drone.protocol || "custom",
         status: (drone.status || "offline") as FleetDrone["status"],
-        battery: telemetry.battery,
-        connectionHealth: telemetry.signalStrength,
+        battery: telemetry.battery, connectionHealth: telemetry.signalStrength,
         lastSeenAt: log?.captured_at || drone.last_seen_at || drone.updated_at,
         telemetry,
       };
     });
-
     return stored.length >= 2 ? stored : [...stored, ...virtualFleet(tick).slice(0, 4 - stored.length)];
   }, [latestLogs, storedDrones, tick]);
 
-  const alerts = useMemo(() => {
-    const now = Date.now();
-    const out: Array<{ id: string; droneId: string; droneName: string; severity: "warning" | "critical"; type: "battery" | "connection" | "stale" | "signal"; message: string; at: string }> = [];
-    fleet.forEach((d) => {
-      const seenMs = d.lastSeenAt ? now - new Date(d.lastSeenAt).getTime() : 0;
-      if (d.status === "offline") out.push({ id: `${d.id}-off`, droneId: d.id, droneName: d.name, severity: "critical", type: "connection", message: "Connection lost — drone is offline.", at: new Date().toISOString() });
-      if (d.battery <= 15) out.push({ id: `${d.id}-bat-c`, droneId: d.id, droneName: d.name, severity: "critical", type: "battery", message: `Critical battery ${d.battery.toFixed(0)}% — initiate RTH.`, at: new Date().toISOString() });
-      else if (d.battery <= 25) out.push({ id: `${d.id}-bat-w`, droneId: d.id, droneName: d.name, severity: "warning", type: "battery", message: `Low battery ${d.battery.toFixed(0)}% — plan landing soon.`, at: new Date().toISOString() });
-      if (d.connectionHealth < 45) out.push({ id: `${d.id}-sig`, droneId: d.id, droneName: d.name, severity: d.connectionHealth < 30 ? "critical" : "warning", type: "signal", message: `Weak link ${d.connectionHealth.toFixed(0)}% — reposition for better signal.`, at: new Date().toISOString() });
-      if (seenMs > 30000) out.push({ id: `${d.id}-stale`, droneId: d.id, droneName: d.name, severity: "warning", type: "stale", message: `Telemetry stale (${Math.round(seenMs/1000)}s old).`, at: new Date().toISOString() });
-    });
-    return out;
-  }, [fleet]);
+  const alerts = useMemo(() => buildAlerts(fleet, thresholds), [fleet, thresholds]);
 
-  return { fleet, loading, alerts, onlineCount: fleet.filter((drone) => drone.status !== "offline").length };
+  return { fleet, loading, alerts, thresholds, onlineCount: fleet.filter((drone) => drone.status !== "offline").length };
+}
+
+function buildAlerts(fleet: FleetDrone[], t: FleetThresholds) {
+  const now = Date.now();
+  const out: Array<{ id: string; droneId: string; droneName: string; severity: "warning" | "critical"; type: "battery" | "connection" | "stale" | "signal"; message: string; at: string }> = [];
+  fleet.forEach((d) => {
+    const seenMs = d.lastSeenAt ? now - new Date(d.lastSeenAt).getTime() : 0;
+    if (d.status === "offline") out.push({ id: `${d.id}-off`, droneId: d.id, droneName: d.name, severity: "critical", type: "connection", message: "Connection lost — aircraft is offline.", at: new Date().toISOString() });
+    if (d.battery <= t.battery_critical_pct) out.push({ id: `${d.id}-bat-c`, droneId: d.id, droneName: d.name, severity: "critical", type: "battery", message: `Critical battery ${d.battery.toFixed(0)}% (≤${t.battery_critical_pct}%) — initiate RTH.`, at: new Date().toISOString() });
+    else if (d.battery <= t.battery_warning_pct) out.push({ id: `${d.id}-bat-w`, droneId: d.id, droneName: d.name, severity: "warning", type: "battery", message: `Low battery ${d.battery.toFixed(0)}% (≤${t.battery_warning_pct}%) — plan landing soon.`, at: new Date().toISOString() });
+    if (d.connectionHealth < t.signal_critical_pct) out.push({ id: `${d.id}-sig-c`, droneId: d.id, droneName: d.name, severity: "critical", type: "signal", message: `Critical link ${d.connectionHealth.toFixed(0)}% (<${t.signal_critical_pct}%) — reposition immediately.`, at: new Date().toISOString() });
+    else if (d.connectionHealth < t.signal_warning_pct) out.push({ id: `${d.id}-sig-w`, droneId: d.id, droneName: d.name, severity: "warning", type: "signal", message: `Weak link ${d.connectionHealth.toFixed(0)}% (<${t.signal_warning_pct}%).`, at: new Date().toISOString() });
+    if (seenMs > t.stale_timeout_sec * 1000) out.push({ id: `${d.id}-stale`, droneId: d.id, droneName: d.name, severity: "warning", type: "stale", message: `Telemetry stale (${Math.round(seenMs/1000)}s, threshold ${t.stale_timeout_sec}s).`, at: new Date().toISOString() });
+  });
+  return out;
 }
