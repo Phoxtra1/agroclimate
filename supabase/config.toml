@@ -11,3 +11,7 @@ verify_jwt = false
 
 [functions.weather-proxy]
 verify_jwt = false
+
+[functions.aih-gateway]
+verify_jwt = true
+
