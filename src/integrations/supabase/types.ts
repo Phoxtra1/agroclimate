@@ -675,14 +675,19 @@ export type Database = {
       }
       drones: {
         Row: {
+          aircraft_type: string
           created_at: string
           firmware: string | null
+          home_base: string | null
           id: string
           last_battery_pct: number | null
+          last_handshake_at: string | null
           last_seen_at: string | null
+          manufacturer: string | null
           metadata: Json | null
           model: string | null
           name: string
+          operator: string | null
           paired_at: string | null
           protocol: string
           serial: string | null
@@ -691,14 +696,19 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          aircraft_type?: string
           created_at?: string
           firmware?: string | null
+          home_base?: string | null
           id?: string
           last_battery_pct?: number | null
+          last_handshake_at?: string | null
           last_seen_at?: string | null
+          manufacturer?: string | null
           metadata?: Json | null
           model?: string | null
           name: string
+          operator?: string | null
           paired_at?: string | null
           protocol?: string
           serial?: string | null
@@ -707,14 +717,19 @@ export type Database = {
           user_id: string
         }
         Update: {
+          aircraft_type?: string
           created_at?: string
           firmware?: string | null
+          home_base?: string | null
           id?: string
           last_battery_pct?: number | null
+          last_handshake_at?: string | null
           last_seen_at?: string | null
+          manufacturer?: string | null
           metadata?: Json | null
           model?: string | null
           name?: string
+          operator?: string | null
           paired_at?: string | null
           protocol?: string
           serial?: string | null
@@ -907,6 +922,45 @@ export type Database = {
           updated_at?: string
           user_id?: string
           water_temp?: number | null
+        }
+        Relationships: []
+      }
+      fleet_alert_thresholds: {
+        Row: {
+          battery_critical_pct: number
+          battery_warning_pct: number
+          created_at: string
+          id: string
+          is_default: boolean
+          signal_critical_pct: number
+          signal_warning_pct: number
+          stale_timeout_sec: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          battery_critical_pct?: number
+          battery_warning_pct?: number
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          signal_critical_pct?: number
+          signal_warning_pct?: number
+          stale_timeout_sec?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          battery_critical_pct?: number
+          battery_warning_pct?: number
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          signal_critical_pct?: number
+          signal_warning_pct?: number
+          stale_timeout_sec?: number
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
