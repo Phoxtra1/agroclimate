@@ -64,8 +64,8 @@ export default function DroneAdvisory() {
       <div className="flex items-center gap-3 mb-4">
         <Plane className="h-6 w-6 text-primary" />
         <div>
-          <h1 className="text-xl font-bold">Universal Air Control Center</h1>
-          <p className="text-sm text-muted-foreground">Multi-platform aerial telemetry, drone mission control, and automated flight safety safeguards</p>
+          <h1 className="text-xl font-bold">Drone Operations &amp; Aerial Intelligence</h1>
+          <p className="text-sm text-muted-foreground">Mission control · Odeneho AI advisory · vision analytics</p>
         </div>
       </div>
 
@@ -292,6 +292,8 @@ export default function DroneAdvisory() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
       </Tabs>
     </div>
   );
