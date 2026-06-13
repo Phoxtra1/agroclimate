@@ -1,11 +1,15 @@
 import React, { useRef, useState, useEffect } from "react";
-import { Maximize2, Minimize2, Camera, Video, PictureInPicture2, Settings, Crosshair, AlertTriangle, Volume2, VolumeX } from "lucide-react";
+import { Maximize2, Minimize2, Camera, Video, PictureInPicture2, Settings, Crosshair, AlertTriangle, Volume2, VolumeX, Thermometer, Cpu, Activity } from "lucide-react";
 import type { TelemetryData, DroneStatus, EnvironmentData } from "@/hooks/useDroneState";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useDroneMedia } from "@/hooks/useDroneMedia";
 import { useDroneVision } from "@/hooks/useDroneVision";
 import { Link } from "react-router-dom";
+import { useAIH } from "@/hooks/useAIH";
+import { MediaManager } from "@/services/aih/mediaManager";
+import { CameraSensorSource, StreamProtocol } from "@/services/aih/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Props {
   telemetry: TelemetryData;
@@ -29,6 +33,7 @@ interface Aircraft {
 }
 
 export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmergencyLand, onReturnToHome, environment }: Props) {
+  const aih = useAIH(); // Air Integration Hub hooks
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -180,8 +185,15 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
       }
 
       const blob: Blob = await new Promise((r) => canvas.toBlob((b) => r(b!), "image/jpeg", 0.85));
-      await upload(blob, { mediaType: "image", missionId: missionId ?? undefined, metadata: { telemetry } });
-      toast({ title: "Screenshot saved" });
+      
+      // Save screenshot via the configured AIH backend
+      const stored = await MediaManager.storeMedia(blob, "screenshot", undefined, {
+        missionId: missionId ?? undefined,
+        telemetry,
+        sensor: aih.activeSensor,
+      });
+
+      toast({ title: "Screenshot captured", description: `Saved to ${stored.backend.toUpperCase()} storage.` });
 
       const base64 = await new Promise<string>((res) => {
         const fr = new FileReader(); fr.onload = () => res((fr.result as string).split(",")[1]); fr.readAsDataURL(blob);
@@ -209,8 +221,10 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
       rec.onstop = async () => {
         const blob = new Blob(recordedChunks.current, { type: "video/webm" });
         try {
-          await upload(blob, { mediaType: "video", missionId: missionId ?? undefined });
-          toast({ title: "Recording saved" });
+          const stored = await MediaManager.storeMedia(blob, "recording", undefined, {
+            missionId: missionId ?? undefined,
+          });
+          toast({ title: "Recording saved", description: `Uploaded to ${stored.backend.toUpperCase()}.` });
         } catch (e: any) {
           toast({ title: "Save failed", description: e.message, variant: "destructive" });
         }
@@ -257,12 +271,22 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
         const currentLat = telemetry.lat || startLat;
         const currentLng = telemetry.lng || startLng;
         
-        // Translate coordinates to pixel offsets (scale factor ~100000)
+        // Translate coordinates to pixel offsets (scale factor ~250000)
         const offsetX = (currentLng - startLng) * 250000;
         const offsetY = (currentLat - startLat) * 250000;
 
+        const sensor = aih.activeSensor;
+
         // 1. Draw Farmland background scrolling
-        ctx.fillStyle = "#0c1810";
+        if (sensor === "rgb") {
+          ctx.fillStyle = "#0c1810";
+        } else if (sensor === "thermal") {
+          ctx.fillStyle = "#08020f"; // thermal deep purple
+        } else if (sensor === "multispectral") {
+          ctx.fillStyle = "#101f05"; // NDVI dark olive
+        } else {
+          ctx.fillStyle = "#0a0a14"; // environmental dark blue
+        }
         ctx.fillRect(0, 0, cv.width, cv.height);
 
         // Draw rolling field grids
@@ -275,13 +299,25 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
             const gridValX = Math.floor((x + offsetX) / fieldSize);
             const gridValY = Math.floor((y - offsetY) / fieldSize);
             
-            // Choose green, olive, or brown shades for crops
             const shade = (gridValX + gridValY) % 3;
-            ctx.fillStyle = shade === 0 ? "#122a18" : shade === 1 ? "#1b2d13" : "#24341b";
+
+            if (sensor === "rgb") {
+              ctx.fillStyle = shade === 0 ? "#122a18" : shade === 1 ? "#1b2d13" : "#24341b";
+            } else if (sensor === "thermal") {
+              ctx.fillStyle = shade === 0 ? "#140a32" : shade === 1 ? "#230f41" : "#321450";
+            } else if (sensor === "multispectral") {
+              ctx.fillStyle = shade === 0 ? "#1a3b04" : shade === 1 ? "#265408" : "#0f2604";
+            } else {
+              ctx.fillStyle = shade === 0 ? "#0c102b" : shade === 1 ? "#101636" : "#141c40";
+            }
             ctx.fillRect(x, y, fieldSize - 6, fieldSize - 6);
 
             // Draw interior crop furrow rows
-            ctx.strokeStyle = "rgba(255,255,255,0.03)";
+            ctx.strokeStyle = sensor === "thermal" 
+              ? "rgba(255, 100, 0, 0.03)" 
+              : sensor === "multispectral" 
+                ? "rgba(100, 255, 0, 0.03)" 
+                : "rgba(255,255,255,0.02)";
             ctx.lineWidth = 1;
             for (let row = 15; row < fieldSize; row += 25) {
               ctx.beginPath();
@@ -294,10 +330,10 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
 
         // 2. Draw Crop Health targets scanned by AI
         const groundTargets = [
-          { name: "Maize (Healthy)", rx: 200, ry: 120, status: "healthy", color: "#22c55e" },
-          { name: "Soybeans (Pest Infestation)", rx: 500, ry: 300, status: "pests", color: "#ef4444" },
-          { name: "Wheat (Water Stressed)", rx: 320, ry: 420, status: "dry", color: "#f59e0b" },
-          { name: "Maize (Nitrogen Deficient)", rx: 700, ry: 150, status: "deficient", color: "#f59e0b" },
+          { name: "Maize (Healthy)", rx: 200, ry: 120, rgbCol: "#22c55e", thermalCol: "#ffffff", ndviCol: "#4ade80", temp: "31.2C" },
+          { name: "Soybeans (Pest Infestation)", rx: 500, ry: 300, rgbCol: "#ef4444", thermalCol: "#fb923c", ndviCol: "#fbbf24", temp: "39.4C" },
+          { name: "Wheat (Water Stressed)", rx: 320, ry: 420, rgbCol: "#f59e0b", thermalCol: "#f97316", ndviCol: "#f87171", temp: "36.8C" },
+          { name: "Maize (Nitrogen Deficient)", rx: 700, ry: 150, rgbCol: "#f59e0b", thermalCol: "#fb923c", ndviCol: "#fbbf24", temp: "35.1C" },
         ];
 
         groundTargets.forEach((t) => {
@@ -306,8 +342,12 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
           const ty = ((t.ry + offsetY) % 600 + 600) % 600 - 50;
 
           if (tx > 0 && tx < cv.width && ty > 0 && ty < cv.height) {
-            // Draw scanning bounding bracket
-            ctx.strokeStyle = t.color;
+            let targetColor = t.rgbCol;
+            if (sensor === "thermal") targetColor = t.thermalCol;
+            else if (sensor === "multispectral") targetColor = t.ndviCol;
+            else if (sensor === "environmental") targetColor = "#c084fc";
+
+            ctx.strokeStyle = targetColor;
             ctx.lineWidth = 1.5;
             
             // Corners brackets
@@ -323,13 +363,39 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
             ctx.stroke();
 
             // AI Label text
-            ctx.fillStyle = t.color;
+            ctx.fillStyle = targetColor;
             ctx.font = "8px monospace";
             ctx.fillText(t.name.toUpperCase(), tx - 22, ty - 25);
             ctx.fillStyle = "rgba(255,255,255,0.4)";
-            ctx.fillText(`CONF: ${(88 + (tx % 11)).toFixed(0)}%`, tx - 22, ty + 32);
+            
+            if (sensor === "thermal") {
+              ctx.fillStyle = "#ff5555";
+              ctx.fillText(`TEMP: ${t.temp}`, tx - 22, ty + 32);
+            } else if (sensor === "multispectral") {
+              ctx.fillStyle = "#55ff55";
+              ctx.fillText(`NDVI: ${(85 + (tx % 11)) / 100}`, tx - 22, ty + 32);
+            } else {
+              ctx.fillText(`CONF: ${(88 + (tx % 11)).toFixed(0)}%`, tx - 22, ty + 32);
+            }
           }
         });
+
+        // Scan Sweep effect for thermal/ndvi
+        if (sensor !== "rgb") {
+          const sweepY = (Date.now() / 8) % (cv.height + 100) - 50;
+          ctx.fillStyle = sensor === "thermal" 
+            ? "rgba(255, 100, 0, 0.05)" 
+            : "rgba(34, 211, 238, 0.04)";
+          ctx.fillRect(0, sweepY - 35, cv.width, 35);
+          ctx.strokeStyle = sensor === "thermal" 
+            ? "rgba(255, 100, 0, 0.12)" 
+            : "rgba(34, 211, 238, 0.1)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, sweepY);
+          ctx.lineTo(cv.width, sweepY);
+          ctx.stroke();
+        }
 
         // 3. Draw Radar Indicator & scan sweep
         const rx = 100, ry = 350, rSize = 60;
@@ -409,7 +475,7 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
         ctx.stroke();
 
         // Horizon pitch ladders
-        ctx.strokeStyle = "rgba(34,211,238,0.2)";
+        ctx.strokeStyle = "rgba(34,211,238,0.25)";
         const roll = isFlying ? Math.sin(Date.now() / 1500) * 4 : 0;
         ctx.save();
         ctx.translate(cv.width / 2, cv.height / 2);
@@ -428,14 +494,68 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [isFlying, telemetry, nearbyAircraft]);
+  }, [isFlying, telemetry, nearbyAircraft, aih.activeSensor]);
+
+  const sensors: { value: CameraSensorSource; label: string; icon: any }[] = [
+    { value: "rgb", label: "Optical RGB", icon: Camera },
+    { value: "thermal", label: "Thermal FLIR", icon: Thermometer },
+    { value: "multispectral", label: "NDVI Scan", icon: Cpu },
+    { value: "environmental", label: "Probe Map", icon: Activity },
+  ];
+
+  const cameraProtocols: { value: StreamProtocol; label: string }[] = [
+    { value: "rtsp", label: "RTSP" },
+    { value: "webrtc", label: "WebRTC" },
+    { value: "hls", label: "HLS" },
+  ];
 
   return (
-    <div ref={containerRef} className="relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col h-[500px]">
+    <div ref={containerRef} className="relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col h-[520px]">
       
+      {/* SENSOR & STREAM SELECTOR BAR */}
+      {hasVideo && (
+        <div className="bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-4 z-20">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            {sensors.map((s) => {
+              const Icon = s.icon;
+              const isSelected = aih.activeSensor === s.value;
+              return (
+                <Button
+                  key={s.value}
+                  size="sm"
+                  variant="outline"
+                  className={`h-7 px-2 font-mono text-[9px] ${
+                    isSelected 
+                      ? "bg-cyan-950 text-cyan-400 border-cyan-700" 
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
+                  }`}
+                  onClick={() => aih.changeSensor(s.value)}
+                >
+                  <Icon className="h-3 w-3 mr-1" /> {s.label}
+                </Button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[8px] font-mono text-slate-500 uppercase">PROTOCOL:</span>
+            <Select value={aih.cameraProtocol} onValueChange={(v: StreamProtocol) => aih.changeCameraProtocol(v)}>
+              <SelectTrigger className="bg-slate-900 border-slate-800 text-slate-300 font-mono h-6 text-[8px] w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-800 text-slate-300 font-mono text-[8px]">
+                {cameraProtocols.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* SEVERE WEATHER ALERT BANNER */}
       {isFlying && hasSevereWeather && (
-        <div className="absolute top-0 inset-x-0 bg-red-600/90 text-white font-mono text-[10px] sm:text-xs py-1.5 px-3 flex items-center justify-between z-30 animate-pulse border-b border-red-700">
+        <div className="absolute top-10 inset-x-0 bg-red-600/90 text-white font-mono text-[10px] sm:text-xs py-1.5 px-3 flex items-center justify-between z-30 animate-pulse border-b border-red-700">
           <span className="flex items-center gap-1.5">
             <AlertTriangle className="h-4 w-4 shrink-0 text-white" />
             CRITICAL WEATHER ALERT: HIGH WIND ({environment?.windSpeed} km/h) / PRECIPITATION ({environment?.rainProbability}%)
@@ -446,7 +566,7 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
 
       {/* RADAR COLLISION ALERT BANNER */}
       {isFlying && nearbyAircraft && nearbyAircraft.distance < 300 && (
-        <div className="absolute top-8 inset-x-0 bg-amber-600/95 text-white font-mono text-[10px] sm:text-xs py-1.5 px-3 flex items-center gap-2 z-30 animate-pulse border-b border-amber-700">
+        <div className="absolute top-16 inset-x-0 bg-amber-600/95 text-white font-mono text-[10px] sm:text-xs py-1.5 px-3 flex items-center gap-2 z-30 animate-pulse border-b border-amber-700">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           COLLISION WARNING: MANNED AIRCRAFT ({nearbyAircraft.name}) DETECTED WITHIN {nearbyAircraft.distance.toFixed(0)}m!
         </div>
@@ -462,7 +582,7 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
             </div>
             <div className="text-xs text-slate-400 space-y-2 leading-relaxed">
               <p>Current wind speed <span className="text-red-400 font-bold">{environment?.windSpeed} km/h</span> and rain risk <span className="text-red-400 font-bold">{environment?.rainProbability}%</span> exceed safety operational boundaries.</p>
-              <p className="text-slate-300">Failure to land may result in drone crash or signal loss.</p>
+              <p className="text-slate-300">Failure to land may result in aircraft crash or signal loss.</p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -472,7 +592,7 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
                   if (onEmergencyLand) {
                     await onEmergencyLand();
                     setShowEmergencyPrompt(false);
-                    toast({ title: "Emergency Landing Initiated", description: "Drone descending immediately at current location." });
+                    toast({ title: "Emergency Landing Initiated", description: "Aircraft descending immediately." });
                   }
                 }}
               >
@@ -484,7 +604,7 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
                   if (onReturnToHome) {
                     await onReturnToHome();
                     setShowEmergencyPrompt(false);
-                    toast({ title: "RTH Initiated", description: "Drone returning to launch coordinates." });
+                    toast({ title: "RTH Initiated", description: "Aircraft returning to launch base." });
                   }
                 }}
               >
@@ -512,8 +632,8 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
             )}
             <Crosshair className="absolute text-cyan-500/40 h-16 w-16 pointer-events-none" strokeWidth={1} />
 
-            <div className="absolute bottom-4 left-4 text-[10px] font-mono text-cyan-500/80 uppercase tracking-widest bg-black/60 px-2 py-1 rounded">
-              CAM-1 OPTICAL [LIVE] {isRecording && <span className="text-red-500 animate-pulse ml-2">● REC</span>}
+            <div className="absolute bottom-4 left-4 text-[9px] font-mono text-cyan-500/80 uppercase tracking-widest bg-black/60 px-2 py-1 rounded">
+              {aih.cameraProtocol.toUpperCase()} // SENSOR: {aih.activeSensor.toUpperCase()} {isRecording && <span className="text-red-500 animate-pulse ml-2">● REC</span>}
             </div>
 
             <div className="absolute top-12 left-4 text-cyan-400 font-mono text-[10px] sm:text-xs space-y-1 bg-black/40 px-2 py-1 rounded pointer-events-none">
@@ -539,9 +659,9 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
           </>
         ) : (
           <div className="text-slate-500 flex flex-col items-center">
-            <Video className="h-12 w-12 mb-2 opacity-50" />
+            <Video className="h-12 w-12 mb-2 opacity-50 text-cyan-500" />
             <p className="font-mono text-sm uppercase tracking-wider">No Video Signal</p>
-            <p className="text-[10px] text-slate-600 mt-1">Connect a drone to begin streaming</p>
+            <p className="text-[10px] text-slate-600 mt-1">Connect registered aircraft to begin streaming</p>
           </div>
         )}
       </div>
@@ -572,9 +692,10 @@ export function LiveFlightView({ telemetry, status, missionId, streamUrl, onEmer
         <div className="flex items-center gap-4 font-mono text-xs text-slate-400">
           <span className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${hasVideo ? "bg-emerald-500" : "bg-red-500"}`} />
-            {hasVideo ? "STREAM ACTIVE" : "OFFLINE"}
+            {hasVideo ? "SIGNAL OK" : "OFFLINE"}
           </span>
-          <span>{streamUrl ? "LIVE" : "SIM"} 720p</span>
+          <span className="hidden sm:inline">HEALTH: {aih.streamHealth.signalQuality}%</span>
+          <span>{aih.isSimulator ? "SIM" : "LIVE"}</span>
         </div>
 
         <div className="flex items-center gap-1">

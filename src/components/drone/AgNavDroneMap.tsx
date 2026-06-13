@@ -86,30 +86,83 @@ export function AgNavDroneMap({ telemetry, isFlying, status }: Props) {
       </div>
 
       {/* Home marker */}
-      <div className="absolute" style={{ left: "50%", top: "50%", transform: "translate(-80px, 60px)" }}>
-        <div className="flex items-center gap-1">
-          <Home className="h-4 w-4 text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]" />
-          <span className="text-[9px] font-mono text-emerald-400">HOME</span>
+      <div className="absolute" style={{ left: "15%", top: "65%", transform: "translate(-50%, -50%)" }}>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-emerald-950/60 border border-emerald-500/80">
+            <Home className="h-3.5 w-3.5 text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]" />
+          </div>
+          <span className="text-[8px] font-mono text-emerald-400 mt-1 font-bold">HOME BASE</span>
         </div>
       </div>
 
-      {/* Flight path */}
+      {/* Waypoints & Mission Boundaries Overlay */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none">
+        {/* Geofence boundary */}
+        <polygon
+          points="60,60 320,80 280,240 70,220"
+          fill="rgba(239, 68, 68, 0.04)"
+          stroke="rgba(239, 68, 68, 0.35)"
+          strokeWidth="1.5"
+          strokeDasharray="4 3"
+        />
+        {/* Mission Waypoints Route */}
+        {isFlying && (
+          <>
+            <polyline
+              points="100,200 150,110 260,95 240,190 180,220"
+              fill="none"
+              stroke="#06b6d4"
+              strokeWidth="1.5"
+              className="opacity-70"
+            />
+            {/* Coverage Swath Swathe (Area scanned) */}
+            <polyline
+              points="100,200 150,110 260,95 240,190"
+              fill="none"
+              stroke="rgba(6, 182, 212, 0.08)"
+              strokeWidth="32"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        )}
+      </svg>
+
+      {/* Waypoints node markers */}
       {isFlying && (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-          <path d="M 50%,50% Q 35%,55% 30%,75%" stroke="#06b6d4" strokeWidth="2" fill="none" strokeDasharray="4 4" className="opacity-50" />
-        </svg>
+        <>
+          <div className="absolute" style={{ left: "150px", top: "110px", transform: "translate(-50%, -50%)" }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-500 border border-cyan-300 flex items-center justify-center"><span className="text-[6px] text-black font-bold">1</span></div>
+          </div>
+          <div className="absolute" style={{ left: "260px", top: "95px", transform: "translate(-50%, -50%)" }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-500 border border-cyan-300 flex items-center justify-center"><span className="text-[6px] text-black font-bold">2</span></div>
+          </div>
+          <div className="absolute" style={{ left: "240px", top: "190px", transform: "translate(-50%, -50%)" }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-500 border border-cyan-300 flex items-center justify-center"><span className="text-[6px] text-black font-bold">3</span></div>
+          </div>
+        </>
       )}
 
-      {/* Drone marker */}
+      {/* Dynamic Aircraft marker */}
       {isFlying ? (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative transition-transform duration-1000 ease-linear" style={{ transform: `rotate(${telemetry.heading}deg)` }}>
-            <Navigation className="text-cyan-400 h-8 w-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-cyan-500/50 animate-ping" />
+          <div className="relative transition-transform duration-1000 ease-linear flex flex-col items-center" style={{ transform: `rotate(${telemetry.heading}deg)` }}>
+            {/* Render custom icon based on aircraft type */}
+            {(() => {
+              const activeType = localStorage.getItem("aih_active_type") || "drone";
+              if (activeType === "helicopter" || activeType === "air_ambulance") {
+                return <Crosshair className="text-cyan-400 h-8 w-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.85)]" />;
+              } else if (activeType === "fixed_wing" || activeType === "cargo" || activeType === "maritime_patrol") {
+                return <Navigation className="text-cyan-400 h-8 w-8 rotate-45 drop-shadow-[0_0_8px_rgba(34,211,238,0.85)]" />;
+              }
+              // Default drone/eVTOL arrow
+              return <Navigation className="text-cyan-400 h-8 w-8 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />;
+            })()}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-cyan-500/40 animate-ping pointer-events-none" />
           </div>
         </div>
       ) : (
-        /* Lost Drone marker if not flying and position is stored */
+        /* Last Position Recover banner indicator */
         lastPos && (
           <div className="absolute" style={{ left: "60%", top: "40%", transform: "translate(-50%, -50%)" }}>
             <div className="flex flex-col items-center">
@@ -125,19 +178,19 @@ export function AgNavDroneMap({ telemetry, isFlying, status }: Props) {
         )
       )}
 
-      {/* Lost Drone Recovery Banner overlay */}
+      {/* Lost Aircraft Recovery Banner overlay */}
       {!isFlying && lastPos && (
         <div className="absolute bottom-10 left-3 right-3 bg-red-950/85 border border-red-900/80 text-red-200 p-2 rounded-lg font-mono text-[9px] flex items-center justify-between z-10 backdrop-blur-sm shadow-xl animate-pulse">
           <div>
             <div className="font-bold text-red-400 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" /> DRONE RECOVERY MODE ACTIVE
+              <AlertTriangle className="h-3 w-3" /> AIRCRAFT RECOVERY MODE ACTIVE
             </div>
             <div>LAT: {lastPos.lat.toFixed(5)} / LNG: {lastPos.lng.toFixed(5)} ({new Date(lastPos.timestamp).toLocaleTimeString()})</div>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="h-6 px-2 text-[8px] bg-red-900 hover:bg-red-800 text-red-100 border-red-700"
+            className="h-6 px-2 text-[8px] bg-red-900 hover:bg-red-800 text-red-100 border-red-700 font-mono"
             onClick={handleLocateLostDrone}
           >
             LOCATE

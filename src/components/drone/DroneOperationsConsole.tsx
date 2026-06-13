@@ -9,6 +9,8 @@ import { OdenehoVision } from "./OdenehoVision";
 import { MissionPlanning } from "./MissionPlanning";
 import { DroneMediaCenter } from "./DroneMediaCenter";
 import { DroneAnalytics } from "./DroneAnalytics";
+import { AircraftRegistry } from "./AircraftRegistry";
+import { LiveStreamingConsole } from "./LiveStreamingConsole";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Wifi, Plane, ShieldCheck, HelpCircle } from "lucide-react";
 
@@ -26,7 +28,7 @@ export function DroneOperationsConsole() {
         </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
           <TabsList className="bg-slate-900 border border-slate-800 p-1 w-full lg:w-auto justify-start overflow-x-auto">
-            {["mission-control", "planning", "intelligence", "media", "analytics", "guide"].map((id) => (
+            {["mission-control", "planning", "registry", "streaming", "intelligence", "media", "analytics", "guide"].map((id) => (
               <TabsTrigger key={id} value={id} className="font-mono text-[10px] sm:text-xs data-[state=active]:bg-cyan-900/50 data-[state=active]:text-cyan-400 uppercase">
                 {id.replace("-", " ")}
               </TabsTrigger>
@@ -64,6 +66,9 @@ export function DroneOperationsConsole() {
         </TabsContent>
 
         <TabsContent value="planning" className="m-0"><MissionPlanning /></TabsContent>
+
+        <TabsContent value="registry" className="m-0"><AircraftRegistry /></TabsContent>
+        <TabsContent value="streaming" className="m-0"><LiveStreamingConsole /></TabsContent>
 
         <TabsContent value="intelligence" className="m-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

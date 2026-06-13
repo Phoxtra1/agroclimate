@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Store, TrendingUp, TrendingDown, Minus, AlertTriangle, Truck, Handshake, Package,
-  Loader2, Image as ImageIcon, Inbox, Route
+  Loader2, Image as ImageIcon, Inbox, Route, Eye, MessageSquare, CalendarRange, Clock, Navigation, CheckCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMarketLink, suggestPrice, type PriceRow } from "@/hooks/useMarketLink";
@@ -23,8 +23,20 @@ import { ChatPanel } from "@/components/market/ChatPanel";
 import { OrderListing } from "@/components/market/Orders";
 import { CopyButton } from "@/components/CopyButton";
 import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market";
-import { useAGTrans } from "@/hooks/useAGTrans";
+import { useAGTrans, DriverProfile, TransportRequest } from "@/hooks/useAGTrans";
 import { estimateMarketPrice } from "@/lib/pricingEngine";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+try {
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  });
+} catch {}
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
@@ -317,8 +329,12 @@ function ContractsPanel() {
 }
 
 function AGTransSupplierPanel() {
-  const { createRequest, requests, confirmDelivery } = useAGTrans();
+  const { createRequest, requests, deliveryJobs, trackingSessions, drivers, confirmDelivery } = useAGTrans();
   const { user } = useAuth();
+  
+  const [subTab, setSubTab] = useState<"requests" | "drivers">("requests");
+
+  // Form states
   const [cargo, setCargo] = useState("");
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState("kg");
@@ -330,9 +346,16 @@ function AGTransSupplierPanel() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const myRequests = requests.filter(r => r.supplier_id === user?.id);
+  // Dialogs
+  const [viewingDriver, setViewingDriver] = useState<DriverProfile | null>(null);
+  const [chatDriver, setChatDriver] = useState<DriverProfile | null>(null);
+  const [bookingDriver, setBookingDriver] = useState<DriverProfile | null>(null);
+  const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const myRequests = requests.filter(r => r.supplier_id === user?.id);
+  const onlineDrivers = drivers.filter(d => d.availability_status === "online" && d.verification_status === "verified");
+
+  const handleSubmit = async (e: React.FormEvent, directDriverId?: string) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -346,103 +369,391 @@ function AGTransSupplierPanel() {
         urgency,
         estimated_price: Number(price),
         notes,
+        driver_id: directDriverId || undefined,
       });
 
-      toast.success("Transport request broadcasted to AGTrans network!");
+      toast.success(directDriverId 
+        ? "Direct request sent! The driver has been notified." 
+        : "Transport request broadcasted to AGTrans network!");
+      
       setCargo(""); setQty(""); setPickup(""); setDropoff(""); setPickupTime(""); setUrgency("standard"); setPrice(""); setNotes("");
+      setBookingDriver(null);
     } catch (err: any) {
-      toast.error(err.message || "Failed to broadcast request");
+      toast.error(err.message || "Failed to submit request");
     } finally {
       setLoading(false);
     }
   };
 
+  const activeTrackingJob = deliveryJobs.find(j => j.id === trackingJobId);
+  const activeTrackingSession = activeTrackingJob ? trackingSessions.find(s => s.delivery_job_id === activeTrackingJob.id) : null;
+
+  // Mock map coordinates for tracking display
+  const defaultPickup: [number, number] = [5.6037, -0.1870]; // Accra
+  const defaultDropoff: [number, number] = [6.6961, -1.6152]; // Kumasi
+  const currentPos: [number, number] = activeTrackingSession?.current_lat && activeTrackingSession?.current_lon 
+    ? [activeTrackingSession.current_lat, activeTrackingSession.current_lon] 
+    : defaultPickup;
+
+  // Custom marker icons
+  const pickupIcon = L.divIcon({
+    html: `<div class="bg-blue-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
+    className: "custom-pin",
+  });
+  const dropoffIcon = L.divIcon({
+    html: `<div class="bg-red-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
+    className: "custom-pin",
+  });
+  const truckIcon = L.divIcon({
+    html: `<div class="bg-emerald-500 p-1.5 rounded-full border border-white shadow-lg text-white" style="transform: rotate(${activeTrackingSession?.heading || 0}deg);">
+      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+    </div>`,
+    className: "truck-pin",
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Route className="h-5 w-5 text-primary" /> Create Transport Request
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">Broadcast your logistics needs to verified AGTrans drivers. AI handles optimal routing and pricing validation.</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><Label>Cargo Type</Label><Input value={cargo} onChange={(e) => setCargo(e.target.value)} placeholder="e.g. Maize, Tomatoes" required /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Quantity</Label><Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
-              <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-            </div>
-            <div><Label>Pickup Location</Label><Input value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Farm or Warehouse address" required /></div>
-            <div><Label>Dropoff Location</Label><Input value={dropoff} onChange={(e) => setDropoff(e.target.value)} placeholder="Market or Buyer address" required /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Preferred Pickup Time</Label><Input type="datetime-local" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} required /></div>
-              <div>
-                <Label>Urgency</Label>
-                <Select value={urgency} onValueChange={setUrgency}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="express">Express</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div><Label>Price Offer (GHS)</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Your budget" required /></div>
-            <div className="sm:col-span-2"><Label>Notes/Instructions</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special handling instructions?" rows={2} /></div>
-            <div className="sm:col-span-2"><Button type="submit" disabled={loading} className="w-full">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Broadcast Request"}</Button></div>
-          </form>
-        </CardContent>
-      </Card>
+      {/* Sub Tabs Toggle */}
+      <div className="flex gap-2 border-b pb-2">
+        <Button 
+          variant={subTab === "requests" ? "default" : "ghost"} 
+          size="sm" 
+          onClick={() => setSubTab("requests")}
+          className="font-semibold"
+        >
+          Requests & Tracking
+        </Button>
+        <Button 
+          variant={subTab === "drivers" ? "default" : "ghost"} 
+          size="sm" 
+          onClick={() => setSubTab("drivers")}
+          className="font-semibold flex items-center gap-2"
+        >
+          Find Drivers <Badge variant="secondary" className="h-5 px-1.5 rounded-full">{onlineDrivers.length}</Badge>
+        </Button>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Your Active Requests</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {myRequests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active transport requests.</p>
-          ) : (
-            myRequests.map(req => (
-              <div key={req.id} className="border rounded-md p-3 flex justify-between items-center bg-card">
+      {subTab === "requests" && (
+        <div className="space-y-6">
+          {/* Create Request Form */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Route className="h-5 w-5 text-primary" /> Create Transport Request
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Broadcast your logistics needs to verified AGTrans drivers. AI handles optimal routing and pricing validation.</p>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => handleSubmit(e)} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><Label>Cargo Type</Label><Input value={cargo} onChange={(e) => setCargo(e.target.value)} placeholder="e.g. Maize, Tomatoes" required /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label>Quantity</Label><Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
+                  <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
+                </div>
+                <div><Label>Pickup Location</Label><Input value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Farm or Warehouse address" required /></div>
+                <div><Label>Dropoff Location</Label><Input value={dropoff} onChange={(e) => setDropoff(e.target.value)} placeholder="Market or Buyer address" required /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label>Preferred Pickup Time</Label><Input type="datetime-local" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} required /></div>
+                  <div>
+                    <Label>Urgency</Label>
+                    <Select value={urgency} onValueChange={setUrgency}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="express">Express</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div><Label>Price Offer (GHS)</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Your budget" required /></div>
+                <div className="sm:col-span-2"><Label>Notes/Instructions</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special handling instructions?" rows={2} /></div>
+                <div className="sm:col-span-2"><Button type="submit" disabled={loading} className="w-full">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Broadcast Request"}</Button></div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Active Requests List */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Your Active Requests</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {myRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active transport requests.</p>
+              ) : (
+                myRequests.map(req => {
+                  const job = deliveryJobs.find(j => j.product === req.product_type && j.supplier_id === user?.id && j.status !== "Cancelled");
+                  return (
+                    <div key={req.id} className="border rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card shadow-sm hover:shadow transition">
+                      <div>
+                        <div className="font-semibold text-lg">{req.product_type} <span className="text-xs font-normal text-muted-foreground">({req.quantity} {req.unit})</span></div>
+                        <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                          {req.pickup_location} → {req.delivery_location}
+                        </div>
+                        <div className="text-xs mt-1 flex items-center gap-1">
+                          Tracking ID: {req.tracking_code} <CopyButton value={req.tracking_code || ""} className="h-4 w-4" />
+                        </div>
+                        {job && (
+                          <div className="text-xs font-semibold text-primary mt-2">
+                            Delivery job: {job.status}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2 items-end w-full md:w-auto">
+                        <div className="flex gap-2 items-center">
+                          <Badge variant={req.status === "delivered" ? "default" : req.status === "in_transit" ? "secondary" : "outline"} className="uppercase">
+                            {req.status.replace("_", " ")}
+                          </Badge>
+                          <span className="font-black text-lg">GHS {req.estimated_price}</span>
+                        </div>
+
+                        {job && job.status === "In Transit" && (
+                          <Button 
+                            size="sm" 
+                            className="bg-blue-600 hover:bg-blue-700 w-full text-xs font-bold"
+                            onClick={() => setTrackingJobId(job.id)}
+                          >
+                            <Navigation className="h-3 w-3 mr-1" /> Track Delivery
+                          </Button>
+                        )}
+
+                        {req.status === "delivered" && (
+                          <Button 
+                            size="sm" 
+                            className="w-full text-xs font-bold" 
+                            onClick={async () => {
+                              try {
+                                await confirmDelivery(req.id);
+                                toast.success("Delivery confirmed securely.");
+                              } catch (e) {
+                                toast.error("Failed to confirm delivery");
+                              }
+                            }}
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Confirm Delivery
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {subTab === "drivers" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" /> Available Transport Partners
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Browse online verified drivers ready for immediate transport negotiation.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {onlineDrivers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No drivers are currently online. Check back later.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {onlineDrivers.map(drv => (
+                  <div key={drv.id} className="border p-4 rounded-xl space-y-3 bg-muted/5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-bold text-base">{drv.full_name}</h4>
+                          <p className="text-xs text-muted-foreground capitalize">{drv.vehicle_type} · Cap: {drv.vehicle_capacity_kg} kg</p>
+                        </div>
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 font-bold border-0">
+                          {drv.reliability_score}% Reliable
+                        </Badge>
+                      </div>
+
+                      <div className="mt-3 text-xs space-y-1 text-muted-foreground border-t pt-2 border-border/40">
+                        <p><strong>Rates:</strong> {drv.rate_information || "Negotiable"}</p>
+                        <p><strong>Corridors:</strong> {drv.preferred_corridors?.join(", ") || "All Regions"}</p>
+                        <p><strong>Specialties:</strong> {drv.cargo_categories?.join(", ") || "General Cargo"}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 justify-end pt-2">
+                      <Button size="sm" variant="outline" onClick={() => setViewingDriver(drv)}>
+                        <Eye className="h-3.5 w-3.5 mr-1" /> Profile
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setChatDriver(drv)}>
+                        <MessageSquare className="h-3.5 w-3.5 mr-1" /> Message
+                      </Button>
+                      <Button size="sm" onClick={() => {
+                        setBookingDriver(drv);
+                        setSubTab("requests");
+                      }}>
+                        Book Direct
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dialog: View Driver Profile */}
+      <Dialog open={!!viewingDriver} onOpenChange={() => setViewingDriver(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Driver Profile: {viewingDriver?.full_name}</DialogTitle>
+          </DialogHeader>
+          {viewingDriver && (
+            <div className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 border-b pb-3 border-border/40">
                 <div>
-                  <div className="font-semibold">{req.product_type} <span className="text-xs font-normal text-muted-foreground">({req.quantity} {req.unit})</span></div>
-                  <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    {req.pickup_location} → {req.delivery_location}
-                  </div>
-                  <div className="text-xs mt-1 flex items-center gap-1">
-                    Tracking ID: {req.tracking_code} <CopyButton value={req.tracking_code || ""} className="h-4 w-4" />
-                  </div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Vehicle</span>
+                  <span className="font-semibold">{viewingDriver.vehicle_type}</span>
                 </div>
-                <div className="text-right">
-                  <Badge variant={req.status === "delivered" ? "default" : req.status === "in_transit" ? "secondary" : "outline"} className="uppercase">
-                    {req.status.replace("_", " ")}
-                  </Badge>
-                  <p className="font-semibold mt-1">GHS {req.estimated_price}</p>
-
-                  {req.status === "delivered" && (
-                    <Button 
-                      size="sm" 
-                      className="mt-2 w-full text-xs" 
-                      onClick={async () => {
-                        try {
-                          await confirmDelivery(req.id);
-                          toast.success("Delivery confirmed securely.");
-                        } catch (e) {
-                          toast.error("Failed to confirm delivery");
-                        }
-                      }}
-                    >
-                      Confirm Delivery
-                    </Button>
-                  )}
+                <div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Plate Number</span>
+                  <span className="font-semibold">{viewingDriver.plate_number}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">License Class</span>
+                  <span className="font-semibold">{viewingDriver.license_class}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Reliability</span>
+                  <span className="font-semibold text-emerald-600">{viewingDriver.reliability_score}%</span>
                 </div>
               </div>
-            ))
+
+              <div className="space-y-2 border-b pb-3 border-border/40">
+                <h5 className="font-bold text-xs text-muted-foreground uppercase">Verification Check</h5>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <span className="flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> Identity Valid</span>
+                  <span className="flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> License Active</span>
+                  <span className="flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> Cargo Insurance</span>
+                  <span className="flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> Roadworthiness</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold block">Service Areas & Corridors</span>
+                <p className="text-xs text-foreground bg-muted/30 p-2.5 rounded-xl border border-border/40 leading-relaxed">
+                  {viewingDriver.preferred_corridors?.join(", ") || "All Regions"}
+                </p>
+              </div>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Chat with Driver */}
+      <Dialog open={!!chatDriver} onOpenChange={() => setChatDriver(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Chatting with {chatDriver?.full_name}</DialogTitle>
+          </DialogHeader>
+          {chatDriver && (
+            <ChatPanel
+              otherUserId={chatDriver.user_id}
+              otherName={`${chatDriver.full_name} (Driver)`}
+              otherRole="driver"
+              defaultUnit="kg"
+              defaultPrice={100}
+              defaultQuantity={100}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Booking Direct Form (displays overlay above request tab) */}
+      <Dialog open={!!bookingDriver} onOpenChange={() => setBookingDriver(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Book {bookingDriver?.full_name} Directly</DialogTitle>
+          </DialogHeader>
+          {bookingDriver && (
+            <form onSubmit={(e) => handleSubmit(e, bookingDriver.user_id)} className="space-y-3 text-sm">
+              <div><Label>Cargo Type</Label><Input value={cargo} onChange={(e) => setCargo(e.target.value)} placeholder="e.g. Maize, Tomatoes" required /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label>Quantity</Label><Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
+                <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div><Label>Pickup Location</Label><Input value={pickup} onChange={(e) => setPickup(e.target.value)} placeholder="Farm or Warehouse address" required /></div>
+              <div><Label>Dropoff Location</Label><Input value={dropoff} onChange={(e) => setDropoff(e.target.value)} placeholder="Market or Buyer address" required /></div>
+              <div><Label>Target Price Offer (GHS)</Label><Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price Offer" required /></div>
+              <div><Label>Preferred Pickup Time</Label><Input type="datetime-local" value={pickupTime} onChange={(e) => setPickupTime(e.target.value)} required /></div>
+              <Button type="submit" disabled={loading} className="w-full mt-2">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Direct Booking Offer"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Realtime Shipment Tracking Modal */}
+      <Dialog open={!!trackingJobId} onOpenChange={() => setTrackingJobId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Live Tracking Session: {activeTrackingJob?.product}</DialogTitle>
+          </DialogHeader>
+          {activeTrackingJob && (
+            <div className="space-y-4">
+              <div className="h-[350px] rounded-xl overflow-hidden border">
+                <MapContainer center={currentPos} zoom={8} className="h-full w-full">
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  <Marker position={defaultPickup} icon={pickupIcon}>
+                    <Popup>Pickup: {activeTrackingJob.pickup_location}</Popup>
+                  </Marker>
+                  <Marker position={defaultDropoff} icon={dropoffIcon}>
+                    <Popup>Dropoff: {activeTrackingJob.destination}</Popup>
+                  </Marker>
+                  {activeTrackingSession && (
+                    <Marker position={currentPos} icon={truckIcon}>
+                      <Popup>
+                        <strong>{activeTrackingSession.driver_name}</strong><br />
+                        Speed: {activeTrackingSession.speed_kn} km/h<br />
+                        Plate: {activeTrackingSession.plate_number}
+                      </Popup>
+                    </Marker>
+                  )}
+                  {activeTrackingSession?.route && (
+                    <Polyline positions={activeTrackingSession.route} color="#10b981" weight={4} dashArray="5, 10" />
+                  )}
+                </MapContainer>
+              </div>
+
+              {activeTrackingSession && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border p-4 rounded-xl bg-muted/10">
+                  <div>
+                    <span className="text-muted-foreground block font-bold text-[9px] uppercase">Driver Name</span>
+                    <span className="font-semibold text-sm">{activeTrackingSession.driver_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-bold text-[9px] uppercase">Speed</span>
+                    <span className="font-semibold text-sm">{activeTrackingSession.speed_kn || 0} km/h</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-bold text-[9px] uppercase">ETA</span>
+                    <span className="font-semibold text-sm text-primary">{activeTrackingSession.eta || "Calculating..."}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block font-bold text-[9px] uppercase">Distance left</span>
+                    <span className="font-semibold text-sm">
+                      {activeTrackingSession.distance_m ? `${Math.round(activeTrackingSession.distance_m / 1000)} km` : "Pending..."}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

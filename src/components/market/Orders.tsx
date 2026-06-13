@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Loader2, Search, MapPin, Calendar, Pencil, Trash2, Save,
-  Handshake, CheckCircle2, XCircle, MessageCircle, X,
+  Handshake, CheckCircle2, XCircle, MessageCircle, X, Navigation, Truck
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,6 +19,19 @@ import { ChatPanel } from "./ChatPanel";
 import {
   openNegotiation, acceptNegotiation, declineNegotiation,
 } from "@/lib/negotiationEngine";
+import { useAGTrans } from "@/hooks/useAGTrans";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+try {
+  delete (L.Icon.Default.prototype as any)._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  });
+} catch {}
 
 export interface OrderRow {
   id: string; buyer_id: string; buyer_name: string | null; crop_name: string;
@@ -163,12 +176,14 @@ function useOrders(scope: Scope) {
 /* ============================================================== */
 export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
   const { user } = useAuth();
+  const { deliveryJobs, trackingSessions } = useAGTrans();
   const { items, loading, reload } = useOrders(scope);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
   const [selected, setSelected] = useState<OrderRow | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
 
   // Edit-mode state for owner modal
   const [editing, setEditing] = useState(false);
@@ -400,6 +415,40 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                     <I label="Delivery" v={`${selected.delivery_start || "?"} → ${selected.delivery_end || "?"}`} />
                   </div>
                   {selected.notes && <p className="text-sm text-muted-foreground border-t pt-2">{selected.notes}</p>}
+
+                  {/* Shipment Tracking details */}
+                  {(() => {
+                    const matchedJob = deliveryJobs.find(
+                      j => j.product.toLowerCase() === selected.crop_name.toLowerCase() &&
+                      j.supplier_id === selected.buyer_id &&
+                      j.status !== "Cancelled"
+                    );
+                    if (!matchedJob) return null;
+                    return (
+                      <div className="mt-4 border-t pt-4 space-y-2">
+                        <h4 className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                          <Truck className="h-4 w-4 text-primary" /> Shipment Tracking Details
+                        </h4>
+                        <div className="flex justify-between items-center bg-muted/20 p-3 rounded-xl border border-border/40">
+                          <div>
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">Status</span>
+                            <Badge variant={matchedJob.status === "Delivered" ? "default" : "secondary"}>
+                              {matchedJob.status}
+                            </Badge>
+                          </div>
+                          {(matchedJob.status === "In Transit" || matchedJob.status === "Near Destination") && (
+                            <Button
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700 text-xs font-bold"
+                              onClick={() => setTrackingJobId(matchedJob.id)}
+                            >
+                              <Navigation className="h-3.5 w-3.5 mr-1" /> Track Shipment
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="flex gap-2 flex-wrap pt-2">
                     {scope !== "marketplace" && (
                       <>
@@ -460,6 +509,102 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
               defaultQuantity={Number(selected.quantity_needed || 0)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Realtime Shipment Tracking Modal for Buyer */}
+      <Dialog open={!!trackingJobId} onOpenChange={() => setTrackingJobId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Track Your Shipment: {
+              (() => {
+                const job = deliveryJobs.find(j => j.id === trackingJobId);
+                return job?.product || "Cargo";
+              })()
+            }</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const job = deliveryJobs.find(j => j.id === trackingJobId);
+            const session = job ? trackingSessions.find(s => s.delivery_job_id === job.id) : null;
+            if (!job) return null;
+
+            const defaultPickup: [number, number] = [5.6037, -0.1870]; // Accra
+            const defaultDropoff: [number, number] = [6.6961, -1.6152]; // Kumasi
+            const currentPos: [number, number] = session?.current_lat && session?.current_lon 
+              ? [session.current_lat, session.current_lon] 
+              : defaultPickup;
+
+            const pickupIcon = L.divIcon({
+              html: `<div class="bg-blue-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
+              className: "custom-pin",
+            });
+            const dropoffIcon = L.divIcon({
+              html: `<div class="bg-red-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
+              className: "custom-pin",
+            });
+            const truckIcon = L.divIcon({
+              html: `<div class="bg-emerald-500 p-1.5 rounded-full border border-white shadow-lg text-white" style="transform: rotate(${session?.heading || 0}deg);">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+              </div>`,
+              className: "truck-pin",
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            });
+
+            return (
+              <div className="space-y-4">
+                <div className="h-[350px] rounded-xl overflow-hidden border">
+                  <MapContainer center={currentPos} zoom={8} className="h-full w-full animate-in fade-in duration-300">
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Marker position={defaultPickup} icon={pickupIcon}>
+                      <Popup>Pickup: {job.pickup_location}</Popup>
+                    </Marker>
+                    <Marker position={defaultDropoff} icon={dropoffIcon}>
+                      <Popup>Dropoff: {job.destination}</Popup>
+                    </Marker>
+                    {session && (
+                      <Marker position={currentPos} icon={truckIcon}>
+                        <Popup>
+                          <strong>{session.driver_name}</strong><br />
+                          Speed: {session.speed_kn} km/h<br />
+                          Plate: {session.plate_number}
+                        </Popup>
+                      </Marker>
+                    )}
+                    {session?.route && (
+                      <Polyline positions={session.route} color="#10b981" weight={4} dashArray="5, 10" />
+                    )}
+                  </MapContainer>
+                </div>
+
+                {session && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border p-4 rounded-xl bg-muted/10">
+                    <div>
+                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">Driver Name</span>
+                      <span className="font-semibold text-sm">{session.driver_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">Speed</span>
+                      <span className="font-semibold text-sm">{session.speed_kn || 0} km/h</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">ETA</span>
+                      <span className="font-semibold text-sm text-primary">{session.eta || "Calculating..."}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">Distance left</span>
+                      <span className="font-semibold text-sm">
+                        {session.distance_m ? `${Math.round(session.distance_m / 1000)} km` : "Pending..."}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

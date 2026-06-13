@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Bot, ShieldAlert, Zap, Wind, RefreshCw, Loader2 } from "lucide-react";
+import { Bot, ShieldAlert, Zap, Wind, RefreshCw, Loader2, Eye, ShieldCheck } from "lucide-react";
 import type { TelemetryData, EnvironmentData, DroneStatus } from "@/hooks/useDroneState";
 import { useFlightAdvisor } from "@/hooks/useFlightAdvisor";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,10 @@ const SEVERITY_CLS: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  safe: { label: "MISSION SAFE", color: "text-emerald-400" },
+  safe: { label: "AIRSPACE SAFE", color: "text-emerald-400" },
   caution: { label: "PROCEED WITH CAUTION", color: "text-amber-400" },
-  return_home: { label: "RETURN HOME ADVISED", color: "text-blue-400" },
-  emergency_land: { label: "LAND IMMEDIATELY", color: "text-red-400" },
+  return_home: { label: "RETURN TO BASE ADVISED", color: "text-blue-400" },
+  emergency_land: { label: "DEVIATE / LAND IMMEDIATELY", color: "text-red-400" },
 };
 
 export function OdenehoAiAdvisory({
@@ -25,12 +25,27 @@ export function OdenehoAiAdvisory({
     telemetry, environment, status,
   });
 
-  // Local fast alerts (instant) while Odeneho deliberates
+  const activeType = localStorage.getItem("aih_active_type") || "drone";
+  const isMannedCommercial = [
+    "helicopter",
+    "fixed_wing",
+    "air_ambulance",
+    "cargo",
+    "maritime_patrol"
+  ].includes(activeType);
+
+  // Local fast alerts (instant)
   const localAlerts = (() => {
     const a: { type: string; severity: keyof typeof SEVERITY_CLS; message: string; icon: any }[] = [];
-    if (environment?.windSpeed > 25) a.push({ type: "high_wind", severity: "warning", message: `High wind: ${environment.windSpeed.toFixed(0)} km/h`, icon: Wind });
-    if (telemetry.battery < 25) a.push({ type: "low_battery", severity: "critical", message: `Battery critical: ${telemetry.battery.toFixed(0)}%`, icon: Zap });
-    if (telemetry.signalStrength < 50 && telemetry.signalStrength > 0) a.push({ type: "signal_loss", severity: "warning", message: `Weak signal: ${telemetry.signalStrength.toFixed(0)}%`, icon: ShieldAlert });
+    if (environment?.windSpeed > 25) {
+      a.push({ type: "high_wind", severity: "warning", message: `High wind: ${environment.windSpeed.toFixed(0)} km/h`, icon: Wind });
+    }
+    if (telemetry.battery < 25) {
+      a.push({ type: "low_battery", severity: "critical", message: `Energy critical: ${telemetry.battery.toFixed(0)}%`, icon: Zap });
+    }
+    if (telemetry.signalStrength < 50 && telemetry.signalStrength > 0) {
+      a.push({ type: "signal_loss", severity: "warning", message: `Weak signal: ${telemetry.signalStrength.toFixed(0)}%`, icon: ShieldAlert });
+    }
     return a;
   })();
 
@@ -38,15 +53,34 @@ export function OdenehoAiAdvisory({
 
   return (
     <Card className="bg-slate-900 border-slate-800 text-slate-100">
-      <CardHeader className="py-4 border-b border-slate-800 flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-2">
-          <Bot className="h-4 w-4" /> Odeneho Flight AI
+      <CardHeader className="py-3 border-b border-slate-800 flex flex-row items-center justify-between">
+        <CardTitle className="text-xs font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-2">
+          <Bot className="h-4 w-4 text-cyan-400" /> Air Control Advisory
         </CardTitle>
-        <Button size="sm" variant="ghost" className="h-7 text-cyan-400 hover:bg-slate-800 font-mono text-[10px]" onClick={evaluate} disabled={loading}>
+        <Button size="sm" variant="ghost" className="h-7 text-cyan-400 hover:bg-slate-800 font-mono text-[9px]" onClick={evaluate} disabled={loading}>
           {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} EVALUATE
         </Button>
       </CardHeader>
       <CardContent className="p-4 space-y-3">
+        {/* Dynamic Manned vs Unmanned Safety Rules */}
+        {isMannedCommercial ? (
+          <div className="bg-amber-950/20 border border-amber-900/60 rounded p-2.5 flex items-start gap-2">
+            <Eye className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+            <div className="font-mono text-[9px] leading-tight">
+              <span className="text-amber-400 font-bold block mb-0.5">COMMERCIAL TRAFFIC LINKED</span>
+              Manned aviation safeguards are active. Telemetry data is read-only.
+            </div>
+          </div>
+        ) : (
+          <div className="bg-emerald-950/25 border border-emerald-900/50 rounded p-2.5 flex items-start gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="font-mono text-[9px] leading-tight">
+              <span className="text-emerald-400 font-bold block mb-0.5">UNMANNED AUTO-PILOT ACTIVE</span>
+              Full digital flight authority granted. Collision avoidance system armed.
+            </div>
+          </div>
+        )}
+
         {advisory && statusInfo && (
           <div className="bg-slate-950 border border-slate-800 rounded p-3">
             <div className={`text-xs font-mono font-bold ${statusInfo.color}`}>{statusInfo.label}</div>
@@ -84,11 +118,12 @@ export function OdenehoAiAdvisory({
             </div>
           </div>
           <div>
-            <div className="text-slate-500 mb-1">ROUTE OPTIMIZATION</div>
-            <div className="text-cyan-400 text-[10px] leading-tight">{advisory?.route_optimization || "Nominal — no adjustments needed"}</div>
+            <div className="text-slate-500 mb-1">AIRSPACE ADVISORY</div>
+            <div className="text-cyan-400 text-[10px] leading-tight">{advisory?.route_optimization || "Clear corridor flight pattern"}</div>
           </div>
         </div>
       </CardContent>
     </Card>
   );
 }
+export default OdenehoAiAdvisory;

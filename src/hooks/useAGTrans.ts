@@ -48,22 +48,66 @@ export interface DriverProfile {
   cancellations: number;
   disputes: number;
   notes?: string;
+  // Expanded fields
+  insurance_status?: string;
+  roadworthiness_status?: string;
+  cargo_categories?: string[];
+  rate_information?: string;
+  vehicle_images?: string[];
+  current_location?: { lat: number; lon: number };
+}
+
+export interface DeliveryJob {
+  id: string;
+  supplier_id: string;
+  driver_id: string;
+  product: string;
+  quantity: number;
+  pickup_location: string;
+  destination: string;
+  status: 'Pending' | 'Accepted' | 'Loading' | 'In Transit' | 'Near Destination' | 'Delivered' | 'Cancelled';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrackingSession {
+  id: string;
+  delivery_job_id: string;
+  driver_id: string;
+  driver_name: string;
+  vehicle_type: string;
+  plate_number: string;
+  pickup_location: string;
+  destination: string;
+  route?: any;
+  eta?: string;
+  distance_m?: number;
+  current_lat?: number;
+  current_lon?: number;
+  speed_kn?: number;
+  heading?: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export function useAGTrans() {
   const { user, refreshSession } = useAuth();
   const [requests, setRequests] = useState<TransportRequest[]>([]);
+  const [deliveryJobs, setDeliveryJobs] = useState<DeliveryJob[]>([]);
+  const [trackingSessions, setTrackingSessions] = useState<TrackingSession[]>([]);
+  const [drivers, setDrivers] = useState<DriverProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!user) {
       setLoading(false);
       return;
     }
-
-    const loadData = async () => {
-      setLoading(true);
+    setLoading(true);
+    try {
+      // Fetch current user's driver profile
       const { data: dp } = await supabase
         .from("agtrans_drivers")
         .select("*")
@@ -72,6 +116,7 @@ export function useAGTrans() {
 
       if (dp) setDriverProfile(dp as unknown as DriverProfile);
 
+      // Fetch all requests
       const { data: reqs } = await supabase
         .from("agtrans_requests")
         .select("*")
@@ -79,14 +124,42 @@ export function useAGTrans() {
         .limit(100);
 
       setRequests((reqs as unknown as TransportRequest[]) || []);
-      setLoading(false);
-    };
 
+      // Fetch all verified drivers
+      const { data: drvs } = await supabase
+        .from("agtrans_drivers")
+        .select("*");
+      setDrivers((drvs as unknown as DriverProfile[]) || []);
+
+      // Fetch delivery jobs
+      const { data: jobs } = await supabase
+        .from("delivery_jobs" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      setDeliveryJobs((jobs as unknown as DeliveryJob[]) || []);
+
+      // Fetch tracking sessions
+      const { data: tracks } = await supabase
+        .from("tracking_sessions" as any)
+        .select("*")
+        .order("created_at", { ascending: false });
+      setTrackingSessions((tracks as unknown as TrackingSession[]) || []);
+
+    } catch (err) {
+      console.error("Error loading AGTrans data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
 
-    const ch = supabase.channel("agtrans-updates")
+    const ch = supabase.channel("agtrans-realtime-updates")
       .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_requests" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "delivery_jobs" as any }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tracking_sessions" as any }, loadData)
       .subscribe();
 
     return () => { supabase.removeChannel(ch); };
@@ -95,12 +168,15 @@ export function useAGTrans() {
   const createRequest = async (payload: Partial<TransportRequest>) => {
     if (!user) throw new Error("Not authenticated");
 
+    const tracking_code = "AGT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+
     const { data, error } = await supabase
       .from("agtrans_requests")
       .insert({
         ...payload,
         supplier_id: user.id,
-        status: "searching_driver",
+        status: payload.driver_id ? "Pending" : "searching_driver",
+        tracking_code,
       } as any)
       .select()
       .single();
@@ -158,6 +234,11 @@ export function useAGTrans() {
         user_id: user.id,
         verification_status: "pending",
         availability_status: "offline",
+        reliability_score: 100,
+        completed_deliveries: 0,
+        late_deliveries: 0,
+        cancellations: 0,
+        disputes: 0,
       } as any)
       .select()
       .single();
@@ -184,15 +265,145 @@ export function useAGTrans() {
     return data;
   };
 
+  const updateDriverProfile = async (payload: Partial<DriverProfile>) => {
+    if (!user || !driverProfile) throw new Error("Not authenticated");
+
+    const { data, error } = await supabase
+      .from("agtrans_drivers")
+      .update(payload as any)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    setDriverProfile(data as unknown as DriverProfile);
+    return data;
+  };
+
   const toggleAvailability = async (status: "online" | "offline") => {
     if (!user) return;
-    const { error } = await supabase
-      .from("agtrans_drivers")
-      .update({ availability_status: status })
-      .eq("user_id", user.id);
-    if (!error && driverProfile) {
-      setDriverProfile({ ...driverProfile, availability_status: status });
+    await updateDriverProfile({ availability_status: status });
+  };
+
+  const createDeliveryJob = async (request: TransportRequest) => {
+    if (!user) throw new Error("Not authenticated");
+    
+    // Create job record
+    const { data: job, error: jobError } = await supabase
+      .from("delivery_jobs" as any)
+      .insert({
+        supplier_id: request.supplier_id,
+        driver_id: user.id,
+        product: request.product_type,
+        quantity: request.quantity,
+        pickup_location: request.pickup_location,
+        destination: request.delivery_location,
+        status: "Accepted",
+      } as any)
+      .select()
+      .single();
+
+    if (jobError) throw jobError;
+
+    // Also update request status
+    await updateRequestStatus(request.id, "Accepted", user.id);
+
+    // Create tracking session immediately in AGNav
+    const { error: trackError } = await supabase
+      .from("tracking_sessions" as any)
+      .insert({
+        delivery_job_id: job.id,
+        driver_id: user.id,
+        driver_name: driverProfile?.full_name || "Verified Driver",
+        vehicle_type: driverProfile?.vehicle_type || "Truck",
+        plate_number: driverProfile?.plate_number || "",
+        pickup_location: request.pickup_location,
+        destination: request.delivery_location,
+        status: "active",
+        current_lat: request.pickup_lat || 5.6037, // default Accra
+        current_lon: request.pickup_lon || -0.1870,
+        speed_kn: 0,
+        heading: 0,
+        eta: "Calculating...",
+        distance_m: 0,
+      } as any);
+
+    if (trackError) {
+      console.error("Error creating tracking session:", trackError);
     }
+
+    return job;
+  };
+
+  const updateDeliveryJobStatus = async (jobId: string, status: DeliveryJob['status']) => {
+    if (!user) throw new Error("Not authenticated");
+
+    const { error } = await supabase
+      .from("delivery_jobs" as any)
+      .update({ status })
+      .eq("id", jobId);
+
+    if (error) throw error;
+
+    // If delivered, we increment completed deliveries and reward driver's reliability score
+    if (status === "Delivered" && driverProfile) {
+      const completed = (driverProfile.completed_deliveries || 0) + 1;
+      const currentScore = driverProfile.reliability_score || 100;
+      const nextScore = Math.min(100, currentScore + 2); // boost reliability for success
+      await updateDriverProfile({
+        completed_deliveries: completed,
+        reliability_score: nextScore,
+      });
+    }
+
+    // Also update tracking status
+    if (status === "Delivered" || status === "Cancelled") {
+      await supabase
+        .from("tracking_sessions" as any)
+        .update({ status: status === "Delivered" ? "completed" : "cancelled" })
+        .eq("delivery_job_id", jobId);
+    }
+  };
+
+  const updateTrackingSessionLocation = async (jobId: string, locationData: { lat: number; lon: number; speed_kn?: number; heading?: number; eta?: string; distance_m?: number; route?: any }) => {
+    const { error } = await supabase
+      .from("tracking_sessions" as any)
+      .update({
+        current_lat: locationData.lat,
+        current_lon: locationData.lon,
+        speed_kn: locationData.speed_kn || 0,
+        heading: locationData.heading || 0,
+        eta: locationData.eta,
+        distance_m: locationData.distance_m,
+        route: locationData.route,
+      } as any)
+      .eq("delivery_job_id", jobId);
+
+    if (error) {
+      console.error("Error updating live location:", error);
+    }
+  };
+
+  const handleCancelTrip = async (jobId: string) => {
+    if (!user || !driverProfile) throw new Error("Not authenticated");
+
+    // Implement fine and suspension rules
+    const cancellations = (driverProfile.cancellations || 0) + 1;
+    const currentScore = driverProfile.reliability_score || 100;
+    const nextScore = Math.max(0, currentScore - 15); // severe penalty for cancellation
+    const isSuspended = cancellations >= 3;
+
+    const profileUpdates: Partial<DriverProfile> = {
+      cancellations,
+      reliability_score: nextScore,
+      verification_status: isSuspended ? "suspended" : driverProfile.verification_status,
+      notes: isSuspended 
+        ? "Suspended automatically for 30 days due to high cancellation count." 
+        : driverProfile.notes,
+    };
+
+    await updateDriverProfile(profileUpdates);
+    await updateDeliveryJobStatus(jobId, "Cancelled");
   };
 
   const confirmDelivery = async (id: string) => {
@@ -206,12 +417,21 @@ export function useAGTrans() {
 
   return {
     requests,
+    deliveryJobs,
+    trackingSessions,
+    drivers,
     loading,
     driverProfile,
     createRequest,
     updateRequestStatus,
     createDriverProfile,
+    updateDriverProfile,
     toggleAvailability,
     confirmDelivery,
+    createDeliveryJob,
+    updateDeliveryJobStatus,
+    updateTrackingSessionLocation,
+    handleCancelTrip,
+    reload: loadData,
   };
 }

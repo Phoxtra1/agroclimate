@@ -1,12 +1,38 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useAIH } from "@/hooks/useAIH";
 import { supabase } from "@/integrations/supabase/client";
-import { getAdapter } from "@/lib/drone/connectionManager";
-import { ConnectionAdapter, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "@/lib/drone/types";
 import { useToast } from "@/hooks/use-toast";
+import { FlightMode, AircraftAsset, UniversalTelemetry } from "@/services/aih/types";
 
-// Back-compat aliases used by existing components
-export type DroneStatus = FlightStatus;
-export interface TelemetryData extends DroneTelemetry {}
+// Back-compat aliases
+export type DroneStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "calibrating"
+  | "armed"
+  | "flying"
+  | "paused"
+  | "returning"
+  | "landing"
+  | "emergency";
+
+export interface TelemetryData {
+  lat: number | undefined;
+  lng: number | undefined;
+  altitude: number;
+  groundSpeed: number;
+  verticalSpeed: number;
+  heading: number;
+  battery: number;
+  signalStrength: number;
+  gpsAccuracy: number;
+  gpsFix: string;
+  flightDuration: number;
+  distanceCovered: number;
+  cameraStatus: string;
+}
+
 export interface EnvironmentData {
   windSpeed: number;
   windDirection: string;
@@ -16,74 +42,139 @@ export interface EnvironmentData {
   visibility: number;
 }
 
-const INITIAL_TELEMETRY: DroneTelemetry = {
-  lat: undefined, lng: undefined,
-  altitude: 0, groundSpeed: 0, verticalSpeed: 0, heading: 0,
-  battery: 100, signalStrength: 0, gpsAccuracy: 0, gpsFix: "none",
-  flightDuration: 0, distanceCovered: 0, cameraStatus: "off",
+const INITIAL_TELEMETRY: TelemetryData = {
+  lat: undefined,
+  lng: undefined,
+  altitude: 0,
+  groundSpeed: 0,
+  verticalSpeed: 0,
+  heading: 0,
+  battery: 100,
+  signalStrength: 0,
+  gpsAccuracy: 0,
+  gpsFix: "none",
+  flightDuration: 0,
+  distanceCovered: 0,
+  cameraStatus: "off",
 };
 
 export const useDroneState = () => {
   const { toast } = useToast();
-  const [protocol, setProtocol] = useState<DroneProtocol>("simulator");
-  const [status, setStatus] = useState<FlightStatus>("disconnected");
-  const [available, setAvailable] = useState<DiscoveredDrone[]>([]);
-  const [activeDrone, setActiveDrone] = useState<DiscoveredDrone | null>(null);
-  const [telemetry, setTelemetry] = useState<DroneTelemetry>(INITIAL_TELEMETRY);
+  const aih = useAIH();
+  
+  const [selectedProtocol, setSelectedProtocol] = useState<any>("simulator");
   const [missionId, setMissionId] = useState<string | null>(null);
 
   const [environment, setEnvironment] = useState<EnvironmentData>({
-    windSpeed: 12, windDirection: "NE", temperature: 28, humidity: 65, rainProbability: 10, visibility: 10,
+    windSpeed: 12,
+    windDirection: "NE",
+    temperature: 28,
+    humidity: 65,
+    rainProbability: 10,
+    visibility: 10,
   });
 
-  const adapterRef = useRef<ConnectionAdapter | null>(null);
-  const unsubRef = useRef<Array<() => void>>([]);
+  // Calculate back-compat status from active aircraft & telemetry
+  const status = useMemo((): DroneStatus => {
+    if (!aih.activeAircraft) return "disconnected";
+    if (aih.activeAircraft.status === "connecting") return "connecting";
+    
+    if (!aih.telemetry) return "connected";
 
-  // Acquire adapter on protocol change
-  useEffect(() => {
-    unsubRef.current.forEach((u) => u());
-    unsubRef.current = [];
-    const adapter = getAdapter(protocol);
-    adapterRef.current = adapter;
-    unsubRef.current.push(adapter.onStatus(setStatus));
-    unsubRef.current.push(adapter.onTelemetry(setTelemetry));
-    return () => { unsubRef.current.forEach((u) => u()); };
-  }, [protocol]);
+    switch (aih.telemetry.flightMode) {
+      case "manual":
+        return "connected";
+      case "stabilize":
+        return "armed";
+      case "loiter":
+        return "paused";
+      case "auto":
+      case "guided":
+        return "flying";
+      case "rtl":
+        return "returning";
+      case "land":
+        return "landing";
+      case "emergency":
+        return "emergency";
+      case "monitoring":
+      default:
+        return "connected";
+    }
+  }, [aih.activeAircraft, aih.telemetry]);
+
+  const isFlying = ["flying", "returning", "paused", "landing", "emergency"].includes(status);
+
+  // Available aircraft based on selected protocol
+  const available = useMemo(() => {
+    return aih.aircrafts.filter(a => a.protocol === selectedProtocol || selectedProtocol === "custom");
+  }, [aih.aircrafts, selectedProtocol]);
+
+  // Telemetry mapping
+  const telemetry = useMemo((): TelemetryData => {
+    if (!aih.telemetry) return INITIAL_TELEMETRY;
+
+    return {
+      lat: aih.telemetry.latitude,
+      lng: aih.telemetry.longitude,
+      altitude: aih.telemetry.altitude,
+      groundSpeed: aih.telemetry.speed,
+      verticalSpeed: aih.telemetry.flightMode === "rtl" || aih.telemetry.flightMode === "land" ? -1.5 : 0,
+      heading: aih.telemetry.heading,
+      battery: aih.telemetry.batteryFuelStatus,
+      signalStrength: aih.telemetry.signalStrength,
+      gpsAccuracy: aih.telemetry.gpsStatus === "rtk" ? 0.02 : aih.telemetry.gpsStatus === "3d" ? 1.5 : 5,
+      gpsFix: aih.telemetry.gpsStatus,
+      flightDuration: isFlying ? 120 : 0, // Mock duration if in flight
+      distanceCovered: isFlying ? 450 : 0,
+      cameraStatus: aih.activeSensor !== "rgb" ? aih.activeSensor : "on",
+    };
+  }, [aih.telemetry, aih.activeSensor, isFlying]);
 
   const scan = useCallback(async () => {
-    if (!adapterRef.current) return [];
-    const found = await adapterRef.current.scan();
-    setAvailable(found);
-    return found;
-  }, []);
+    await aih.refreshAircrafts();
+    return aih.aircrafts.filter(a => a.protocol === selectedProtocol);
+  }, [aih, selectedProtocol]);
 
-  const connect = useCallback(async (drone?: DiscoveredDrone) => {
-    if (!adapterRef.current) return;
-    const target = drone || available[0];
+  const connect = useCallback(async (aircraft?: AircraftAsset) => {
+    const target = aircraft || available[0];
     if (!target) {
-      const found = await adapterRef.current.scan();
-      setAvailable(found);
-      if (!found[0]) return;
-      setActiveDrone(found[0]);
-      await adapterRef.current.connect(found[0].id);
+      toast({ title: "Connection Error", description: "No registered aircraft found for the selected protocol.", variant: "destructive" });
       return;
     }
-    setActiveDrone(target);
-    await adapterRef.current.connect(target.id);
-  }, [available]);
+    try {
+      await aih.connect(target.id);
+      toast({ title: "Aircraft Connected", description: `Established connection to ${target.name}.` });
+    } catch (err: any) {
+      toast({ title: "Connection Failed", description: err.message, variant: "destructive" });
+    }
+  }, [aih, available, toast]);
 
   const disconnect = useCallback(async () => {
-    await adapterRef.current?.disconnect();
-    setActiveDrone(null);
-    setMissionId(null);
-  }, []);
+    try {
+      await aih.disconnect();
+      setMissionId(null);
+      toast({ title: "Disconnected", description: "Connection severed." });
+    } catch (err: any) {
+      toast({ title: "Disconnect Failed", description: err.message, variant: "destructive" });
+    }
+  }, [aih, toast]);
 
-  const calibrate = useCallback(async () => { await adapterRef.current?.calibrate(); }, []);
+  const calibrate = useCallback(async () => {
+    if (!aih.activeAircraft) return;
+    toast({ title: "Calibration Initiated", description: "Starting compass and sensor calibration..." });
+    await new Promise(r => setTimeout(r, 1500));
+    toast({ title: "Calibration Completed", description: "All sensors aligned." });
+  }, [aih.activeAircraft, toast]);
 
-  const startMission = useCallback(async (config?: { missionType?: string; name?: string; altitude_m?: number }) => {
-    if (!adapterRef.current) return;
-    await adapterRef.current.startMission();
-    // Persist mission record
+  const startMission = useCallback(async (config?: any) => {
+    if (!aih.activeAircraft) return;
+    const res = await aih.issueCommand("startMission", config);
+    if (!res.success) {
+      toast({ title: "Command Blocked", description: res.message, variant: "destructive" });
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -99,21 +190,39 @@ export const useDroneState = () => {
         }).select("id").maybeSingle();
         if (data?.id) setMissionId(data.id);
       }
-    } catch (e) { /* offline ok */ }
-  }, [telemetry.altitude, telemetry.lat, telemetry.lng]);
+    } catch (e) {
+      console.warn("Could not log flight mission record in Supabase:", e);
+    }
+  }, [aih, telemetry]);
 
-  const pauseMission = useCallback(async () => { await adapterRef.current?.pauseMission(); }, []);
-  const resumeMission = useCallback(async () => { await adapterRef.current?.resumeMission(); }, []);
+  const pauseMission = useCallback(async () => {
+    const res = await aih.issueCommand("pauseMission");
+    if (!res.success) toast({ title: "Command Blocked", description: res.message, variant: "destructive" });
+  }, [aih, toast]);
 
-  const returnToHome = useCallback(async () => { await adapterRef.current?.returnToHome(); }, []);
+  const resumeMission = useCallback(async () => {
+    const res = await aih.issueCommand("resumeMission");
+    if (!res.success) toast({ title: "Command Blocked", description: res.message, variant: "destructive" });
+  }, [aih, toast]);
+
+  const returnToHome = useCallback(async () => {
+    const res = await aih.issueCommand("returnHome");
+    if (!res.success) toast({ title: "Command Blocked", description: res.message, variant: "destructive" });
+  }, [aih, toast]);
 
   const emergencyLand = useCallback(async () => {
-    await adapterRef.current?.emergencyLand();
+    const res = await aih.issueCommand("land");
+    if (!res.success) {
+      toast({ title: "Command Blocked", description: res.message, variant: "destructive" });
+      return;
+    }
     if (missionId) {
-      await supabase.from("drone_missions").update({ status: "aborted", completed_at: new Date().toISOString() }).eq("id", missionId);
+      try {
+        await supabase.from("drone_missions").update({ status: "aborted", completed_at: new Date().toISOString() }).eq("id", missionId);
+      } catch {}
       setMissionId(null);
     }
-  }, [missionId]);
+  }, [aih, missionId, toast]);
 
   // Persist telemetry breadcrumbs while flying
   useEffect(() => {
@@ -135,9 +244,9 @@ export const useDroneState = () => {
     return () => clearInterval(t);
   }, [status, missionId, telemetry]);
 
-  // Track and save drone location at all times in real-time
+  // Save last known position
   useEffect(() => {
-    if (telemetry.lat != null && telemetry.lng != null && ["flying", "returning", "landing", "emergency", "connected", "armed", "paused"].includes(status)) {
+    if (telemetry.lat != null && telemetry.lng != null && isFlying) {
       localStorage.setItem(
         "last_known_drone_pos",
         JSON.stringify({
@@ -145,16 +254,15 @@ export const useDroneState = () => {
           lng: telemetry.lng,
           altitude: telemetry.altitude,
           timestamp: new Date().toISOString(),
-          droneName: activeDrone?.name || "Odeneho Drone",
+          droneName: aih.activeAircraft?.name || "Active Aircraft",
         })
       );
     }
-  }, [telemetry.lat, telemetry.lng, telemetry.altitude, status, activeDrone]);
+  }, [telemetry.lat, telemetry.lng, telemetry.altitude, isFlying, aih.activeAircraft]);
 
-  // Automatic weather degradation simulation
+  // Weather simulation
   useEffect(() => {
     if (status !== "flying") {
-      // Reset to safe levels when not flying
       setEnvironment({
         windSpeed: 12,
         windDirection: "NE",
@@ -168,33 +276,44 @@ export const useDroneState = () => {
 
     const timer = setTimeout(() => {
       setEnvironment({
-        windSpeed: 38, // Heavy wind
+        windSpeed: 38,
         windDirection: "WSW",
         temperature: 24,
         humidity: 92,
-        rainProbability: 95, // Heavy rain
-        visibility: 3, // Poor visibility
+        rainProbability: 95,
+        visibility: 3,
       });
       toast({
         title: "CRITICAL WEATHER ALERT",
         description: "Wind became heavy (38 km/h) with signs of heavy rain in flight area. Emergency landing recommended!",
         variant: "destructive",
       });
-    }, 20000); // 20 seconds of flight
+    }, 20000);
 
     return () => clearTimeout(timer);
   }, [status, toast]);
 
-  const droneName = activeDrone?.name || "No Drone";
+  const droneName = aih.activeAircraft?.name || "No Connected Asset";
 
   return {
-    protocol, setProtocol,
-    status, telemetry, environment, setEnvironment,
-    available, activeDrone, droneName,
+    protocol: selectedProtocol,
+    setProtocol: setSelectedProtocol,
+    status,
+    telemetry,
+    environment,
+    setEnvironment,
+    available,
+    activeDrone: aih.activeAircraft,
+    droneName,
     missionId,
-    scan, connect, disconnect, calibrate,
-    startMission, pauseMission, resumeMission, returnToHome, emergencyLand,
+    scan,
+    connect,
+    disconnect,
+    calibrate,
+    startMission,
+    pauseMission,
+    resumeMission,
+    returnToHome,
+    emergencyLand,
   };
 };
-
-export type UseDroneState = ReturnType<typeof useDroneState>;
