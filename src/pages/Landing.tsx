@@ -35,7 +35,7 @@ export default function Landing() {
     setLoading(true);
     
     // 1. Clean the input
-    const email = loginEmail.trim().toLowerCase();
+    const email = loginEmail.trim();
 
     // 2. Attempt Sign In
     const { error } = await signIn(email, loginPassword);
@@ -47,7 +47,7 @@ export default function Landing() {
       sessionStorage.clear();
       
       const errorMessage = error.message?.toLowerCase() || "";
-      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network") || !navigator.onLine;
+      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network");
 
       if (isNetworkError) {
         toast({
@@ -103,7 +103,7 @@ export default function Landing() {
     const { error } = await signUp(regEmail.trim(), regPassword, regName, extraData);
     if (error) {
       const errorMessage = error.message?.toLowerCase() || "";
-      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network") || !navigator.onLine;
+      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network");
 
       if (isNetworkError) {
         toast({
