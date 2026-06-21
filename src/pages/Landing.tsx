@@ -43,12 +43,12 @@ export default function Landing() {
     if (error) {
       // 3. AUTO-FIX for non-tech users: 
       // If login fails, clear old session data that might be causing the "Inconsistency"
-      localStorage.removeItem('supabase.auth.token');
+      await supabase.auth.signOut();
       sessionStorage.clear();
       
       toast({ 
         title: "Login failed", 
-        description: "Invalid credentials. Please try again or use 'Forgot Password'.", 
+        description: error.message || "Invalid credentials. Please try again or use 'Forgot Password'.", 
         variant: "destructive" 
       });
     }

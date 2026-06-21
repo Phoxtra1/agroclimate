@@ -260,7 +260,7 @@ function AppRoutes() {
       <Route path="/marketplace/supply" element={<BuyerRoute><MarketplaceSupplyPage /></BuyerRoute>} />
       <Route path="/marketplace/orders" element={<BuyerRoute><MarketplaceOrderForm /></BuyerRoute>} />
       <Route path="/marketplace/order-listing" element={<BuyerRoute><MarketplaceOrderListing /></BuyerRoute>} />
-      <Route path="/marketplace/auth" element={<Navigate to="/" replace />} />
+      <Route path="/marketplace/auth" element={<MarketplaceAuth />} />
       <Route path="/marketplace/inbox" element={<BuyerRoute><MarketplaceInbox /></BuyerRoute>} />
 
       {/* Handler workspace */}

@@ -155,9 +155,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (error) throw error;
+        
+        if (!data.session) {
+          throw new Error("Please verify your email address before signing in.");
+        }
 
         // Immediate UI update after successful sign-in
-        updateAuthState(data.session ?? null);
+        updateAuthState(data.session);
 
         return { error: null };
       } catch (error: any) {
