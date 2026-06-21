@@ -24,7 +24,16 @@ export default function MarketplaceAuth() {
     setBusy(true);
     const { error } = await signIn(email.trim().toLowerCase(), password);
     setBusy(false);
-    if (error) toast.error(error.message || "Login failed");
+    if (error) {
+      const errorMessage = error.message?.toLowerCase() || "";
+      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network") || !navigator.onLine;
+
+      if (isNetworkError) {
+        toast.error("Network Connection Error: Please check your internet connection and try again.");
+      } else {
+        toast.error(error.message || "Login failed");
+      }
+    }
     else navigate("/marketplace");
   };
 
@@ -47,7 +56,14 @@ export default function MarketplaceAuth() {
       }
       toast.success("Account created. Check email if verification required, then sign in.");
     } catch (err: any) {
-      toast.error(err.message || "Sign-up failed");
+      const errorMessage = err.message?.toLowerCase() || "";
+      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network") || !navigator.onLine;
+
+      if (isNetworkError) {
+        toast.error("Network Connection Error: Please check your internet connection and try again.");
+      } else {
+        toast.error(err.message || "Sign-up failed");
+      }
     } finally { setBusy(false); }
   };
 

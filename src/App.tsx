@@ -55,13 +55,7 @@ const isPreviewEnvironment = () => {
   );
 };
 
-function LoadingScreen() {
-  return (
-    <div className="flex items-center justify-center min-h-screen text-muted-foreground">
-      Loading...
-    </div>
-  );
-}
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 function AdminAccessFallback() {
   return (
