@@ -30,40 +30,44 @@ export default function Landing() {
   const [droneType, setDroneType] = useState("");
   const [loading, setLoading] = useState(false);
 
-    const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // 1. Clean the input
-    const email = loginEmail.trim();
+    try {
+      // 1. Clean the input
+      const email = loginEmail.trim();
 
-    // 2. Attempt Sign In
-    const { error } = await signIn(email, loginPassword);
+      // 2. Attempt Sign In
+      const { error } = await signIn(email, loginPassword);
 
-    if (error) {
-      // 3. AUTO-FIX for non-tech users: 
-      // If login fails, clear old session data that might be causing the "Inconsistency"
-      await supabase.auth.signOut();
-      sessionStorage.clear();
-      
-      const errorMessage = error.message?.toLowerCase() || "";
-      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network");
+      if (error) {
+        const errorMessage = error.message?.toLowerCase() || "";
+        const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network");
 
-      if (isNetworkError) {
-        toast({
-          title: "Network Connection Error",
-          description: "Please check your internet connection and try again. The server could not be reached.",
-          variant: "destructive"
-        });
-      } else {
-        toast({ 
-          title: "Login failed", 
-          description: error.message || "Invalid credentials. Please try again or use 'Forgot Password'.", 
-          variant: "destructive" 
-        });
+        if (isNetworkError) {
+          toast({
+            title: "Network Connection Error",
+            description: "Please check your internet connection and try again. The server could not be reached.",
+            variant: "destructive"
+          });
+        } else {
+          toast({ 
+            title: "Login failed", 
+            description: error.message || "Invalid credentials. Please try again or use 'Forgot Password'.", 
+            variant: "destructive" 
+          });
+        }
       }
+    } catch (err: any) {
+      toast({
+        title: "Login Error",
+        description: err.message || "An unexpected error occurred during login.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleForgotPassword = async (e: React.MouseEvent) => {
