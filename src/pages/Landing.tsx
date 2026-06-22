@@ -42,22 +42,11 @@ export default function Landing() {
       const { error } = await signIn(email, loginPassword);
 
       if (error) {
-        const errorMessage = error.message?.toLowerCase() || "";
-        const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network");
-
-        if (isNetworkError) {
-          toast({
-            title: "Network Connection Error",
-            description: "Please check your internet connection and try again. The server could not be reached.",
-            variant: "destructive"
-          });
-        } else {
-          toast({ 
-            title: "Login failed", 
-            description: error.message || "Invalid credentials. Please try again or use 'Forgot Password'.", 
-            variant: "destructive" 
-          });
-        }
+        toast({ 
+          title: "Login failed", 
+          description: error.message || "Invalid credentials. Please try again or use 'Forgot Password'.", 
+          variant: "destructive" 
+        });
       }
     } catch (err: any) {
       toast({
@@ -106,18 +95,7 @@ export default function Landing() {
     };
     const { error } = await signUp(regEmail.trim(), regPassword, regName, extraData);
     if (error) {
-      const errorMessage = error.message?.toLowerCase() || "";
-      const isNetworkError = errorMessage.includes("fetch") || errorMessage.includes("network");
-
-      if (isNetworkError) {
-        toast({
-          title: "Network Connection Error",
-          description: "Please check your internet connection and try again.",
-          variant: "destructive"
-        });
-      } else {
-        toast({ title: "Registration failed", description: error.message, variant: "destructive" });
-      }
+      toast({ title: "Registration failed", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Account created!", description: "Please check your email to verify your account." });
     }
