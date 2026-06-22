@@ -149,10 +149,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const cleanEmail = email.trim();
 
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const signInPromise = supabase.auth.signInWithPassword({
           email: cleanEmail,
           password,
         });
+
+        // Add a 15 second timeout to prevent hanging forever
+        const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) => {
+          setTimeout(() => reject(new Error("Connection timed out. The server took too long to respond. Please check your internet or try again later.")), 15000);
+        });
+
+        const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
 
         if (error) throw error;
         
@@ -177,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const cleanEmail = email.trim().toLowerCase();
 
-        const { error } = await supabase.auth.signUp({
+        const signUpPromise = supabase.auth.signUp({
           email: cleanEmail,
           password,
           options: {
@@ -185,6 +192,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             emailRedirectTo: `${window.location.origin}/verify-email`,
           },
         });
+
+        // Add a 15 second timeout
+        const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) => {
+          setTimeout(() => reject(new Error("Connection timed out. The server took too long to respond.")), 15000);
+        });
+
+        const { error } = await Promise.race([signUpPromise, timeoutPromise]);
 
         if (error) throw error;
         return { error: null };

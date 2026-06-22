@@ -34,7 +34,7 @@ export default function MarketplaceAuth() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const signUpPromise = supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
@@ -42,6 +42,12 @@ export default function MarketplaceAuth() {
           emailRedirectTo: `${window.location.origin}/marketplace`,
         },
       });
+
+      const timeoutPromise = new Promise<{ data: any, error: any }>((_, reject) => {
+        setTimeout(() => reject(new Error("Connection timed out. The server took too long to respond.")), 15000);
+      });
+
+      const { data, error } = await Promise.race([signUpPromise, timeoutPromise]);
       if (error) throw error;
       // Best-effort: assign buyer role if session is immediately available
       if (data.user) {

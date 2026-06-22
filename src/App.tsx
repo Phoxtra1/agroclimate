@@ -80,8 +80,8 @@ function useUserRole() {
     if (authLoading) return;
     if (!user) { setRole(null); setRoleLoading(false); return; }
 
-    // Optimization: If role is already resolved to a specialized role, skip recheck on path change
-    if (role && role !== "user") {
+    // Optimization: If role is already resolved, skip recheck on path change
+    if (role) {
       setRoleLoading(false);
       return;
     }
