@@ -109,26 +109,75 @@ export function AircraftRegistry() {
           {loading && <p className="text-xs text-slate-500 font-mono">Loading…</p>}
           {!loading && list.length === 0 && <p className="text-xs text-slate-500 font-mono">No aircraft registered. Add your first above.</p>}
           {list.map((a) => (
-            <div key={a.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-cyan-300 truncate">{a.name}</span>
-                  <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 uppercase">{a.aircraft_type || "drone"}</Badge>
-                  <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400">{a.protocol}</Badge>
-                </div>
-                <div className="text-[10px] font-mono text-slate-500 uppercase mt-1 grid grid-cols-2 gap-x-3">
-                  <span>MODEL: {a.model || "—"}</span>
-                  <span>MFR: {a.manufacturer || "—"}</span>
-                  <span>OPERATOR: {a.operator || "—"}</span>
-                  <span>BASE: {a.home_base || "—"}</span>
-                  <span className="col-span-2 flex items-center gap-1"><History className="h-3 w-3" /> LAST SEEN: {a.last_seen_at ? new Date(a.last_seen_at).toLocaleString() : "never"}</span>
-                </div>
+            <AircraftRow key={a.id} aircraft={a} onRemove={remove} />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AircraftRow({ aircraft: a, onRemove }: { aircraft: Aircraft; onRemove: (id: string) => void }) {
+  const [openHistory, setOpenHistory] = useState(false);
+  const [events, setEvents] = useState<ConnectionEvent[]>([]);
+
+  useEffect(() => {
+    if (!openHistory) return;
+    const refresh = () => {
+      const all = getConnectionEvents({ limit: 100 });
+      setEvents(all.filter((e) => e.aircraftId === a.id || e.aircraftName === a.name || (!e.aircraftId && !e.aircraftName)));
+    };
+    refresh();
+    const on = () => refresh();
+    window.addEventListener("aih:event-log-changed", on);
+    return () => window.removeEventListener("aih:event-log-changed", on);
+  }, [openHistory, a.id, a.name]);
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950 p-3 space-y-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-bold text-cyan-300 truncate">{a.name}</span>
+            <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 uppercase">{a.aircraft_type || "drone"}</Badge>
+            <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400">{a.protocol}</Badge>
+          </div>
+          <div className="text-[10px] font-mono text-slate-500 uppercase mt-1 grid grid-cols-2 gap-x-3">
+            <span>MODEL: {a.model || "—"}</span>
+            <span>MFR: {a.manufacturer || "—"}</span>
+            <span>OPERATOR: {a.operator || "—"}</span>
+            <span>BASE: {a.home_base || "—"}</span>
+            <span className="col-span-2 flex items-center gap-1"><History className="h-3 w-3" /> LAST SEEN: {a.last_seen_at ? new Date(a.last_seen_at).toLocaleString() : "never"}</span>
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Button size="sm" variant="ghost" className="text-red-400 hover:bg-red-950/40" onClick={() => onRemove(a.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="sm" variant="ghost" className="text-cyan-300 hover:bg-slate-800 font-mono text-[10px] h-6 px-2" onClick={() => setOpenHistory((v) => !v)}>
+            {openHistory ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />} HISTORY
+          </Button>
+        </div>
+      </div>
+      {openHistory && (
+        <div className="border-t border-slate-800 pt-2 max-h-56 overflow-y-auto space-y-1">
+          {events.length === 0 && <p className="text-[10px] font-mono text-slate-600 italic">No connect/disconnect/protocol events yet.</p>}
+          {events.map((e) => (
+            <div key={e.id} className="text-[10px] font-mono flex items-start gap-2 border border-slate-800 rounded px-2 py-1 bg-slate-900">
+              <Badge variant="outline" className="text-[8px] border-slate-700 text-slate-300 uppercase">{e.type.replace("_", " ")}</Badge>
+              <div className="min-w-0 flex-1">
+                <p className="text-slate-200 truncate">{e.message}</p>
+                <p className="text-slate-500 text-[9px]">{new Date(e.ts).toLocaleString()} · {e.protocol || "—"} / {e.adapter || "—"}</p>
               </div>
-              <Button size="sm" variant="ghost" className="text-red-400 hover:bg-red-950/40" onClick={() => remove(a.id)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function _Unused() { return null; 
         </CardContent>
       </Card>
     </div>
