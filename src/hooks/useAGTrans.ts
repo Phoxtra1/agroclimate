@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 export interface TransportRequest {
   id: string;
@@ -142,6 +143,26 @@ export function useAGTrans() {
   const [loading, setLoading] = useState(true);
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
 
+  const seenRequestsRef = useRef<Set<string>>(new Set());
+  const initialLoadRef = useRef(true);
+
+  const safeSelect = async <T,>(table: string, opts?: { order?: boolean; limit?: number }) => {
+    try {
+      let q: any = supabase.from(table as any).select("*");
+      if (opts?.order) q = q.order("created_at", { ascending: false });
+      if (opts?.limit) q = q.limit(opts.limit);
+      const { data, error } = await q;
+      if (error) {
+        console.warn(`[AGTrans] ${table} read skipped:`, error.message);
+        return [] as T[];
+      }
+      return (data as unknown as T[]) || [];
+    } catch (err) {
+      console.warn(`[AGTrans] ${table} threw:`, err);
+      return [] as T[];
+    }
+  };
+
   const loadData = async () => {
     if (!user) {
       setLoading(false);
@@ -149,44 +170,39 @@ export function useAGTrans() {
     }
     setLoading(true);
     try {
-      // Fetch current user's driver profile
-      const { data: dp } = await supabase
-        .from("agtrans_drivers")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      try {
+        const { data: dp } = await supabase
+          .from("agtrans_drivers")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (dp) setDriverProfile(dp as unknown as DriverProfile);
+      } catch (e) { console.warn("[AGTrans] driver profile:", e); }
 
-      if (dp) setDriverProfile(dp as unknown as DriverProfile);
+      const reqs = await safeSelect<TransportRequest>("agtrans_requests", { order: true, limit: 100 });
+      setRequests(reqs);
 
-      // Fetch all requests
-      const { data: reqs } = await supabase
-        .from("agtrans_requests")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
+      // Toast on newly-arrived open requests (skip the very first load)
+      if (!initialLoadRef.current) {
+        for (const r of reqs) {
+          if (!seenRequestsRef.current.has(r.id) && r.status === "searching_driver") {
+            toast.info(`New transport request · ${r.product_type}`, {
+              description: `${r.pickup_location} → ${r.delivery_location} · ${r.quantity} ${r.unit}`,
+            });
+          }
+        }
+      }
+      seenRequestsRef.current = new Set(reqs.map((r) => r.id));
+      initialLoadRef.current = false;
 
-      setRequests((reqs as unknown as TransportRequest[]) || []);
+      const drvs = await safeSelect<DriverProfile>("agtrans_drivers");
+      setDrivers(drvs);
 
-      // Fetch all verified drivers
-      const { data: drvs } = await supabase
-        .from("agtrans_drivers")
-        .select("*");
-      setDrivers((drvs as unknown as DriverProfile[]) || []);
+      const jobs = await safeSelect<DeliveryJob>("delivery_jobs", { order: true });
+      setDeliveryJobs(jobs);
 
-      // Fetch delivery jobs
-      const { data: jobs } = await supabase
-        .from("delivery_jobs" as any)
-        .select("*")
-        .order("created_at", { ascending: false });
-      setDeliveryJobs((jobs as unknown as DeliveryJob[]) || []);
-
-      // Fetch tracking sessions
-      const { data: tracks } = await supabase
-        .from("tracking_sessions" as any)
-        .select("*")
-        .order("created_at", { ascending: false });
-      setTrackingSessions((tracks as unknown as TrackingSession[]) || []);
-
+      const tracks = await safeSelect<TrackingSession>("tracking_sessions", { order: true });
+      setTrackingSessions(tracks);
     } catch (err) {
       console.error("Error loading AGTrans data:", err);
     } finally {
@@ -198,10 +214,20 @@ export function useAGTrans() {
     loadData();
 
     const ch = supabase.channel("agtrans-realtime-updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_requests" }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_requests" }, (payload: any) => {
+        // Real-time toast on brand-new insert
+        if (payload?.eventType === "INSERT" && payload?.new) {
+          const r = payload.new;
+          if (r.status === "searching_driver" && !seenRequestsRef.current.has(r.id)) {
+            seenRequestsRef.current.add(r.id);
+            toast.info(`🚚 New transport request · ${r.product_type}`, {
+              description: `${r.pickup_location} → ${r.delivery_location}`,
+            });
+          }
+        }
+        loadData();
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadData)
-      .on("postgres_changes", { event: "*", schema: "public", table: "delivery_jobs" as any }, loadData)
-      .on("postgres_changes", { event: "*", schema: "public", table: "tracking_sessions" as any }, loadData)
       .subscribe();
 
     return () => { supabase.removeChannel(ch); };

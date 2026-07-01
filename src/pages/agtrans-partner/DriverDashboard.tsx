@@ -349,7 +349,7 @@ export default function DriverDashboard() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground uppercase font-bold tracking-wide">Reliability Rating</p>
-                      <p className="text-2xl font-black text-primary">{driverProfile.reliability_score?.toFixed(0) || "100"}%</p>
+                      <p className="text-2xl font-black text-primary">{Number(driverProfile.reliability_score ?? 100).toFixed(0)}%</p>
                     </div>
                   </CardContent>
                 </Card>
