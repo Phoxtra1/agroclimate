@@ -21,16 +21,16 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: "autoUpdate",
 
-      includeAssets: ["favicon.ico", "placeholder.svg"],
+      includeAssets: ["favicon.png", "placeholder.svg"],
 
       manifest: {
-        name: "AgroClimate - Smart Farming Weather",
-        short_name: "AgroClimate",
+        name: "Agyenkwa — by Amineva Global",
+        short_name: "Agyenkwa",
         description:
-          "Localized weather forecasts, crop advisory, and aquaculture monitoring for farmers",
+          "Agriculture & climate intelligence, aerial ops and market linkage for African producers. By Amineva Global.",
 
-        theme_color: "#2d7a4a",
-        background_color: "#f7f4ef",
+        theme_color: "#1f7a3a",
+        background_color: "#f5f0e6",
 
         display: "standalone",
         orientation: "portrait",
