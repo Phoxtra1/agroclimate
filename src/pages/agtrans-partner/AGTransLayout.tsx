@@ -1,8 +1,10 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { Truck, User, MapPin, Activity } from "lucide-react";
+import { User, Activity } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
+import { APP_NAME, APP_VERSION_LABEL } from "@/config/version";
+import AppFooter from "@/components/AppFooter";
 
 export default function AGTransLayout() {
   const { signOut, user } = useAuth();
@@ -14,11 +16,13 @@ export default function AGTransLayout() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
       <aside className="w-64 bg-card border-r flex flex-col fixed h-full z-30">
         <div className="h-16 flex items-center gap-2 px-6 border-b">
-          <img src={aminevaLogo} alt="Logo" className="h-8 w-8 rounded-full" />
-          <span className="font-bold text-lg">AGTrans Partner</span>
+          <img src={agyenkwaIcon} alt={APP_NAME} className="h-9 w-9" />
+          <div className="flex flex-col leading-tight">
+            <span className="font-bold text-base">AGTrans Partner</span>
+            <span className="text-[9px] text-primary font-semibold">{APP_NAME} · {APP_VERSION_LABEL}</span>
+          </div>
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2">
           {navItems.map((item) => {
@@ -47,9 +51,11 @@ export default function AGTransLayout() {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 ml-64 p-6 overflow-y-auto">
-        <Outlet />
+      <main className="flex-1 ml-64 flex flex-col">
+        <div className="flex-1 p-6 overflow-y-auto">
+          <Outlet />
+        </div>
+        <AppFooter />
       </main>
     </div>
   );

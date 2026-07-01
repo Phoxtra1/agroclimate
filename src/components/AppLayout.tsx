@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import aminevaLogo from "@/assets/amineva-logo.png";
-import { APP_VERSION_LABEL } from "@/config/version";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
+import { APP_NAME, APP_VERSION_LABEL } from "@/config/version";
+import AppFooter from "@/components/AppFooter";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
@@ -101,9 +102,9 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
+            <img src={agyenkwaIcon} alt={APP_NAME} className="h-8 w-8" />
             <div className="flex flex-col leading-tight">
-              <span className="font-bold text-sm">AgroClimate</span>
+              <span className="font-bold text-sm">{APP_NAME}</span>
               <span className="text-[9px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
             </div>
           </div>
@@ -113,8 +114,11 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
             </SheetTrigger>
             <SheetContent side="left" className="bg-sidebar w-64 p-4">
               <div className="flex items-center gap-2 mb-6">
-                <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
-                <span className="font-bold text-sidebar-foreground">AgroClimate</span>
+                <img src={agyenkwaIcon} alt={APP_NAME} className="h-8 w-8" />
+                <div className="flex flex-col">
+                  <span className="font-bold text-sidebar-foreground">{APP_NAME}</span>
+                  <span className="text-[9px] text-sidebar-foreground/60">by Amineva Global</span>
+                </div>
               </div>
               <nav className="space-y-1">
                 <NavItems onClick={() => setSheetOpen(false)} isAdmin={isAdmin} />
@@ -128,7 +132,7 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
           </Sheet>
         </header>
 
-        <main className="pb-20">{children}</main>
+        <main className="pb-20">{children}<AppFooter compact /></main>
 
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
           <div className="flex items-center justify-around h-16">
@@ -157,10 +161,10 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
       {!hideSidebar && (
         <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
           <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
-            <img src={aminevaLogo} alt="AgroClimate" className="h-8 w-8 rounded-full" />
+            <img src={agyenkwaIcon} alt={APP_NAME} className="h-9 w-9" />
             <div className="flex flex-col leading-tight">
-              <span className="font-bold text-lg text-sidebar-foreground">AgroClimate</span>
-              <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
+              <span className="font-bold text-lg text-sidebar-foreground">{APP_NAME}</span>
+              <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL} · by Amineva Global</span>
             </div>
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -174,7 +178,10 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
           </div>
         </aside>
       )}
-      <main className={`flex-1 ${!hideSidebar ? "ml-64" : ""}`}>{children}</main>
+      <main className={`flex-1 flex flex-col ${!hideSidebar ? "ml-64" : ""}`}>
+        <div className="flex-1">{children}</div>
+        <AppFooter />
+      </main>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { OdenehoProvider, SummaryRequest, PredictionRequest, ChatMessage, RiskAssessment, AIAlertAdvisory, AIEnvironmentalAssessment } from "./index";
+import type { OdenehoProvider, SummaryRequest, PredictionRequest, ChatMessage, RiskAssessment, AIAlertAdvisory, AIEnvironmentalAssessment, AIAgroRiskAssessment } from "./index";
 import { levelFromScore } from "./index";
 
 // Calls the `odeneho-intelligence` edge function which proxies Lovable AI.

@@ -21,7 +21,7 @@ interface Props {
   otherUserId: string;
   otherName: string;
   /** Which party the *other* user represents. Used to assign buyer_id/supplier_id. */
-  otherRole?: "buyer" | "supplier";
+  otherRole?: "buyer" | "supplier" | "driver";
   relatedSupplyId?: string;   // listing_id when negotiating a supplier listing
   relatedOrderId?: string;    // order_id  when negotiating a buyer order
   onClose?: () => void;

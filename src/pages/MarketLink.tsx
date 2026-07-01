@@ -659,7 +659,7 @@ function AGTransSupplierPanel() {
             <ChatPanel
               otherUserId={chatDriver.user_id}
               otherName={`${chatDriver.full_name} (Driver)`}
-              otherRole="driver"
+              otherRole={"driver" as any}
               defaultUnit="kg"
               defaultPrice={100}
               defaultQuantity={100}

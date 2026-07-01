@@ -48,7 +48,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
     "air_ambulance",
     "cargo",
     "maritime_patrol"
-  ].includes(activeDrone.type);
+  ].includes((activeDrone as any).type || activeDrone.aircraftType || "");
 
   const handleScan = async () => {
     setScanning(true);
@@ -147,7 +147,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
           </div>
           
           <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono">
-            <div className="text-slate-500">TYPE: <span className="text-slate-300 uppercase">{activeDrone?.type.replace("_", " ") || "—"}</span></div>
+            <div className="text-slate-500">TYPE: <span className="text-slate-300 uppercase">{((activeDrone as any)?.type || activeDrone?.aircraftType || "—").toString().replace("_", " ")}</span></div>
             <div className="text-slate-500">BAT/FUEL: <span className="text-slate-300">{telemetry.battery.toFixed(0)}%</span></div>
             <div className="text-slate-500">SIGNAL: <span className="text-slate-300">{telemetry.signalStrength.toFixed(0)}%</span></div>
             <div className="text-slate-500">GPS FIX: <span className="text-slate-300 uppercase">{telemetry.gpsFix}</span></div>
@@ -201,9 +201,9 @@ export function DroneConnectionCenter(props: UseDroneState) {
                 >
                   <div className="flex justify-between items-center">
                     <span className="text-slate-200 truncate font-bold">{d.name}</span>
-                    <span className="text-cyan-500 uppercase text-[8px]">{d.type.replace("_", " ")}</span>
+                    <span className="text-cyan-500 uppercase text-[8px]">{(((d as any).type || d.aircraftType || "drone") as string).replace("_", " ")}</span>
                   </div>
-                  <div className="text-[9px] text-slate-500 truncate">{d.manufacturer} {d.model}</div>
+                  <div className="text-[9px] text-slate-500 truncate">{(d as any).manufacturer || ""} {d.model}</div>
                 </button>
               ))}
             </div>
