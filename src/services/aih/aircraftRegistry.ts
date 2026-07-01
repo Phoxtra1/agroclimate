@@ -185,18 +185,19 @@ export class AircraftRegistryManager {
 
       if (error) throw error;
       if (data) {
+        const row: any = data;
         updatedAsset = {
-          id: data.id,
-          name: data.name,
-          type: data.type as AircraftType,
-          manufacturer: data.manufacturer,
-          model: data.model,
-          protocol: data.protocol as AircraftProtocol,
-          status: data.status,
-          lastConnected: data.last_connected,
-          operator: data.operator,
-          homeBase: data.home_base,
-          metadata: data.metadata,
+          id: row.id,
+          name: row.name,
+          type: row.type as AircraftType,
+          manufacturer: row.manufacturer,
+          model: row.model,
+          protocol: row.protocol as AircraftProtocol,
+          status: row.status,
+          lastConnected: row.last_connected,
+          operator: row.operator,
+          homeBase: row.home_base,
+          metadata: row.metadata,
         };
       }
     } catch (err) {

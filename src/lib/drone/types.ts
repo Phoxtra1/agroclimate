@@ -44,6 +44,8 @@ export interface DiscoveredDrone {
   signal: number;
   firmware?: string;
   aircraftType?: AircraftType;
+  type?: AircraftType;
+  manufacturer?: string;
 }
 
 export interface DroneTelemetry {

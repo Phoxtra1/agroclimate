@@ -366,7 +366,7 @@ export function useAGTrans() {
     const { error: trackError } = await supabase
       .from("tracking_sessions" as any)
       .insert({
-        delivery_job_id: job.id,
+        delivery_job_id: (job as any).id,
         driver_id: user.id,
         driver_name: driverProfile?.full_name || "Verified Driver",
         vehicle_type: driverProfile?.vehicle_type || "Truck",
