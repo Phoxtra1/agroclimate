@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getAdapter } from "@/lib/drone/connectionManager";
 import { ConnectionAdapter, ConnectionDiagnostics, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "@/lib/drone/types";
+import { logConnectionEvent } from "@/lib/drone/eventLog";
 
 
 // Back-compat aliases used by existing components
@@ -45,7 +46,12 @@ export const useDroneState = () => {
     unsubRef.current = [];
     const adapter = getAdapter(protocol);
     adapterRef.current = adapter;
-    unsubRef.current.push(adapter.onStatus(setStatus));
+    logConnectionEvent({ type: "protocol_change", protocol, message: `Protocol switched to ${protocol}` });
+    unsubRef.current.push(adapter.onStatus((s) => {
+      setStatus(s);
+      if (s === "connected") logConnectionEvent({ type: "connect", protocol, aircraftId: activeDrone?.id, aircraftName: activeDrone?.name, message: `Aircraft connected via ${protocol}` });
+      if (s === "disconnected") logConnectionEvent({ type: "disconnect", protocol, aircraftId: activeDrone?.id, aircraftName: activeDrone?.name, message: `Aircraft disconnected` });
+    }));
     unsubRef.current.push(adapter.onTelemetry(setTelemetry));
     if (adapter.onDiagnostics) unsubRef.current.push(adapter.onDiagnostics(setDiagnostics));
     return () => { unsubRef.current.forEach((u) => u()); };

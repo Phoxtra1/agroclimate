@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plane, Plus, Trash2, History } from "lucide-react";
+import { Plane, Plus, Trash2, History, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SUPPORTED_PROTOCOLS } from "@/lib/drone/connectionManager";
+import { getConnectionEvents, type ConnectionEvent } from "@/lib/drone/eventLog";
 
 const AIRCRAFT_TYPES = [
   "drone", "helicopter", "fixed_wing", "air_ambulance", "cargo", "evtol", "survey", "maritime_patrol", "custom",
