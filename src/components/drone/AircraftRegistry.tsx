@@ -177,12 +177,6 @@ function AircraftRow({ aircraft: a, onRemove }: { aircraft: Aircraft; onRemove: 
   );
 }
 
-function _Unused() { return null; 
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 function Field({ label, v, on }: { label: string; v: string; on: (v: string) => void }) {
   return (
