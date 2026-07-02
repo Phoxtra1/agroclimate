@@ -11,9 +11,9 @@ import { weeklyForecast } from "@/data/mock-data";
 import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2, Bot, Plane, Leaf, Shield, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 import { supabase } from "@/integrations/supabase/client";
-import { APP_VERSION_LABEL, WHATS_NEW } from "@/config/version";
+import { APP_VERSION_LABEL, WHATS_NEW, APP_NAME, APP_FOOTER } from "@/config/version";
 
 export default function Landing() {
   const { signIn, signUp } = useAuth();
@@ -121,8 +121,8 @@ export default function Landing() {
             <div>
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
-                  <img src={aminevaLogo} alt="AgroClimate" className="h-10 w-10 rounded-full" />
-                  <h1 className="text-2xl font-extrabold text-foreground">AgroClimate</h1>
+                  <img src={agyenkwaIcon} alt={APP_NAME} className="h-10 w-10 rounded-lg" />
+                  <h1 className="text-2xl font-extrabold text-foreground">{APP_NAME}</h1>
                 </div>
                 <Link to="/marketplace/auth">
                   <Button size="sm" variant="outline" className="gap-1">
@@ -130,7 +130,7 @@ export default function Landing() {
                   </Button>
                 </Link>
               </div>
-              <p className="text-xs font-semibold text-primary mb-2">AGC V1.0</p>
+              <p className="text-xs font-semibold text-primary mb-2">{APP_VERSION_LABEL} · by Amineva Global</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
                 Smart Insights for <span className="text-gradient-primary">Agriculture and Climate</span>
               </h2>
@@ -157,7 +157,7 @@ export default function Landing() {
               <Card className="shadow-xl border-border/50">
                 <CardHeader className="text-center pb-2">
                   <CardTitle className="text-xl">Get Started</CardTitle>
-                  <CardDescription>Join the AgroClimate community</CardDescription>
+                  <CardDescription>Join the {APP_NAME} community</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="login">
@@ -331,8 +331,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="container mx-auto px-4 py-6 text-center text-xs text-muted-foreground">
-        {APP_VERSION_LABEL}
+      <footer className="container mx-auto px-4 py-6 text-center text-xs text-muted-foreground space-y-1">
+        <div>{APP_FOOTER}</div>
+        <div className="font-mono text-[10px] text-primary/80">{APP_VERSION_LABEL}</div>
       </footer>
     </div>
   );
