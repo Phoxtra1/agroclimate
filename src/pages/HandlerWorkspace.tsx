@@ -15,7 +15,7 @@ import {
   Loader2, Camera, MapPin
 } from "lucide-react";
 import { format } from "date-fns";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 export default function HandlerWorkspace() {
   const { user, signOut } = useAuth();
@@ -182,9 +182,9 @@ export default function HandlerWorkspace() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src={aminevaLogo} alt="AgroClimate" className="h-7 w-7 rounded-full" />
+          <img src={agyenkwaIcon} alt="Agyenkwa" className="h-7 w-7 rounded-lg" />
           <div>
-            <span className="font-bold text-sm">AgroClimate</span>
+            <span className="font-bold text-sm">Agyenkwa</span>
             <p className="text-[10px] text-muted-foreground leading-none">Handler Workspace</p>
           </div>
         </div>

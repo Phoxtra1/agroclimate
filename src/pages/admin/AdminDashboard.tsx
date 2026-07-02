@@ -18,7 +18,7 @@ import {
   Shield, Bell, Bot, Plane, Settings, Users,
   ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck
 } from "lucide-react";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type EngineKey =
   | "overview" | "alert" | "ai" | "flight" | "system"

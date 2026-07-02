@@ -95,8 +95,17 @@ export default function DriverDashboard() {
     }
   }, [driverProfile, loading, navigate]);
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading dashboard data...</div>;
-  if (!driverProfile) return null;
+  if (loading) return <div className="flex items-center justify-center min-h-[60vh] text-sm text-muted-foreground">Loading AGTrans Partner dashboard…</div>;
+  if (!driverProfile) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4 p-6">
+      <ShieldAlert className="h-10 w-10 text-primary" />
+      <h2 className="text-xl font-bold">Complete driver onboarding to continue</h2>
+      <p className="text-sm text-muted-foreground max-w-md">
+        We couldn't find your AGTrans driver profile. Finish onboarding to unlock the Driver Hub, receive delivery requests, and go online.
+      </p>
+      <Button onClick={() => navigate("/agtrans-partner/onboarding")}>Start Onboarding</Button>
+    </div>
+  );
 
   // Filter lists
   const availableRequests = requests.filter(r => r.status === "searching_driver" || (r.driver_id === user?.id && r.status === "Pending"));
