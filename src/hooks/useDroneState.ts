@@ -143,10 +143,12 @@ export const useDroneState = () => {
   }, [available, scan]);
 
   const disconnect = useCallback(async () => {
+    const priorId = activeDrone?.id;
     await adapterRef.current?.disconnect();
+    if (priorId) { try { await supabase.from("drones").update({ status: "offline", last_seen_at: new Date().toISOString() }).eq("id", priorId); } catch {} }
     setActiveDrone(null);
     setMissionId(null);
-  }, []);
+  }, [activeDrone]);
 
   const calibrate = useCallback(async () => { await adapterRef.current?.calibrate(); }, []);
 
