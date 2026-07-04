@@ -58,27 +58,89 @@ export const useDroneState = () => {
   }, [protocol]);
 
 
+  // Merge adapter-native discovery with the user's registered aircraft
+  // (public.drones) so any powered-on / registered asset appears in Asset
+  // Discovery regardless of the currently-selected protocol. Registered
+  // entries whose stored protocol matches the active one are prioritised.
+  const fetchRegisteredAircraft = useCallback(async (): Promise<DiscoveredDrone[]> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data } = await supabase
+        .from("drones").select("id,name,model,protocol,aircraft_type,manufacturer,status,last_seen_at")
+        .eq("user_id", user.id).order("last_seen_at", { ascending: false, nullsFirst: false });
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        name: d.name || "Unnamed aircraft",
+        model: d.model || "—",
+        protocol: (d.protocol || "aih") as any,
+        signal: d.status === "offline" ? 0 : 90,
+        firmware: d.manufacturer || undefined,
+        aircraftType: (d.aircraft_type || "drone") as any,
+        type: (d.aircraft_type || "drone") as any,
+        manufacturer: d.manufacturer || undefined,
+      }));
+    } catch { return []; }
+  }, []);
+
+  const mergeAvailable = useCallback((adapterFound: DiscoveredDrone[], registered: DiscoveredDrone[]) => {
+    const seen = new Set<string>();
+    const out: DiscoveredDrone[] = [];
+    // Registered assets first (matching protocol on top)
+    const sortedReg = [...registered].sort((a, b) => Number(b.protocol === protocol) - Number(a.protocol === protocol));
+    for (const d of [...sortedReg, ...adapterFound]) {
+      if (!d || seen.has(d.id)) continue;
+      seen.add(d.id);
+      out.push(d);
+    }
+    return out;
+  }, [protocol]);
+
   const scan = useCallback(async () => {
     if (!adapterRef.current) return [];
-    const found = await adapterRef.current.scan();
-    setAvailable(found);
-    return found;
-  }, []);
+    let adapterFound: DiscoveredDrone[] = [];
+    try { adapterFound = await adapterRef.current.scan(); } catch { /* protocol may need hardware */ }
+    const registered = await fetchRegisteredAircraft();
+    const merged = mergeAvailable(adapterFound, registered);
+    setAvailable(merged);
+    return merged;
+  }, [fetchRegisteredAircraft, mergeAvailable]);
+
+  // Auto-refresh registered assets so newly-registered/powered-on aircraft
+  // appear in Asset Discovery without a manual refresh.
+  useEffect(() => {
+    let stopped = false;
+    const tick = async () => {
+      if (stopped) return;
+      if (status === "disconnected" || status === "connecting") {
+        const registered = await fetchRegisteredAircraft();
+        setAvailable((prev) => mergeAvailable(prev.filter((d) => !registered.find((r) => r.id === d.id)), registered));
+      }
+    };
+    tick();
+    const t = setInterval(tick, 8000);
+    return () => { stopped = true; clearInterval(t); };
+  }, [status, fetchRegisteredAircraft, mergeAvailable]);
 
   const connect = useCallback(async (drone?: DiscoveredDrone) => {
     if (!adapterRef.current) return;
-    const target = drone || available[0];
+    let target = drone || available[0];
     if (!target) {
-      const found = await adapterRef.current.scan();
-      setAvailable(found);
-      if (!found[0]) return;
-      setActiveDrone(found[0]);
-      await adapterRef.current.connect(found[0].id);
-      return;
+      const found = await scan();
+      target = found[0];
+      if (!target) return;
     }
     setActiveDrone(target);
+    // Persist aircraft-type hint so AGNav marker + other views can react in real time
+    try { localStorage.setItem("aih_active_type", (target.type || target.aircraftType || "drone") as string); } catch {}
     await adapterRef.current.connect(target.id);
-  }, [available]);
+    // Best-effort: mark the registered row as connected so admin/registry views update immediately
+    try {
+      await supabase.from("drones").update({
+        status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
+      }).eq("id", target.id);
+    } catch {}
+  }, [available, scan]);
 
   const disconnect = useCallback(async () => {
     await adapterRef.current?.disconnect();
