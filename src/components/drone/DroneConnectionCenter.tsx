@@ -62,8 +62,13 @@ export function DroneConnectionCenter(props: UseDroneState) {
 
   const handleConnect = async () => {
     if (available.length === 0) {
-      toast({ title: "No Assets Discovered", description: "Please register or select a valid aircraft protocol.", variant: "destructive" });
-      return;
+      // Trigger a live discovery pass before failing so newly-registered
+      // or powered-on assets can appear without manual refresh.
+      const found = await scan().catch(() => []);
+      if (!found || found.length === 0) {
+        toast({ title: "No registered aircraft available", description: "Register an aircraft or power one on so it appears in Asset Discovery.", variant: "destructive" });
+        return;
+      }
     }
     try {
       await connect();
@@ -188,7 +193,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
           
           {available.length === 0 ? (
             <p className="text-[10px] font-mono text-slate-600 italic py-1">
-              No registered {protocol} aircraft. Register assets in the Aircraft Registry tab.
+              No registered aircraft currently available. Register an aircraft in the Registry tab or power on a paired asset — it will appear here automatically.
             </p>
           ) : (
             <div className="space-y-1 max-h-24 overflow-y-auto">
