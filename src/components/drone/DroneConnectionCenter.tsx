@@ -193,7 +193,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
           
           {available.length === 0 ? (
             <p className="text-[10px] font-mono text-slate-600 italic py-1">
-              No registered {protocol} aircraft. Register assets in the Aircraft Registry tab.
+              No registered aircraft currently available. Register an aircraft in the Registry tab or power on a paired asset — it will appear here automatically.
             </p>
           ) : (
             <div className="space-y-1 max-h-24 overflow-y-auto">
