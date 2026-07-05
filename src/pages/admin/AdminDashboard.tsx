@@ -16,8 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Bot, Plane, Settings, Users,
-  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck
+  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download
 } from "lucide-react";
+
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type EngineKey =
