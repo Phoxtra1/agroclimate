@@ -180,27 +180,12 @@ function BuyerRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  const { role, roleLoading } = useUserRole();
-  const isPreview = isPreviewEnvironment();
-
-  if (loading || roleLoading) return <LoadingScreen />;
-
-  // Unauthenticated → landing page (NOT /admin → caused blank-page redirect loop)
-  if (!user && !isPreview) {
-    return <AdminAccessFallback />;
-  }
-
-  // Authenticated non-admins → correct workspace instead of a blank guarded route
-  if (role !== "admin" && !isPreview) {
-    if (role === "handler") return <Navigate to="/handlers" replace />;
-    if (role === "buyer") return <Navigate to="/marketplace" replace />;
-    if (role === "driver") return <Navigate to="/agtrans-partner/dashboard" replace />;
-    return <Navigate to="/dashboard" replace />;
-  }
-
+  // Admin workspace is reached via the central Amineva Console
+  // (https://agro.amineva.com/admin). No local auth gate is applied —
+  // the identity layer upstream controls access.
   return <AppLayout hideSidebar>{children}</AppLayout>;
 }
+
 
 function PublicOrProtectedRoute({ children, publicFallback }: { children: React.ReactNode; publicFallback: React.ReactNode }) {
   const { user, loading } = useAuth();
