@@ -55,19 +55,30 @@ function OverviewPanel() {
   const [counts, setCounts] = useState({
     totalUsers: 0, activeUsers: 0, alertsTotal: 0, alertsToday: 0,
     contracts: 0, supply: 0, demand: 0, farms: 0, handlers: 0, sos: 0,
+    alertsDelivered: 0, alertsOpened: 0, alertViews: 0,
   });
   const [byType, setByType] = useState<Record<string, number>>({});
   const [bySeverity, setBySeverity] = useState<Record<string, number>>({});
   const [byFarmerType, setByFarmerType] = useState<Record<string, number>>({});
+  const [dailyActive, setDailyActive] = useState<{ day: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const openRate = counts.alertsDelivered > 0
+    ? Math.round((counts.alertsOpened / counts.alertsDelivered) * 1000) / 10
+    : 0;
 
   const load = async () => {
     setLoading(true);
     const since = rangeStart(range).toISOString();
     const todayStart = rangeStart("today").toISOString();
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const last7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [profiles, alerts, alertsRange, alertsToday, activeWindow, contracts, supply, demand, farms, handlers, sos] = await Promise.all([
+    const [
+      profiles, alerts, alertsRange, alertsToday, activeWindow,
+      contracts, supply, demand, farms, handlers, sos,
+      alertLogsRange, alertViewsRange, dauWindow,
+    ] = await Promise.all([
       supabase.from("profiles").select("id, farmer_type"),
       supabase.from("disaster_alerts").select("id, alert_type, severity, created_at"),
       supabase.from("disaster_alerts").select("id, alert_type, severity").gte("created_at", since),
@@ -79,6 +90,9 @@ function OverviewPanel() {
       supabase.from("farm_qr_codes").select("id"),
       supabase.from("handlers").select("id"),
       supabase.from("disaster_alerts").select("id").eq("alert_type", "sos").gte("created_at", since),
+      supabase.from("alert_logs" as any).select("delivered, opened").gte("delivered_at", since),
+      supabase.from("activity" as any).select("id").eq("action", "view_alert").gte("created_at", since),
+      supabase.from("activity" as any).select("user_id, created_at").eq("action", "login").gte("created_at", last7d),
     ]);
 
     const fType: Record<string, number> = {};
@@ -90,9 +104,26 @@ function OverviewPanel() {
       sv[a.severity || "info"] = (sv[a.severity || "info"] || 0) + 1;
     });
 
+    const logs = (alertLogsRange.data as any[]) || [];
+    const delivered = logs.filter(l => l.delivered).length;
+    const opened = logs.filter(l => l.opened).length;
+
+    // Build 7-day DAU buckets
+    const buckets: Record<string, Set<string>> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
+      buckets[d.toISOString().slice(0, 10)] = new Set<string>();
+    }
+    ((dauWindow.data as any[]) || []).forEach((row: any) => {
+      const day = new Date(row.created_at).toISOString().slice(0, 10);
+      if (buckets[day] && row.user_id) buckets[day].add(row.user_id);
+    });
+    const dau = Object.entries(buckets).map(([day, s]) => ({ day: day.slice(5), count: s.size }));
+
     setByFarmerType(fType);
     setByType(at);
     setBySeverity(sv);
+    setDailyActive(dau);
     setCounts({
       totalUsers: (profiles.data || []).length,
       activeUsers: (activeWindow.data || []).length,
@@ -104,6 +135,9 @@ function OverviewPanel() {
       farms: (farms.data || []).length,
       handlers: (handlers.data || []).length,
       sos: (sos.data || []).length,
+      alertsDelivered: delivered,
+      alertsOpened: opened,
+      alertViews: ((alertViewsRange.data as any[]) || []).length,
     });
     setLoading(false);
   };
@@ -116,10 +150,48 @@ function OverviewPanel() {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "market_contracts" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "market_presence" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_logs" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "activity" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
+
+  const exportCsv = () => {
+    const rows: (string | number)[][] = [
+      ["metric", "value", "range"],
+      ["total_users", counts.totalUsers, "all"],
+      ["active_users_24h", counts.activeUsers, "24h"],
+      ["alerts_today", counts.alertsToday, "today"],
+      ["alerts_total", counts.alertsTotal, "all"],
+      ["alerts_delivered", counts.alertsDelivered, range],
+      ["alerts_opened", counts.alertsOpened, range],
+      ["alert_open_rate_pct", openRate, range],
+      ["alert_views", counts.alertViews, range],
+      ["new_contracts", counts.contracts, range],
+      ["new_supply", counts.supply, range],
+      ["new_orders", counts.demand, range],
+      ["sos_broadcasts", counts.sos, range],
+      ["registered_farms", counts.farms, "all"],
+      ["handlers", counts.handlers, "all"],
+    ];
+    Object.entries(byFarmerType).forEach(([k, v]) => rows.push([`user_type_${k}`, v, "all"]));
+    Object.entries(byType).forEach(([k, v]) => rows.push([`alerts_type_${k}`, v, range]));
+    Object.entries(bySeverity).forEach(([k, v]) => rows.push([`alerts_severity_${k}`, v, range]));
+    dailyActive.forEach(({ day, count }) => rows.push([`dau_${day}`, count, "7d"]));
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `agyenkwa-admin-overview-${range}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const farmers = byFarmerType["smallholder"] || 0 + (byFarmerType["farmer"] || 0);
+  const fishermen = byFarmerType["fisherman"] || byFarmerType["fisher"] || 0;
+  const boatOps = byFarmerType["boat_operator"] || byFarmerType["boat"] || 0;
 
   return (
     <div className="space-y-5">
@@ -129,28 +201,38 @@ function OverviewPanel() {
           <h1 className="text-xl font-bold">Admin Overview</h1>
           {loading && <span className="text-xs text-muted-foreground">refreshing…</span>}
         </div>
-        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 text-xs">
-          {(["today", "7d", "30d"] as Range[]).map((r) => (
-            <button key={r} onClick={() => setRange(r)} className={`px-3 py-1 rounded-md font-medium ${range === r ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
-              {r === "today" ? "Today" : r === "7d" ? "Last 7 days" : "Last 30 days"}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1 text-xs">
+            {(["today", "7d", "30d"] as Range[]).map((r) => (
+              <button key={r} onClick={() => setRange(r)} className={`px-3 py-1 rounded-md font-medium ${range === r ? "bg-card shadow-sm" : "text-muted-foreground"}`}>
+                {r === "today" ? "Today" : r === "7d" ? "Last 7 days" : "Last 30 days"}
+              </button>
+            ))}
+          </div>
+          <Button size="sm" variant="outline" onClick={exportCsv} className="gap-2">
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Metric label="Total Users" value={counts.totalUsers} />
         <Metric label="Active (24h)" value={counts.activeUsers} />
-        <Metric label="Alerts Today" value={counts.alertsToday} />
-        <Metric label="Alerts Total" value={counts.alertsTotal} />
+        <Metric label="Alerts Sent Today" value={counts.alertsToday} />
+        <Metric label={`Alert Open Rate`} value={openRate} suffix="%" />
       </div>
 
       <Card>
         <CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">User breakdown</p>
+          <div className="grid grid-cols-3 gap-2 text-sm mb-3">
+            <div className="border rounded-md p-2"><div className="text-[11px] text-muted-foreground">Farmers</div><div className="font-bold">{farmers}</div></div>
+            <div className="border rounded-md p-2"><div className="text-[11px] text-muted-foreground">Fishermen</div><div className="font-bold">{fishermen}</div></div>
+            <div className="border rounded-md p-2"><div className="text-[11px] text-muted-foreground">Boat Operators</div><div className="font-bold">{boatOps}</div></div>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
             {Object.entries(byFarmerType).map(([k, v]) => (
-              <div key={k} className="border rounded-md p-2"><div className="text-[11px] text-muted-foreground capitalize">{k}</div><div className="font-bold">{v}</div></div>
+              <div key={k} className="border rounded-md p-2"><div className="text-[11px] text-muted-foreground capitalize">{k.replace(/_/g, " ")}</div><div className="font-bold">{v}</div></div>
             ))}
             {Object.keys(byFarmerType).length === 0 && <p className="text-xs text-muted-foreground">No user data yet.</p>}
           </div>
@@ -178,6 +260,39 @@ function OverviewPanel() {
 
       <Card>
         <CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">Alert performance ({range})</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+            <Metric label="Delivered" value={counts.alertsDelivered} small />
+            <Metric label="Opened" value={counts.alertsOpened} small />
+            <Metric label="Open rate" value={openRate} suffix="%" small />
+            <Metric label="Alert views" value={counts.alertViews} small />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">Daily active users (last 7 days)</p>
+          {dailyActive.length === 0 ? <p className="text-xs text-muted-foreground">No activity yet.</p> : (
+            <div className="flex items-end gap-2 h-24">
+              {dailyActive.map((d) => {
+                const max = Math.max(1, ...dailyActive.map(x => x.count));
+                const h = Math.round((d.count / max) * 100);
+                return (
+                  <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-primary/70 rounded-t" style={{ height: `${h}%`, minHeight: 2 }} title={`${d.count} users`} />
+                    <span className="text-[10px] text-muted-foreground">{d.day}</span>
+                    <span className="text-[10px] font-semibold">{d.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">Engagement & activity ({range})</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
             <Metric label="New contracts" value={counts.contracts} small />
@@ -195,14 +310,15 @@ function OverviewPanel() {
   );
 }
 
-function Metric({ label, value, small }: { label: string; value: number; small?: boolean }) {
+function Metric({ label, value, small, suffix }: { label: string; value: number; small?: boolean; suffix?: string }) {
   return (
     <Card><CardContent className="pt-4 text-center">
-      <p className={small ? "text-xl font-bold" : "text-2xl font-bold"}>{value.toLocaleString()}</p>
+      <p className={small ? "text-xl font-bold" : "text-2xl font-bold"}>{value.toLocaleString()}{suffix || ""}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
     </CardContent></Card>
   );
 }
+
 
 /**
  * AdminDashboard
