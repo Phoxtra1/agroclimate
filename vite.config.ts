@@ -24,10 +24,10 @@ export default defineConfig(({ mode }) => ({
       includeAssets: ["favicon.png", "placeholder.svg"],
 
       manifest: {
-        name: "Agyenkwa — by Amineva Global",
+        name: "Agyenkwa",
         short_name: "Agyenkwa",
         description:
-          "Agriculture & climate intelligence, aerial ops and market linkage for African producers. By Amineva Global.",
+          "Agriculture & climate intelligence for African producers. By Amineva Global.",
 
         theme_color: "#1f7a3a",
         background_color: "#f5f0e6",
