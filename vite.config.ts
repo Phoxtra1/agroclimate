@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => ({
         name: "Agyenkwa",
         short_name: "Agyenkwa",
         description:
-          "Agriculture & climate intelligence for African producers. By Amineva Global.",
+          "Agriculture & climate intelligence for African producers",
 
         theme_color: "#1f7a3a",
         background_color: "#f5f0e6",
