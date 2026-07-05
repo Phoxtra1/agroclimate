@@ -106,8 +106,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return;
   }
 
+  // Track sign-in activity for admin analytics
+  if (event === "SIGNED_IN" && currentSession?.user?.id) {
+    void supabase.from("activity" as any).insert({
+      user_id: currentSession.user.id,
+      action: "login",
+      metadata: { at: new Date().toISOString() },
+    }).then(() => {}, () => {});
+  }
+
   updateAuthState(currentSession ?? null);
 });
+
 
     // 2) Restore session on refresh
     void refreshSession();
