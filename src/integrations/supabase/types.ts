@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       agreements: {
         Row: {
           agreed_price: number
@@ -333,6 +357,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      alert_logs: {
+        Row: {
+          alert_id: string | null
+          alert_type: string | null
+          created_at: string
+          delivered: boolean
+          delivered_at: string
+          id: string
+          opened: boolean
+          opened_at: string | null
+          severity: string | null
+          user_id: string | null
+        }
+        Insert: {
+          alert_id?: string | null
+          alert_type?: string | null
+          created_at?: string
+          delivered?: boolean
+          delivered_at?: string
+          id?: string
+          opened?: boolean
+          opened_at?: string | null
+          severity?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          alert_id?: string | null
+          alert_type?: string | null
+          created_at?: string
+          delivered?: boolean
+          delivered_at?: string
+          id?: string
+          opened?: boolean
+          opened_at?: string | null
+          severity?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       buyer_orders: {
         Row: {
