@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
-  Shield, Bell, Bot, Plane, Settings, Users,
+  Shield, Bell, Layers, Plane, Settings, Users,
   ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download
 } from "lucide-react";
 
@@ -28,7 +28,7 @@ type EngineKey =
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
   { key: "alert", label: "Alert Engine", icon: Bell },
-  { key: "ai", label: "Odeneho AI", icon: Bot },
+  { key: "ai", label: "AI Layer", icon: Layers },
   { key: "flight", label: "Flight Advisory", icon: Plane },
   { key: "agnav", label: "AGNav Engine", icon: Anchor },
   { key: "agtrans", label: "AGTrans (Logistics)", icon: Truck },

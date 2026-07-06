@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Users, Save, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import { supabase } from "@/integrations/supabase/client";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 export default function UserSettings() {
   const { toast } = useToast();
@@ -16,31 +17,60 @@ export default function UserSettings() {
 
   const [profile, setProfile] = useState({
     displayName: "Admin",
-    email: user?.email || "admin@amineva.com",
+    email: user?.email || "",
     phone: "",
     bio: "System Manager",
     profileImage: "",
   });
-
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Load profile from DB
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from("profiles")
+        .select("display_name, phone, avatar_url, bio")
+        .eq("user_id", user.id).maybeSingle();
+      setProfile((p) => ({
+        ...p,
+        email: user.email || "",
+        displayName: (data as any)?.display_name || p.displayName,
+        phone: (data as any)?.phone || "",
+        bio: (data as any)?.bio || p.bio,
+        profileImage: (data as any)?.avatar_url || "",
+      }));
+      setLoading(false);
+    })();
+  }, [user]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setProfile(prev => ({ ...prev, profileImage: ev.target?.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setProfile((p) => ({ ...p, profileImage: ev.target?.result as string }));
+    reader.readAsDataURL(file);
   };
 
   const saveProfile = async () => {
+    if (!user) return;
     setSaving(true);
-    // Simulate save
-    await new Promise(r => setTimeout(r, 800));
+    // profiles has display_name, phone; avatar_url + bio may exist — write if present, ignore errors otherwise
+    const payload: any = {
+      user_id: user.id,
+      display_name: profile.displayName,
+      phone: profile.phone,
+    };
+    // opportunistic extras
+    if (profile.profileImage) payload.avatar_url = profile.profileImage;
+    if (profile.bio) payload.bio = profile.bio;
+    const { error } = await supabase.from("profiles").upsert(payload, { onConflict: "user_id" });
     setSaving(false);
-    toast({ title: "Profile updated", description: "Your admin profile has been saved." });
+    toast({
+      title: error ? "Save failed" : "Profile saved permanently",
+      description: error?.message,
+      variant: error ? "destructive" : "default",
+    });
   };
 
   return (
@@ -53,11 +83,10 @@ export default function UserSettings() {
       <Card>
         <CardHeader><CardTitle className="text-base">Profile Information</CardTitle></CardHeader>
         <CardContent className="space-y-6">
-          {/* Avatar */}
           <div className="flex items-center gap-4">
             <div className="relative">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={profile.profileImage || aminevaLogo} />
+                <AvatarImage src={profile.profileImage || agyenkwaIcon} />
                 <AvatarFallback className="text-lg">AD</AvatarFallback>
               </Avatar>
               <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1.5 cursor-pointer hover:bg-primary/90">
@@ -91,7 +120,7 @@ export default function UserSettings() {
             <Textarea value={profile.bio} onChange={e => setProfile({ ...profile, bio: e.target.value })} rows={3} />
           </div>
 
-          <Button onClick={saveProfile} disabled={saving}>
+          <Button onClick={saveProfile} disabled={saving || loading}>
             <Save className="mr-2 h-4 w-4" /> {saving ? "Saving…" : "Save Profile"}
           </Button>
         </CardContent>

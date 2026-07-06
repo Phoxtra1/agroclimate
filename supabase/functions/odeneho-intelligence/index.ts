@@ -6,7 +6,17 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
+const DEFAULT_MODEL = "google/gemini-3-flash-preview";
+const ALLOWED_MODELS = new Set([
+  "google/gemini-3-flash-preview",
+  "google/gemini-2.5-pro",
+  "google/gemini-3.5-flash",
+  "google/gemini-2.5-flash",
+  "openai/gpt-5.5",
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+]);
+const pickModel = (m?: string) => (m && ALLOWED_MODELS.has(m)) ? m : DEFAULT_MODEL;
 
 interface ToolCallPayload {
   action: "summary" | "prediction" | "recommendations" | "risk" | "chat";
@@ -98,7 +108,8 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       return new Response(JSON.stringify({ error: "AI not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const body = (await req.json()) as ToolCallPayload;
+    const body = (await req.json()) as ToolCallPayload & { model?: string };
+    const MODEL = pickModel(body?.model);
 
     if (body.action === "chat") {
       const messages = Array.isArray(body.payload?.messages) ? body.payload.messages : [];

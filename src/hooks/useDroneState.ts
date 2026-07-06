@@ -209,15 +209,40 @@ export const useDroneState = () => {
 
   const droneName = activeDrone?.name || "No Drone";
 
+  // Derived UI connection state driven by real backend events (adapter status +
+  // active mission + telemetry age). Consumed by the Connection Manager UI.
+  let connectionState:
+    | "offline" | "searching" | "aircraft_found" | "connecting" | "connected"
+    | "in_flight" | "recording" | "connection_lost" | "reconnecting" | "mission_complete" = "offline";
+
+  if (status === "disconnected") {
+    connectionState = activeDrone ? "connection_lost" : (available.length > 0 ? "aircraft_found" : "offline");
+  } else if (status === "connecting") {
+    connectionState = activeDrone ? "connecting" : "searching";
+  } else if (status === "connected" || status === "calibrating" || status === "armed") {
+    connectionState = "connected";
+  } else if (status === "flying" || status === "returning" || status === "landing") {
+    connectionState = missionId ? "in_flight" : "connected";
+  } else if (status === "paused") {
+    connectionState = missionId ? "in_flight" : "connected";
+  } else if (status === "emergency") {
+    connectionState = "connection_lost";
+  }
+
   return {
     protocol, setProtocol,
     status, telemetry, environment, setEnvironment,
     available, activeDrone, droneName,
     missionId, diagnostics,
+    connectionState,
     scan, connect, disconnect, calibrate,
     startMission, pauseMission, resumeMission, returnToHome, emergencyLand,
   };
 };
 
 export type UseDroneState = ReturnType<typeof useDroneState>;
+export type ConnectionState =
+  | "offline" | "searching" | "aircraft_found" | "connecting" | "connected"
+  | "in_flight" | "recording" | "connection_lost" | "reconnecting" | "mission_complete";
+
 
