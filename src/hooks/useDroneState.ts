@@ -211,20 +211,23 @@ export const useDroneState = () => {
 
   // Derived UI connection state driven by real backend events (adapter status +
   // active mission + telemetry age). Consumed by the Connection Manager UI.
-  const now = Date.now();
-  const telemetryAge = (telemetry as any)?._ts ? now - (telemetry as any)._ts : null;
   let connectionState:
     | "offline" | "searching" | "aircraft_found" | "connecting" | "connected"
     | "in_flight" | "recording" | "connection_lost" | "reconnecting" | "mission_complete" = "offline";
 
-  if (status === "disconnected") connectionState = available.length > 0 ? "aircraft_found" : "offline";
-  if (status === "connecting") connectionState = activeDrone ? "connecting" : "searching";
-  if (status === "connected") connectionState = "connected";
-  if (status === "flying") connectionState = missionId ? "in_flight" : "connected";
-  if (status === "returning") connectionState = "in_flight";
-  if (status === "landing") connectionState = "in_flight";
-  if (status === "landing") connectionState = missionId ? "in_flight" : "mission_complete";
-  if (!activeDrone && status === "disconnected") connectionState = available.length ? "aircraft_found" : "offline";
+  if (status === "disconnected") {
+    connectionState = activeDrone ? "connection_lost" : (available.length > 0 ? "aircraft_found" : "offline");
+  } else if (status === "connecting") {
+    connectionState = activeDrone ? "connecting" : "searching";
+  } else if (status === "connected" || status === "calibrating" || status === "armed") {
+    connectionState = "connected";
+  } else if (status === "flying" || status === "returning" || status === "landing") {
+    connectionState = missionId ? "in_flight" : "connected";
+  } else if (status === "paused") {
+    connectionState = missionId ? "in_flight" : "connected";
+  } else if (status === "emergency") {
+    connectionState = "connection_lost";
+  }
 
   return {
     protocol, setProtocol,
