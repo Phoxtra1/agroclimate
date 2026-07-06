@@ -223,8 +223,8 @@ export const useDroneState = () => {
   if (status === "flying") connectionState = missionId ? "in_flight" : "connected";
   if (status === "returning") connectionState = "in_flight";
   if (status === "landing") connectionState = "in_flight";
-  if (status === "landed" && missionId === null && activeDrone) connectionState = "mission_complete";
-  if (activeDrone && (status === "disconnected")) connectionState = "connection_lost";
+  if (status === "landing") connectionState = missionId ? "in_flight" : "mission_complete";
+  if (!activeDrone && status === "disconnected") connectionState = available.length ? "aircraft_found" : "offline";
 
   return {
     protocol, setProtocol,
