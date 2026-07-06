@@ -108,7 +108,8 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       return new Response(JSON.stringify({ error: "AI not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const body = (await req.json()) as ToolCallPayload;
+    const body = (await req.json()) as ToolCallPayload & { model?: string };
+    const MODEL = pickModel(body?.model);
 
     if (body.action === "chat") {
       const messages = Array.isArray(body.payload?.messages) ? body.payload.messages : [];

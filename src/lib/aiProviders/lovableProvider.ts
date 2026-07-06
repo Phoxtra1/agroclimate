@@ -2,12 +2,26 @@ import { supabase } from "@/integrations/supabase/client";
 import type { OdenehoProvider, SummaryRequest, PredictionRequest, ChatMessage, RiskAssessment, AIAlertAdvisory, AIEnvironmentalAssessment, AIAgroRiskAssessment } from "./index";
 import { levelFromScore } from "./index";
 
+import { getActiveModelSync } from "@/hooks/useAiModel";
+
 // Calls the `odeneho-intelligence` edge function which proxies Lovable AI.
-// Switching to a future proprietary model only requires swapping this provider.
+// The active model is chosen in the admin AI Layer and forwarded per call so
+// every Agyenkwa component uses the currently selected engine.
 async function call(action: string, payload: unknown): Promise<any> {
+  const model = getActiveModelSync().gatewayModel;
+  const started = performance.now();
   const { data, error } = await supabase.functions.invoke("odeneho-intelligence", {
-    body: { action, payload },
+    body: { action, payload, model },
   });
+  // Fire-and-forget usage log (best effort)
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("ai_usage_logs").insert({
+      user_id: user?.id ?? null, model, action,
+      latency_ms: Math.round(performance.now() - started),
+      ok: !error, error: error?.message?.slice(0, 500) ?? null,
+    });
+  } catch { /* logging is non-critical */ }
   if (error) throw error;
   return data;
 }
