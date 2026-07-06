@@ -1,163 +1,175 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Bot, UploadCloud, Play, PauseCircle, Trash2, Key, Zap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Layers, Activity, Zap, ScrollText, Bell, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAiModel } from "@/hooks/useAiModel";
+import { supabase } from "@/integrations/supabase/client";
 
-interface Dataset {
-  id: string;
-  name: string;
-  records: number;
-  uploadedAt: string;
-}
-
-interface TrainingJob {
-  id: string;
-  model: string;
-  dataset: string;
-  status: "idle" | "running" | "paused" | "completed" | "failed";
-  progress: number;
-  startedAt?: string;
-}
+interface UsageRow { id: string; model: string; action: string; latency_ms: number | null; ok: boolean; error: string | null; created_at: string; }
 
 export default function AIEngine() {
   const { toast } = useToast();
-  const [datasets, setDatasets] = useState<Dataset[]>([
-    { id: "d1", name: "FarmerBehavior_v1.csv", records: 1200, uploadedAt: "2026-02-28" },
-    { id: "d2", name: "CropHealth_v2.csv", records: 5000, uploadedAt: "2026-03-01" },
-  ]);
-  const [jobs, setJobs] = useState<TrainingJob[]>([
-    { id: "j1", model: "Odeneho-Core-v1", dataset: "FarmerBehavior_v1.csv", status: "running", progress: 45, startedAt: "2026-03-02" },
-    { id: "j2", model: "Odeneho-Predictor-v1", dataset: "CropHealth_v2.csv", status: "completed", progress: 100, startedAt: "2026-03-01" },
-  ]);
-  const [newDataset, setNewDataset] = useState({ name: "", records: 0 });
+  const { model, models, setActiveModel, loading } = useAiModel();
 
-  // AI API configuration
-  const [aiApiKey, setAiApiKey] = useState("");
-  const [aiApiEndpoint, setAiApiEndpoint] = useState("");
-  const [aiApiActive, setAiApiActive] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(
-    "You are Odeneho, an AI assistant for AgroClimate. Help farmers with crop management, weather interpretation, livestock care, and agricultural best practices."
-  );
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [predictionsEnabled, setPredictionsEnabled] = useState(true);
+  const [logs, setLogs] = useState<UsageRow[]>([]);
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const [savingToggles, setSavingToggles] = useState(false);
 
-  const uploadDataset = () => {
-    if (!newDataset.name || newDataset.records <= 0) return;
-    setDatasets(prev => [...prev, {
-      id: `d${prev.length + 1}`,
-      name: newDataset.name,
-      records: newDataset.records,
-      uploadedAt: new Date().toISOString().slice(0, 10),
-    }]);
-    setNewDataset({ name: "", records: 0 });
-    toast({ title: "Dataset uploaded" });
+  // Load persisted admin toggles + prompt
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("system_settings").select("key,value")
+        .in("key", ["ai_system_prompt", "ai_notifications_enabled", "ai_predictions_enabled"]);
+      for (const row of data || []) {
+        if (row.key === "ai_system_prompt") setSystemPrompt(((row.value as any)?.text) || "");
+        if (row.key === "ai_notifications_enabled") setNotificationsEnabled(!!((row.value as any)?.enabled));
+        if (row.key === "ai_predictions_enabled") setPredictionsEnabled(!!((row.value as any)?.enabled));
+      }
+    })();
+  }, []);
+
+  // Live usage logs
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.from("ai_usage_logs").select("*").order("created_at", { ascending: false }).limit(50);
+      setLogs((data as any) || []);
+    };
+    load();
+    const ch = supabase.channel("ai_usage_live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_logs" },
+        (payload) => setLogs((p) => [payload.new as any, ...p].slice(0, 50)))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  const savePrompt = async () => {
+    setSavingPrompt(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("system_settings").upsert(
+      { key: "ai_system_prompt", value: { text: systemPrompt } as any, updated_by: user?.id ?? null },
+      { onConflict: "key" }
+    );
+    setSavingPrompt(false);
+    toast({ title: error ? "Save failed" : "System prompt saved", description: error?.message, variant: error ? "destructive" : "default" });
   };
 
-  const startJob = (jobId: string) => setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: "running" } : j));
-  const pauseJob = (jobId: string) => setJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: "paused" } : j));
-  const removeJob = (jobId: string) => setJobs(prev => prev.filter(j => j.id !== jobId));
-
-  const statusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
-    if (status === "running") return "default";
-    if (status === "paused") return "secondary";
-    if (status === "failed") return "destructive";
-    return "outline";
+  const saveToggles = async () => {
+    setSavingToggles(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("system_settings").upsert(
+      { key: "ai_notifications_enabled", value: { enabled: notificationsEnabled } as any, updated_by: user?.id ?? null },
+      { onConflict: "key" }
+    );
+    await supabase.from("system_settings").upsert(
+      { key: "ai_predictions_enabled", value: { enabled: predictionsEnabled } as any, updated_by: user?.id ?? null },
+      { onConflict: "key" }
+    );
+    setSavingToggles(false);
+    toast({ title: "AI controls saved" });
   };
 
-  const saveApiConfig = () => {
-    toast({ title: "AI API configuration saved", description: "Odeneho AI on user dashboard will use this configuration." });
+  const chooseModel = async (id: string) => {
+    const m = models.find((x) => x.id === id);
+    if (!m) return;
+    await setActiveModel(m);
+    toast({ title: `Active AI model: ${m.label}`, description: "Every Agyenkwa component will use this engine on the next request." });
   };
+
+  const totalCalls = logs.length;
+  const ok = logs.filter((l) => l.ok).length;
+  const avgMs = logs.length ? Math.round(logs.reduce((s, l) => s + (l.latency_ms || 0), 0) / logs.length) : 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Bot className="h-6 w-6 text-primary" />
-        <h2 className="text-xl font-bold">Odeneho AI Engine</h2>
+        <Layers className="h-6 w-6 text-primary" />
+        <div>
+          <h2 className="text-xl font-bold">AI Layer — Operations Center</h2>
+          <p className="text-xs text-muted-foreground">Centralized intelligence for Weather, Alerts, Flight Advisory, AgroRisk, Handlers, Inventory, Post-Harvest, Market Link, AGNav & Environmental modules.</p>
+        </div>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Central AI Operations Center. Manage providers, prompts, training datasets and risk-engine controls.
-        Odeneho AI is wired through a provider abstraction (<code>src/lib/aiProviders</code>) and the
-        <code> odeneho-intelligence </code> edge function so swapping to proprietary or local models
-        requires no app changes. Risk Scoring Engine: <code>src/lib/riskEngine.ts</code>.
-      </p>
 
-      {/* AI API Configuration */}
+      {/* Model Manager */}
       <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Key className="h-4 w-4" /> AI API Configuration</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="h-4 w-4" /> Active AI Model</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label>Enable External AI API</Label>
-            <Switch checked={aiApiActive} onCheckedChange={setAiApiActive} />
+          <div className="grid gap-2">
+            <Label>Model powering all Agyenkwa AI components</Label>
+            <Select value={model.id} onValueChange={chooseModel} disabled={loading}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {models.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{models.find((m) => m.id === model.id)?.description}</p>
+            <div className="text-xs text-muted-foreground">Gateway route: <code>{model.gatewayModel}</code></div>
           </div>
-          {aiApiActive && (
-            <>
-              <div className="space-y-2">
-                <Label className="text-xs">API Endpoint</Label>
-                <Input placeholder="https://api.openai.com/v1/chat/completions" value={aiApiEndpoint} onChange={e => setAiApiEndpoint(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">API Key</Label>
-                <Input type="password" placeholder="sk-..." value={aiApiKey} onChange={e => setAiApiKey(e.target.value)} />
-              </div>
-            </>
-          )}
-          <div className="space-y-2">
-            <Label className="text-xs">System Prompt</Label>
-            <Textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={4} />
-          </div>
-          <Button onClick={saveApiConfig}><Zap className="mr-2 h-4 w-4" /> Save Configuration</Button>
         </CardContent>
       </Card>
 
-      {/* Dataset Management */}
+      {/* Usage snapshot */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Dataset Management</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Input placeholder="Dataset name" value={newDataset.name} onChange={e => setNewDataset({ ...newDataset, name: e.target.value })} />
-            <Input type="number" placeholder="Records" value={newDataset.records || ""} onChange={e => setNewDataset({ ...newDataset, records: parseInt(e.target.value) || 0 })} className="sm:w-32" />
-            <Button onClick={uploadDataset}><UploadCloud className="mr-2 h-4 w-4" /> Upload</Button>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> AI Usage (last 50)</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Calls</p><p className="text-xl font-bold">{totalCalls}</p></div>
+            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Success</p><p className="text-xl font-bold">{totalCalls ? Math.round((ok / totalCalls) * 100) : 0}%</p></div>
+            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Avg latency</p><p className="text-xl font-bold">{avgMs} ms</p></div>
           </div>
-          <div className="space-y-2">
-            {datasets.map(ds => (
-              <div key={ds.id} className="flex justify-between p-3 border rounded">
-                <div>
-                  <p className="font-medium text-sm">{ds.name}</p>
-                  <p className="text-xs text-muted-foreground">{ds.records} records · {ds.uploadedAt}</p>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => setDatasets(prev => prev.filter(d => d.id !== ds.id))}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+          <div className="border rounded max-h-72 overflow-auto text-xs">
+            {logs.length === 0 && <p className="p-4 text-muted-foreground">No AI calls yet.</p>}
+            {logs.map((l) => (
+              <div key={l.id} className="flex items-center gap-2 p-2 border-b last:border-0">
+                <Badge variant={l.ok ? "default" : "destructive"} className="text-[10px]">{l.ok ? "OK" : "ERR"}</Badge>
+                <span className="font-mono">{l.action}</span>
+                <span className="text-muted-foreground truncate">{l.model}</span>
+                <span className="ml-auto text-muted-foreground">{l.latency_ms ?? "—"}ms</span>
+                <span className="text-muted-foreground">{new Date(l.created_at).toLocaleTimeString()}</span>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* Training Jobs */}
+      {/* Prompt manager */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Training Jobs</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><ScrollText className="h-4 w-4" /> Global System Prompt</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Guidance appended to every AI call across Agyenkwa modules." />
+          <Button onClick={savePrompt} disabled={savingPrompt}><Save className="mr-2 h-4 w-4" />{savingPrompt ? "Saving…" : "Save Prompt"}</Button>
+        </CardContent>
+      </Card>
+
+      {/* Notification + prediction controls */}
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Bell className="h-4 w-4" /> AI Controls</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          {jobs.map(job => (
-            <div key={job.id} className="p-4 border rounded-lg space-y-2">
-              <div className="flex justify-between items-center">
-                <p className="font-medium text-sm">{job.model}</p>
-                <Badge variant={statusVariant(job.status)}>{job.status.toUpperCase()}</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">Dataset: {job.dataset}</p>
-              <Progress value={job.progress} />
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => startJob(job.id)}><Play className="mr-1 h-3 w-3" /> Start</Button>
-                <Button size="sm" variant="outline" onClick={() => pauseJob(job.id)}><PauseCircle className="mr-1 h-3 w-3" /> Pause</Button>
-                <Button size="sm" variant="ghost" onClick={() => removeJob(job.id)}><Trash2 className="mr-1 h-3 w-3 text-destructive" /></Button>
-              </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Intelligent notifications</Label>
+              <p className="text-xs text-muted-foreground">Allow the AI Layer to trigger cross-module alerts.</p>
             </div>
-          ))}
+            <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Predictive insights</Label>
+              <p className="text-xs text-muted-foreground">Enable forecasts, risk scoring, and correlations.</p>
+            </div>
+            <Switch checked={predictionsEnabled} onCheckedChange={setPredictionsEnabled} />
+          </div>
+          <Button onClick={saveToggles} disabled={savingToggles}><Save className="mr-2 h-4 w-4" />{savingToggles ? "Saving…" : "Save Controls"}</Button>
         </CardContent>
       </Card>
     </div>
