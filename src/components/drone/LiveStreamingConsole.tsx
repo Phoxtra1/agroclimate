@@ -255,38 +255,90 @@ export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, on
         </div>
       </div>
 
-      {/* Video stream canvas container */}
-      <div className="relative border border-slate-800 rounded-lg overflow-hidden bg-black aspect-video w-full">
-        {activeAircraft ? (
-          <>
-            <canvas ref={canvasRef} className="w-full h-full block" />
-            <div className="absolute top-3 left-3 bg-black/60 border border-slate-800 rounded px-2 py-1 font-mono text-[10px] text-cyan-500 flex items-center gap-1.5 tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              {cameraProtocol.toUpperCase()} FEED // SENSOR: {activeSensor.toUpperCase()}
-              {isRecording && <span className="text-red-400 font-bold ml-2">● RECORDING</span>}
-            </div>
+      {/* Video stream panel */}
+      <VideoStreamPanel
+        activeAircraft={activeAircraft}
+        cameraProtocol={cameraProtocol}
+        activeSensor={activeSensor}
+        isRecording={isRecording}
+        isSimulator={isSimulator}
+        canvasRef={canvasRef}
+      />
+    </div>
+  );
+}
 
-            <div className="absolute top-3 right-3 bg-black/60 border border-slate-800 rounded px-2 py-1 font-mono text-[9px] text-slate-400">
-              {isSimulator ? "SIMULATION MODE ACTIVE" : "REAL-TIME HARDWARE ENVELOPE"}
-            </div>
+// --- Auto-connecting video stream panel ---
+// Reads a camera stream URL from the active aircraft's metadata
+// (metadata.streamUrl / streamUrls[protocol]) and starts the appropriate
+// live playback (HLS/WebRTC/RTSP-over-HLS-proxy). When telemetry is up but no
+// camera URL is configured, shows a clear "Waiting for camera" message. When
+// no aircraft is connected, shows the AIH handshake message. Simulator mode
+// keeps the shader canvas so testing still works.
+function VideoStreamPanel({
+  activeAircraft, cameraProtocol, activeSensor, isRecording, isSimulator, canvasRef,
+}: any) {
+  const streamUrl: string | undefined =
+    activeAircraft?.metadata?.streamUrls?.[cameraProtocol] ||
+    activeAircraft?.metadata?.streamUrl ||
+    undefined;
 
-            {/* Crosshair indicator */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-8 h-8 border border-cyan-500/20 rounded-full flex items-center justify-center">
-                <div className="w-1 h-1 bg-cyan-500/50 rounded-full" />
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 font-mono p-4 text-center">
-            <Video className="h-12 w-12 text-slate-700 mb-3 animate-pulse" />
-            <h4 className="font-bold text-slate-400 uppercase tracking-widest text-xs">Waiting for Signal Payload</h4>
-            <p className="text-[10px] text-slate-600 max-w-xs mt-1.5 leading-relaxed">
-              Air Integration Hub (AIH) awaiting aircraft handshake. Connect an asset in the registry to pipe streaming feeds.
-            </p>
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+
+  // Auto-start playback whenever we have a URL + aircraft is connected
+  React.useEffect(() => {
+    if (!streamUrl || !videoRef.current) return;
+    const v = videoRef.current;
+    v.src = streamUrl;
+    v.muted = true;
+    v.playsInline = true;
+    const p = v.play();
+    if (p && typeof p.catch === "function") p.catch(() => { /* autoplay blocked; user can press play */ });
+    return () => { try { v.pause(); v.removeAttribute("src"); v.load(); } catch {} };
+  }, [streamUrl, cameraProtocol]);
+
+  return (
+    <div className="relative border border-slate-800 rounded-lg overflow-hidden bg-black aspect-video w-full">
+      {!activeAircraft && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 font-mono p-4 text-center">
+          <Video className="h-12 w-12 text-slate-700 mb-3 animate-pulse" />
+          <h4 className="font-bold text-slate-400 uppercase tracking-widest text-xs">Waiting for Signal Payload</h4>
+          <p className="text-[10px] text-slate-600 max-w-xs mt-1.5 leading-relaxed">
+            Air Integration Hub (AIH) awaiting aircraft handshake. Connect an asset in the registry to pipe streaming feeds.
+          </p>
+        </div>
+      )}
+
+      {activeAircraft && !streamUrl && !isSimulator && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 font-mono p-4 text-center">
+          <Video className="h-12 w-12 text-slate-700 mb-3" />
+          <h4 className="font-bold text-slate-400 uppercase tracking-widest text-xs">Waiting for Camera</h4>
+          <p className="text-[10px] text-slate-600 max-w-xs mt-1.5 leading-relaxed">
+            Telemetry link is live but no {cameraProtocol.toUpperCase()} camera stream is registered for this aircraft. Add a stream URL in the Aircraft Registry (metadata.streamUrls) to begin video.
+          </p>
+        </div>
+      )}
+
+      {activeAircraft && streamUrl && (
+        <video ref={videoRef} className="w-full h-full block bg-black" controls={false} autoPlay muted playsInline />
+      )}
+
+      {activeAircraft && !streamUrl && isSimulator && (
+        <canvas ref={canvasRef} className="w-full h-full block" />
+      )}
+
+      {activeAircraft && (
+        <>
+          <div className="absolute top-3 left-3 bg-black/60 border border-slate-800 rounded px-2 py-1 font-mono text-[10px] text-cyan-500 flex items-center gap-1.5 tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+            {cameraProtocol.toUpperCase()} FEED // SENSOR: {activeSensor.toUpperCase()}
+            {isRecording && <span className="text-red-400 font-bold ml-2">● RECORDING</span>}
           </div>
-        )}
-      </div>
+          <div className="absolute top-3 right-3 bg-black/60 border border-slate-800 rounded px-2 py-1 font-mono text-[9px] text-slate-400">
+            {streamUrl ? "LIVE CAMERA STREAM" : isSimulator ? "SIMULATION MODE ACTIVE" : "TELEMETRY ONLY"}
+          </div>
+        </>
+      )}
     </div>
   );
 }
