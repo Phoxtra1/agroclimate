@@ -13,6 +13,8 @@ interface Props {
   onToggleRecording?: () => void;
 }
 
+import { useUserPreferences } from "@/hooks/useUserPreferences";
+
 export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, onToggleRecording }: Props) {
   const {
     activeAircraft,
@@ -24,6 +26,22 @@ export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, on
     changeCameraProtocol,
     isSimulator,
   } = useAIH();
+
+  // Persistent per-user streaming preferences (view + retry/backoff)
+  const { prefs, setPref, loading: prefsLoading } = useUserPreferences<{
+    streamingSensor?: CameraSensorSource;
+    streamingProtocol?: StreamProtocol;
+    retryMax?: number;
+    backoffMs?: number;
+  }>();
+
+  // Apply saved prefs on load
+  useEffect(() => {
+    if (prefsLoading) return;
+    if (prefs.streamingSensor && prefs.streamingSensor !== activeSensor) changeSensor(prefs.streamingSensor);
+    if (prefs.streamingProtocol && prefs.streamingProtocol !== cameraProtocol) changeCameraProtocol(prefs.streamingProtocol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsLoading]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -207,7 +225,7 @@ export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, on
         <div className="flex items-center gap-3">
           <div className="space-y-1">
             <label className="text-[9px] font-mono text-slate-500 uppercase">Stream Protocol</label>
-            <Select value={cameraProtocol} onValueChange={(v: StreamProtocol) => changeCameraProtocol(v)}>
+            <Select value={cameraProtocol} onValueChange={(v: StreamProtocol) => { changeCameraProtocol(v); setPref("streamingProtocol", v); }}>
               <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-300 font-mono h-8 text-xs w-48">
                 <SelectValue />
               </SelectTrigger>
@@ -235,7 +253,7 @@ export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, on
                         ? "bg-cyan-950/40 text-cyan-400 border-cyan-600" 
                         : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
                     }`}
-                    onClick={() => changeSensor(s.value)}
+                    onClick={() => { changeSensor(s.value); setPref("streamingSensor", s.value); }}
                   >
                     <Icon className="h-3.5 w-3.5 mr-1" /> {s.label.split(" ")[0]}
                   </Button>

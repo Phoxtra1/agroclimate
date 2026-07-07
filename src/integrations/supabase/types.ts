@@ -1913,6 +1913,36 @@ export type Database = {
           },
         ]
       }
+      user_alert_events: {
+        Row: {
+          alert_id: string
+          alert_type: string | null
+          created_at: string
+          event: string
+          id: string
+          severity: string | null
+          user_id: string
+        }
+        Insert: {
+          alert_id: string
+          alert_type?: string | null
+          created_at?: string
+          event?: string
+          id?: string
+          severity?: string | null
+          user_id: string
+        }
+        Update: {
+          alert_id?: string
+          alert_type?: string | null
+          created_at?: string
+          event?: string
+          id?: string
+          severity?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_alerts: {
         Row: {
           alert_id: string
@@ -1943,6 +1973,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          created_at: string
+          prefs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          prefs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          prefs?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1960,6 +2011,51 @@ export type Database = {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          activated_at: string | null
+          amount_local: number | null
+          amount_usd: number | null
+          created_at: string
+          currency: string | null
+          expires_at: string | null
+          id: string
+          paystack_reference: string | null
+          plan: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          amount_local?: number | null
+          amount_usd?: number | null
+          created_at?: string
+          currency?: string | null
+          expires_at?: string | null
+          id?: string
+          paystack_reference?: string | null
+          plan?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          amount_local?: number | null
+          amount_usd?: number | null
+          created_at?: string
+          currency?: string | null
+          expires_at?: string | null
+          id?: string
+          paystack_reference?: string | null
+          plan?: string
+          status?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

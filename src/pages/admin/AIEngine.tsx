@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Activity, Zap, ScrollText, Bell, Save } from "lucide-react";
+import { Layers, Activity, Zap, ScrollText, Bell, Save, Download, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAiModel } from "@/hooks/useAiModel";
 import { supabase } from "@/integrations/supabase/client";
@@ -118,29 +119,9 @@ export default function AIEngine() {
         </CardContent>
       </Card>
 
-      {/* Usage snapshot */}
-      <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> AI Usage (last 50)</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Calls</p><p className="text-xl font-bold">{totalCalls}</p></div>
-            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Success</p><p className="text-xl font-bold">{totalCalls ? Math.round((ok / totalCalls) * 100) : 0}%</p></div>
-            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Avg latency</p><p className="text-xl font-bold">{avgMs} ms</p></div>
-          </div>
-          <div className="border rounded max-h-72 overflow-auto text-xs">
-            {logs.length === 0 && <p className="p-4 text-muted-foreground">No AI calls yet.</p>}
-            {logs.map((l) => (
-              <div key={l.id} className="flex items-center gap-2 p-2 border-b last:border-0">
-                <Badge variant={l.ok ? "default" : "destructive"} className="text-[10px]">{l.ok ? "OK" : "ERR"}</Badge>
-                <span className="font-mono">{l.action}</span>
-                <span className="text-muted-foreground truncate">{l.model}</span>
-                <span className="ml-auto text-muted-foreground">{l.latency_ms ?? "—"}ms</span>
-                <span className="text-muted-foreground">{new Date(l.created_at).toLocaleTimeString()}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Usage snapshot with filters + CSV export */}
+      <AiLogsPanel logs={logs} models={models} totalCalls={totalCalls} ok={ok} avgMs={avgMs} />
+
 
       {/* Prompt manager */}
       <Card>
@@ -175,3 +156,113 @@ export default function AIEngine() {
     </div>
   );
 }
+
+function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]; models: any[]; totalCalls: number; ok: number; avgMs: number; }) {
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
+  const [action, setAction] = useState<string>("all");
+  const [modelFilter, setModelFilter] = useState<string>("all");
+  const [status, setStatus] = useState<string>("all");
+
+  const actions = useMemo(() => Array.from(new Set(logs.map(l => l.action))).sort(), [logs]);
+  const modelIds = useMemo(() => Array.from(new Set(logs.map(l => l.model))).sort(), [logs]);
+
+  const filtered = useMemo(() => logs.filter(l => {
+    const t = new Date(l.created_at).getTime();
+    if (from && t < new Date(from).getTime()) return false;
+    if (to && t > new Date(to).getTime() + 86400000) return false;
+    if (action !== "all" && l.action !== action) return false;
+    if (modelFilter !== "all" && l.model !== modelFilter) return false;
+    if (status === "ok" && !l.ok) return false;
+    if (status === "err" && l.ok) return false;
+    return true;
+  }), [logs, from, to, action, modelFilter, status]);
+
+  const exportCsv = () => {
+    const rows = [["timestamp", "action", "model", "status", "latency_ms", "error"]];
+    filtered.forEach(l => rows.push([
+      l.created_at, l.action, l.model, l.ok ? "ok" : "err",
+      String(l.latency_ms ?? ""), (l.error || "").replace(/\n/g, " "),
+    ]));
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `agyenkwa-ai-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const fok = filtered.filter(l => l.ok).length;
+  const favg = filtered.length ? Math.round(filtered.reduce((s, l) => s + (l.latency_ms || 0), 0) / filtered.length) : 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Activity className="h-4 w-4" /> AI Usage Logs
+          <Badge variant="outline" className="ml-2 text-[10px]">{filtered.length} / {logs.length}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div><Label className="text-[10px]">From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="h-8" /></div>
+          <div><Label className="text-[10px]">To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="h-8" /></div>
+          <div>
+            <Label className="text-[10px]">Component / Action</Label>
+            <Select value={action} onValueChange={setAction}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {actions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px]">Model</Label>
+            <Select value={modelFilter} onValueChange={setModelFilter}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {modelIds.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-[10px]">Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="ok">OK</SelectItem>
+                <SelectItem value="err">Errors</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button size="sm" variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-1" /> CSV</Button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="p-2 rounded border text-center"><p className="text-[10px] text-muted-foreground">Filtered calls</p><p className="text-lg font-bold">{filtered.length}</p></div>
+          <div className="p-2 rounded border text-center"><p className="text-[10px] text-muted-foreground">Success</p><p className="text-lg font-bold">{filtered.length ? Math.round((fok / filtered.length) * 100) : 0}%</p></div>
+          <div className="p-2 rounded border text-center"><p className="text-[10px] text-muted-foreground">Avg latency</p><p className="text-lg font-bold">{favg} ms</p></div>
+        </div>
+
+        <div className="border rounded max-h-80 overflow-auto text-xs">
+          {filtered.length === 0 && <p className="p-4 text-muted-foreground">No AI calls match the filters.</p>}
+          {filtered.map((l) => (
+            <div key={l.id} className="flex items-center gap-2 p-2 border-b last:border-0">
+              <Badge variant={l.ok ? "default" : "destructive"} className="text-[10px]">{l.ok ? "OK" : "ERR"}</Badge>
+              <span className="font-mono">{l.action}</span>
+              <span className="text-muted-foreground truncate">{l.model}</span>
+              <span className="ml-auto text-muted-foreground">{l.latency_ms ?? "—"}ms</span>
+              <span className="text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+

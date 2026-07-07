@@ -4,8 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Trash2, Ban, CheckCircle, Settings, UserPlus, Search, Activity } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Trash2, Ban, CheckCircle, Settings, UserPlus, Search, Activity, Rocket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePilotMode } from "@/hooks/usePilotMode";
 
 interface ProfileRow {
   id: string;
@@ -80,6 +83,9 @@ export default function SystemControl() {
         <h2 className="text-xl font-bold">System Control — User Management</h2>
       </div>
 
+      <PilotModeCard />
+
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{users.length}</p><p className="text-xs text-muted-foreground">Total Users</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{newThisWeek}</p><p className="text-xs text-muted-foreground">New This Week</p></CardContent></Card>
@@ -143,3 +149,34 @@ export default function SystemControl() {
     </div>
   );
 }
+
+function PilotModeCard() {
+  const { enabled, loading, setPilotMode } = usePilotMode();
+  const { toast } = useToast();
+  return (
+    <Card className={enabled ? "border-primary" : ""}>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Rocket className="h-4 w-4 text-primary" /> Global Pilot Mode
+          {enabled && <Badge className="ml-2">ACTIVE</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="text-sm text-muted-foreground max-w-xl">
+            When ON, subscription checks, paywalls and pay-as-you-go deductions are bypassed platform-wide. Use for investor demos, presentations, testing and maintenance. When OFF, Commercial Mode is active automatically.
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <Switch
+              checked={enabled}
+              disabled={loading}
+              onCheckedChange={async (v) => { await setPilotMode(v); toast({ title: `Global Pilot Mode ${v ? "ON" : "OFF"}` }); }}
+            />
+            <Label className="text-[10px] text-muted-foreground">{enabled ? "Commercial checks bypassed" : "Commercial Mode enforced"}</Label>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
