@@ -447,6 +447,27 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   const visibleAlerts = enrichedAlerts.filter((a) => !a.isDismissed);
   const unreadAlerts = visibleAlerts.filter((a) => !a.isRead);
 
+  // Record real-time per-user delivered events (one row per alert per day)
+  useEffect(() => {
+    if (!user || visibleAlerts.length === 0) return;
+    const dk = dateKey();
+    const seenKey = `agy_alert_delivered_${user.id}_${dk}`;
+    const seen: string[] = JSON.parse(localStorage.getItem(seenKey) || "[]");
+    const newOnes = visibleAlerts.filter(a => !seen.includes(a.id));
+    if (newOnes.length === 0) return;
+    const rows = newOnes.map(a => ({
+      user_id: user.id,
+      alert_id: a.id,
+      alert_type: a.type,
+      severity: a.type === "danger" ? "critical" : a.type === "warning" ? "warning" : "info",
+      event: "delivered",
+    }));
+    supabase.from("user_alert_events").insert(rows).then(() => {
+      localStorage.setItem(seenKey, JSON.stringify([...seen, ...newOnes.map(a => a.id)]));
+    });
+  }, [user, visibleAlerts.map(a => a.id).join(",")]);
+
+
   const upsertState = useCallback(async (alertId: string, updates: Partial<UserAlertState>) => {
     if (!user) return;
     const existing = alertStates.find(s => s.alert_id === alertId);
@@ -469,7 +490,17 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
     });
   }, [user, alertStates]);
 
-  const markRead = useCallback((alertId: string) => upsertState(alertId, { is_read: true }), [upsertState]);
+  const markRead = useCallback(async (alertId: string) => {
+    await upsertState(alertId, { is_read: true });
+    if (user) {
+      const a = visibleAlerts.find(x => x.id === alertId);
+      await supabase.from("user_alert_events").insert({
+        user_id: user.id, alert_id: alertId, alert_type: a?.type,
+        severity: a?.type === "danger" ? "critical" : a?.type === "warning" ? "warning" : "info",
+        event: "opened",
+      });
+    }
+  }, [upsertState, user, visibleAlerts]);
   const dismiss = useCallback((alertId: string) => upsertState(alertId, { is_dismissed: true }), [upsertState]);
   const markUnread = useCallback((alertId: string) => upsertState(alertId, { is_read: false }), [upsertState]);
 
