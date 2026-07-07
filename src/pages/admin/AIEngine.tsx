@@ -119,29 +119,9 @@ export default function AIEngine() {
         </CardContent>
       </Card>
 
-      {/* Usage snapshot */}
-      <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" /> AI Usage (last 50)</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Calls</p><p className="text-xl font-bold">{totalCalls}</p></div>
-            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Success</p><p className="text-xl font-bold">{totalCalls ? Math.round((ok / totalCalls) * 100) : 0}%</p></div>
-            <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Avg latency</p><p className="text-xl font-bold">{avgMs} ms</p></div>
-          </div>
-          <div className="border rounded max-h-72 overflow-auto text-xs">
-            {logs.length === 0 && <p className="p-4 text-muted-foreground">No AI calls yet.</p>}
-            {logs.map((l) => (
-              <div key={l.id} className="flex items-center gap-2 p-2 border-b last:border-0">
-                <Badge variant={l.ok ? "default" : "destructive"} className="text-[10px]">{l.ok ? "OK" : "ERR"}</Badge>
-                <span className="font-mono">{l.action}</span>
-                <span className="text-muted-foreground truncate">{l.model}</span>
-                <span className="ml-auto text-muted-foreground">{l.latency_ms ?? "—"}ms</span>
-                <span className="text-muted-foreground">{new Date(l.created_at).toLocaleTimeString()}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Usage snapshot with filters + CSV export */}
+      <AiLogsPanel logs={logs} models={models} totalCalls={totalCalls} ok={ok} avgMs={avgMs} />
+
 
       {/* Prompt manager */}
       <Card>
