@@ -7,7 +7,8 @@ export function usePilotMode() {
     return localStorage.getItem("global_pilot_enabled") === "true";
   });
   const [paywallDisabled, setPaywallDisabled] = useState<boolean>(() => {
-    return localStorage.getItem("global_pilot_paywall_disabled") === "true";
+    const val = localStorage.getItem("global_pilot_paywall_disabled");
+    return val === null ? true : val === "true";
   });
   const [loading, setLoading] = useState(true);
 
@@ -22,7 +23,7 @@ export function usePilotMode() {
       if (!error && data) {
         const val = data.value as any;
         const isEnabled = !!val?.enabled;
-        const isPaywallDisabled = !!val?.paywall_disabled;
+        const isPaywallDisabled = val?.paywall_disabled !== false;
         
         setEnabled(isEnabled);
         setPaywallDisabled(isPaywallDisabled);
@@ -46,7 +47,7 @@ export function usePilotMode() {
         (payload: any) => {
           const val = payload.new?.value as any;
           const isEnabled = !!val?.enabled;
-          const isPaywallDisabled = !!val?.paywall_disabled;
+          const isPaywallDisabled = val?.paywall_disabled !== false;
           
           setEnabled(isEnabled);
           setPaywallDisabled(isPaywallDisabled);

@@ -162,10 +162,8 @@ function PilotModeCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="text-sm text-muted-foreground max-w-xl">
-            When ON, you can toggle the system-wide paywall ON or OFF for piloting and presentations. When OFF, Commercial Mode (paywall check) is active and enforced automatically.
-          </div>
+        <div className="flex items-center justify-between gap-4">
+          <Label className="text-sm font-medium">Enable Global Pilot Mode</Label>
           <div className="flex flex-col items-end gap-1">
             <Switch
               checked={enabled}
@@ -180,13 +178,8 @@ function PilotModeCard() {
         </div>
 
         {enabled && (
-          <div className="pt-4 border-t border-dashed flex items-start justify-between gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="space-y-0.5 max-w-xl">
-              <Label className="text-sm font-medium">Bypass Paywall (Free Access)</Label>
-              <p className="text-xs text-muted-foreground">
-                When active, all premium modules are unlocked for all users. When inactive, subscription plans are enforced even during the pilot.
-              </p>
-            </div>
+          <div className="pt-4 border-t border-dashed flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+            <Label className="text-sm font-medium">Bypass Paywall (Free Access)</Label>
             <div className="flex flex-col items-end gap-1">
               <Switch
                 checked={paywallDisabled}
