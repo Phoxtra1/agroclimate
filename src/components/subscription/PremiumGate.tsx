@@ -16,13 +16,13 @@ interface Props {
  * Global Pilot Mode bypasses all checks. Uses a single reusable dialog.
  */
 export function PremiumGate({ component, children }: Props) {
-  const { enabled: pilot, loading: pilotLoading } = usePilotMode();
+  const { enabled: pilot, paywallDisabled, loading: pilotLoading } = usePilotMode();
   const { hasAccess, loading: subLoading } = useSubscription();
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const allowed = pilot || hasAccess(component);
+  const allowed = (pilot && paywallDisabled) || hasAccess(component);
 
   useEffect(() => {
     if (!pilotLoading && !subLoading && !allowed) setOpen(true);

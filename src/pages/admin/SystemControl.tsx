@@ -151,7 +151,7 @@ export default function SystemControl() {
 }
 
 function PilotModeCard() {
-  const { enabled, loading, setPilotMode } = usePilotMode();
+  const { enabled, paywallDisabled, loading, setPilotMode } = usePilotMode();
   const { toast } = useToast();
   return (
     <Card className={enabled ? "border-primary" : ""}>
@@ -161,20 +161,48 @@ function PilotModeCard() {
           {enabled && <Badge className="ml-2">ACTIVE</Badge>}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="text-sm text-muted-foreground max-w-xl">
-            When ON, subscription checks, paywalls and pay-as-you-go deductions are bypassed platform-wide. Use for investor demos, presentations, testing and maintenance. When OFF, Commercial Mode is active automatically.
+            When ON, you can toggle the system-wide paywall ON or OFF for piloting and presentations. When OFF, Commercial Mode (paywall check) is active and enforced automatically.
           </div>
           <div className="flex flex-col items-end gap-1">
             <Switch
               checked={enabled}
               disabled={loading}
-              onCheckedChange={async (v) => { await setPilotMode(v); toast({ title: `Global Pilot Mode ${v ? "ON" : "OFF"}` }); }}
+              onCheckedChange={async (v) => { 
+                await setPilotMode(v, v); 
+                toast({ title: `Global Pilot Mode ${v ? "ON" : "OFF"}` }); 
+              }}
             />
-            <Label className="text-[10px] text-muted-foreground">{enabled ? "Commercial checks bypassed" : "Commercial Mode enforced"}</Label>
+            <Label className="text-[10px] text-muted-foreground">{enabled ? "Pilot mode active" : "Commercial Mode enforced"}</Label>
           </div>
         </div>
+
+        {enabled && (
+          <div className="pt-4 border-t border-dashed flex items-start justify-between gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="space-y-0.5 max-w-xl">
+              <Label className="text-sm font-medium">Bypass Paywall (Free Access)</Label>
+              <p className="text-xs text-muted-foreground">
+                When active, all premium modules are unlocked for all users. When inactive, subscription plans are enforced even during the pilot.
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <Switch
+                checked={paywallDisabled}
+                disabled={loading}
+                onCheckedChange={async (v) => { 
+                  await setPilotMode(enabled, v); 
+                  toast({ 
+                    title: v ? "Paywall Bypassed" : "Paywall Enforced",
+                    description: v ? "All premium modules unlocked" : "Subscription gates are now active"
+                  }); 
+                }}
+              />
+              <Label className="text-[10px] text-muted-foreground">{paywallDisabled ? "Paywall Switched OFF" : "Paywall Switched ON"}</Label>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
