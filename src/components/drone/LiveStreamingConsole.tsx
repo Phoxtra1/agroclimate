@@ -13,6 +13,8 @@ interface Props {
   onToggleRecording?: () => void;
 }
 
+import { useUserPreferences } from "@/hooks/useUserPreferences";
+
 export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, onToggleRecording }: Props) {
   const {
     activeAircraft,
@@ -24,6 +26,22 @@ export function LiveStreamingConsole({ isRecording = false, onTakeScreenshot, on
     changeCameraProtocol,
     isSimulator,
   } = useAIH();
+
+  // Persistent per-user streaming preferences (view + retry/backoff)
+  const { prefs, setPref, loading: prefsLoading } = useUserPreferences<{
+    streamingSensor?: CameraSensorSource;
+    streamingProtocol?: StreamProtocol;
+    retryMax?: number;
+    backoffMs?: number;
+  }>();
+
+  // Apply saved prefs on load
+  useEffect(() => {
+    if (prefsLoading) return;
+    if (prefs.streamingSensor && prefs.streamingSensor !== activeSensor) changeSensor(prefs.streamingSensor);
+    if (prefs.streamingProtocol && prefs.streamingProtocol !== cameraProtocol) changeCameraProtocol(prefs.streamingProtocol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefsLoading]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
