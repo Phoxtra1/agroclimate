@@ -41,6 +41,9 @@ import AGTransLayout from "./pages/agtrans-partner/AGTransLayout";
 import DriverOnboarding from "./pages/agtrans-partner/Onboarding";
 import DriverDashboard from "./pages/agtrans-partner/DriverDashboard";
 import TripPage from "./pages/agtrans-partner/TripPage";
+import Subscription from "./pages/Subscription";
+import SubscriptionVerify from "./pages/SubscriptionVerify";
+import { PremiumGate } from "@/components/subscription/PremiumGate";
 import { installOfflineSync } from "@/lib/offlineQueue";
 
 const queryClient = new QueryClient();
@@ -263,16 +266,18 @@ function AppRoutes() {
       <Route path="/aquaculture" element={<ProtectedRoute><Aquaculture /></ProtectedRoute>} />
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      <Route path="/odeneho" element={<ProtectedRoute><OdenehoAI /></ProtectedRoute>} />
-      <Route path="/flight-advisory" element={<ProtectedRoute><DroneAdvisory /></ProtectedRoute>} />
-      <Route path="/inventory" element={<ProtectedRoute><AgroInventory /></ProtectedRoute>} />
+      <Route path="/odeneho" element={<ProtectedRoute><PremiumGate component="ai_assistant"><OdenehoAI /></PremiumGate></ProtectedRoute>} />
+      <Route path="/flight-advisory" element={<ProtectedRoute><PremiumGate component="flight_advisory"><DroneAdvisory /></PremiumGate></ProtectedRoute>} />
+      <Route path="/inventory" element={<ProtectedRoute><PremiumGate component="agro_inventory"><AgroInventory /></PremiumGate></ProtectedRoute>} />
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
       <Route path="/farm-business" element={<ProtectedRoute><FarmBusinessHub /></ProtectedRoute>} />
-      <Route path="/handler-management" element={<ProtectedRoute><HandlerManagement /></ProtectedRoute>} />
-      <Route path="/post-harvest" element={<ProtectedRoute><PostHarvestTracker /></ProtectedRoute>} />
-      <Route path="/market-link" element={<ProtectedRoute><MarketLink /></ProtectedRoute>} />
-      <Route path="/agnav" element={<ProtectedRoute><AGNav /></ProtectedRoute>} />
+      <Route path="/handler-management" element={<ProtectedRoute><PremiumGate component="handler"><HandlerManagement /></PremiumGate></ProtectedRoute>} />
+      <Route path="/post-harvest" element={<ProtectedRoute><PremiumGate component="post_harvest"><PostHarvestTracker /></PremiumGate></ProtectedRoute>} />
+      <Route path="/market-link" element={<ProtectedRoute><PremiumGate component="market_link"><MarketLink /></PremiumGate></ProtectedRoute>} />
+      <Route path="/agnav" element={<ProtectedRoute><PremiumGate component="agnav"><AGNav /></PremiumGate></ProtectedRoute>} />
+      <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
+      <Route path="/subscription/verify" element={<SubscriptionVerify />} />
       <Route
         path="/learning"
         element={
