@@ -77,7 +77,7 @@ function OverviewPanel() {
     const [
       profiles, alerts, alertsRange, alertsToday, activeWindow,
       contracts, supply, demand, farms, handlers, sos,
-      alertLogsRange, alertViewsRange, dauWindow,
+      uaeDelivered, uaeOpened, dauWindow,
     ] = await Promise.all([
       supabase.from("profiles").select("id, farmer_type"),
       supabase.from("disaster_alerts").select("id, alert_type, severity, created_at"),
@@ -90,9 +90,9 @@ function OverviewPanel() {
       supabase.from("farm_qr_codes").select("id"),
       supabase.from("handlers").select("id"),
       supabase.from("disaster_alerts").select("id").eq("alert_type", "sos").gte("created_at", since),
-      supabase.from("alert_logs" as any).select("delivered, opened").gte("delivered_at", since),
-      supabase.from("activity" as any).select("id").eq("action", "view_alert").gte("created_at", since),
-      supabase.from("activity" as any).select("user_id, created_at").eq("action", "login").gte("created_at", last7d),
+      supabase.from("user_alert_events").select("id,user_id,alert_type,created_at").eq("event", "delivered").gte("created_at", since),
+      supabase.from("user_alert_events").select("id,user_id").eq("event", "opened").gte("created_at", since),
+      supabase.from("user_alert_events").select("user_id, created_at").eq("event", "delivered").gte("created_at", last7d),
     ]);
 
     const fType: Record<string, number> = {};
@@ -104,11 +104,11 @@ function OverviewPanel() {
       sv[a.severity || "info"] = (sv[a.severity || "info"] || 0) + 1;
     });
 
-    const logs = (alertLogsRange.data as any[]) || [];
-    const delivered = logs.filter(l => l.delivered).length;
-    const opened = logs.filter(l => l.opened).length;
+    const delivered = ((uaeDelivered.data as any[]) || []).length;
+    const opened = ((uaeOpened.data as any[]) || []).length;
+    const views = opened; // treat opened as views
 
-    // Build 7-day DAU buckets
+    // Build 7-day per-day unique users reached by alerts
     const buckets: Record<string, Set<string>> = {};
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
@@ -137,7 +137,7 @@ function OverviewPanel() {
       sos: (sos.data || []).length,
       alertsDelivered: delivered,
       alertsOpened: opened,
-      alertViews: ((alertViewsRange.data as any[]) || []).length,
+      alertViews: views,
     });
     setLoading(false);
   };
@@ -150,7 +150,7 @@ function OverviewPanel() {
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "market_contracts" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "market_presence" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "alert_logs" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_alert_events" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "activity" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
