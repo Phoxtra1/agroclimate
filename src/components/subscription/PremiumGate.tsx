@@ -1,10 +1,7 @@
-import { useEffect, useState, ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { PremiumComponent, COMPONENT_LABELS } from "@/lib/subscriptions/plans";
+import { ReactNode } from "react";
+import { PremiumComponent } from "@/lib/subscriptions/plans";
 import { useSubscription } from "@/hooks/useSubscription";
 import { usePilotMode } from "@/hooks/usePilotMode";
-import { SubscriptionDialog } from "./SubscriptionDialog";
-import { LoadingScreen } from "@/components/LoadingScreen";
 
 interface Props {
   component: PremiumComponent;
@@ -12,37 +9,24 @@ interface Props {
 }
 
 /**
- * Blocks rendering of a premium component until the user has access.
- * Global Pilot Mode bypasses all checks. Uses a single reusable dialog.
+ * Paywall is temporarily deactivated for testing.
+ *
+ * The subscription and pilot hooks are still invoked so the architecture,
+ * pricing logic, and subscription state remain intact. All premium
+ * components are rendered unconditionally.
  */
 export function PremiumGate({ component, children }: Props) {
+  // Keep hooks alive for future reactivation; their results are intentionally ignored.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { enabled: pilot, paywallDisabled, loading: pilotLoading } = usePilotMode();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { hasAccess, loading: subLoading } = useSubscription();
-  const [open, setOpen] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
 
-  const allowed = (pilot && paywallDisabled) || hasAccess(component);
+  void pilot;
+  void paywallDisabled;
+  void pilotLoading;
+  void subLoading;
+  void hasAccess(component);
 
-  useEffect(() => {
-    if (!pilotLoading && !subLoading && !allowed) setOpen(true);
-    if (allowed) setOpen(false);
-  }, [pilotLoading, subLoading, allowed]);
-
-  if (pilotLoading || subLoading) return <LoadingScreen />;
-  if (allowed) return <>{children}</>;
-
-  return (
-    <>
-      <div className="p-8 text-center text-sm text-muted-foreground">
-        This component is available on paid plans. Choose a plan to continue.
-      </div>
-      <SubscriptionDialog
-        open={open}
-        onCancel={() => { setOpen(false); navigate("/dashboard"); }}
-        redirectPath={location.pathname + location.search}
-        componentLabel={COMPONENT_LABELS[component]}
-      />
-    </>
-  );
+  return <>{children}</>;
 }
