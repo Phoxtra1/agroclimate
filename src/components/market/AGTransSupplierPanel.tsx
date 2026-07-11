@@ -169,9 +169,9 @@ export function AGTransSupplierPanel() {
       if (destinationFilter && !normalize(`${o.destination} ${o.planned_route}`).includes(normalize(destinationFilter))) return false;
       if (selectedCargo && !(o.cargo_types_accepted || []).map(normalize).includes(normalize(selectedCargo))) return false;
       if (selectedFeature && !(o.vehicle_features || []).map(normalize).includes(normalize(selectedFeature))) return false;
-      if (minRating && Number(o.driver_rating || 0) < Number(minRating)) return false;
+      if (minRating && minRating !== "any" && Number(o.driver_rating || 0) < Number(minRating)) return false;
       if (verifiedOnly && o.approval_status !== "approved") return false;
-      if (pricingFilter && normalize(o.pricing_type) !== normalize(pricingFilter)) return false;
+      if (pricingFilter && pricingFilter !== "all" && normalize(o.pricing_type) !== normalize(pricingFilter)) return false;
       return true;
     });
   }, [availableOffers, q, vehicleType, locationFilter, destinationFilter, selectedCargo, selectedFeature, minRating, verifiedOnly, pricingFilter]);
@@ -329,12 +329,12 @@ export function AGTransSupplierPanel() {
             </Select>
             <Select value={pricingFilter} onValueChange={setPricingFilter}>
               <SelectTrigger><SelectValue placeholder="Pricing type" /></SelectTrigger>
-              <SelectContent><SelectItem value="">Any</SelectItem>{PRICING_TYPE.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="all">Any</SelectItem>{PRICING_TYPE.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={minRating} onValueChange={setMinRating}>
               <SelectTrigger><SelectValue placeholder="Min rating" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Any</SelectItem>
+                <SelectItem value="any">Any</SelectItem>
                 <SelectItem value="4">4+</SelectItem>
                 <SelectItem value="3">3+</SelectItem>
                 <SelectItem value="2">2+</SelectItem>
@@ -461,7 +461,7 @@ export function AGTransSupplierPanel() {
                 <Select value={selectedContractId} onValueChange={setSelectedContractId}>
                   <SelectTrigger><SelectValue placeholder="Choose an active order" /></SelectTrigger>
                   <SelectContent>
-                    {myContracts.length === 0 && <SelectItem value="">No active orders</SelectItem>}
+                    {myContracts.length === 0 && <SelectItem value="none">No active orders</SelectItem>}
                     {myContracts.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.crop_name} · {c.quantity} {c.unit} · GHS {c.locked_price}
