@@ -276,8 +276,11 @@ export function useAGTrans() {
   useEffect(() => {
     loadData();
 
+    // Use a unique channel name per mount to avoid silent subscription conflicts
+    // when the user switches tabs and comes back (Supabase rejects duplicate channel names)
+    const channelId = `agtrans-rt-${Math.random().toString(36).slice(2, 9)}`;
     const ch = supabase
-      .channel("agtrans-realtime-updates")
+      .channel(channelId)
       .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_requests" }, (payload: any) => {
         if (payload?.eventType === "INSERT" && payload?.new) {
           const r = payload.new;
@@ -295,7 +298,7 @@ export function useAGTrans() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tracking_sessions" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "transport_agreements" }, loadData)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { try { supabase.removeChannel(ch); } catch { /* ignore */ } };
   }, [user, loadData]);
 
   const notifyUser = async (userId: string, type: string, title: string, message: string, data?: any) => {

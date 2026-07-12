@@ -124,7 +124,7 @@ function validateCompatibility(offer: DriverProfile, order: {
 export function AGTransSupplierPanel() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { drivers, sendTransportRequest, respondToCounter, requests, deliveryJobs } = useAGTrans();
+  const { drivers, sendTransportRequest, respondToCounter, requests, deliveryJobs, loading } = useAGTrans();
   const { contracts, supply, orders } = useMarketLink();
 
   const [viewingOffer, setViewingOffer] = useState<DriverProfile | null>(null);
@@ -266,7 +266,7 @@ export function AGTransSupplierPanel() {
       toast.success("Transport request sent to driver");
       setSelectedOffer(null);
     } catch (err) {
-      toast.error(err.message || "Failed to send request");
+      toast.error((err as Error)?.message || "Failed to send request");
     } finally {
       setRequesting(false);
     }
@@ -293,7 +293,7 @@ export function AGTransSupplierPanel() {
       toast.success("Counter offer sent");
       setCounterDialog(null);
     } catch (err) {
-      toast.error(err.message || "Failed to send counter");
+      toast.error((err as Error)?.message || "Failed to send counter");
     }
   };
 
@@ -302,9 +302,18 @@ export function AGTransSupplierPanel() {
       await respondToCounter(req.id, "accept");
       toast.success("Counter offer accepted. Transport agreement created.");
     } catch (err) {
-      toast.error(err.message || "Failed to accept");
+      toast.error((err as Error)?.message || "Failed to accept");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <p className="text-sm">Loading transport marketplace…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -350,7 +359,19 @@ export function AGTransSupplierPanel() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredOffers.length === 0 ? (
-          <p className="text-sm text-muted-foreground col-span-full text-center py-8">No published transport offers match your filters.</p>
+          <div className="col-span-full flex flex-col items-center justify-center py-12 gap-3 text-center">
+            <Truck className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">
+              {drivers.length === 0
+                ? "No transport offers are available right now."
+                : "No published transport offers match your filters."}
+            </p>
+            <p className="text-xs text-muted-foreground max-w-xs">
+              {drivers.length === 0
+                ? "Approved drivers will publish their offers here. Check back soon or clear your filters."
+                : "Try adjusting your search filters to see more results."}
+            </p>
+          </div>
         ) : (
           filteredOffers.map((offer) => (
             <Card key={offer.id} className="flex flex-col">
