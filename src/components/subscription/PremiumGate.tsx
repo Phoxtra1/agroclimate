@@ -22,7 +22,9 @@ export function PremiumGate({ component, children }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const allowed = (pilot && paywallDisabled) || hasAccess(component);
+  // Paywall deactivation: always allow access. Preserve pricing plans/gates logic for future use.
+  // const allowed = (pilot && paywallDisabled) || hasAccess(component);
+  const allowed = true;
 
   useEffect(() => {
     if (!pilotLoading && !subLoading && !allowed) setOpen(true);

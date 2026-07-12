@@ -19,6 +19,232 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+interface DriverNotesJson {
+  rejection_reason?: string;
+  more_info_needed?: string;
+  offer?: {
+    is_published: boolean;
+    vehicle_features: string[];
+    cargo_acceptance: string[];
+    pickup_area: string;
+    destination: string;
+    planned_route: string;
+    departure_date: string;
+    departure_time: string;
+    estimated_arrival: string;
+    route_flexibility: "strict" | "minor_detour" | "off_route";
+    pricing_type: "negotiable" | "fixed";
+    suggested_fee?: number;
+    additional_notes?: string;
+    remaining_capacity: number;
+  };
+}
+
+function DriverStatusScreen({
+  profile,
+  notesData,
+  reload,
+}: {
+  profile: any;
+  notesData: DriverNotesJson;
+  reload: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const { createDriverProfile } = useAGTrans();
+  
+  // Form states matching profile fields
+  const [fullName, setFullName] = useState(profile.full_name || "");
+  const [phone, setPhone] = useState(profile.phone || "");
+  const [region, setRegion] = useState(profile.region || "");
+  const [district, setDistrict] = useState(profile.district || "");
+  const [vehicle, setVehicle] = useState(profile.vehicle_type || "");
+  const [plateNumber, setPlateNumber] = useState(profile.plate_number || "");
+  const [capacity, setCapacity] = useState(String(profile.vehicle_capacity_kg || ""));
+  const [licenseClass, setLicenseClass] = useState(profile.license_class || "D");
+  const [corridors, setCorridors] = useState(profile.preferred_corridors?.join(", ") || "");
+  const [licenseFile, setLicenseFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await createDriverProfile({
+        full_name: fullName,
+        phone,
+        region,
+        district,
+        vehicle_type: vehicle,
+        plate_number: plateNumber,
+        vehicle_capacity_kg: Number(capacity) || 0,
+        license_class: licenseClass,
+        preferred_corridors: corridors.split(",").map((s: string) => s.trim()).filter(Boolean),
+        route_coverage: corridors.split(",").map((s: string) => s.trim()).filter(Boolean),
+      }, licenseFile || undefined);
+      
+      setEditing(false);
+      toast.success("Profile updated and resubmitted for verification!");
+      await reload();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update profile");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const getStatusDisplay = () => {
+    switch (profile.verification_status) {
+      case "pending":
+        return {
+          title: "Verification Pending",
+          description: "Your onboarding request is currently being reviewed by an administrator. In the meantime, you can review and edit your profile details.",
+          color: "border-amber-500 bg-amber-500/5 text-amber-600",
+          icon: Clock
+        };
+      case "rejected":
+        return {
+          title: "Application Rejected",
+          description: notesData.rejection_reason || "Your application was rejected. Please review your details and correct any issues below.",
+          color: "border-destructive bg-destructive/5 text-destructive",
+          icon: X
+        };
+      case "suspended":
+        return {
+          title: "Account Suspended",
+          description: notesData.rejection_reason || "Your driver dashboard access has been suspended due to policy violations (e.g. excessive cancellations). Please contact support.",
+          color: "border-red-600 bg-red-600/5 text-red-600",
+          icon: ShieldAlert
+        };
+      default: // "more_info"
+        return {
+          title: "More Information Required",
+          description: notesData.more_info_needed || "The administrator has requested additional details to approve your profile. Please update the details below.",
+          color: "border-blue-500 bg-blue-500/5 text-blue-600",
+          icon: HelpCircle
+        };
+    }
+  };
+
+  const status = getStatusDisplay();
+  const StatusIcon = status.icon;
+
+  return (
+    <div className="max-w-3xl mx-auto my-12 px-4 space-y-6">
+      <Card className={`border-l-4 ${status.color} shadow-lg`}>
+        <CardContent className="p-6 flex items-start gap-4">
+          <div className="p-3 bg-muted rounded-xl shrink-0">
+            <StatusIcon className="h-6 w-6" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-xl font-bold">{status.title}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">{status.description}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {editing ? (
+        <Card className="border-border/60 shadow-xl overflow-hidden bg-card/60 backdrop-blur-md">
+          <div className="h-2 bg-gradient-to-r from-emerald-500 via-primary to-teal-600" />
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold">Edit and Resubmit Profile</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input value={fullName} onChange={e => setFullName(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input value={phone} onChange={e => setPhone(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Operational Region</Label>
+                  <Input value={region} onChange={e => setRegion(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Base District</Label>
+                  <Input value={district} onChange={e => setDistrict(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vehicle Type</Label>
+                  <Input value={vehicle} onChange={e => setVehicle(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vehicle Capacity (kg)</Label>
+                  <Input type="number" value={capacity} onChange={e => setCapacity(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>License Plate Number</Label>
+                  <Input value={plateNumber} onChange={e => setPlateNumber(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Driver License Class</Label>
+                  <Input value={licenseClass} onChange={e => setLicenseClass(e.target.value)} required />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Preferred Transit Corridors</Label>
+                  <Input value={corridors} onChange={e => setCorridors(e.target.value)} placeholder="comma-separated list" required />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Upload New Driver's License Document (Optional)</Label>
+                  <Input type="file" accept="image/*,.pdf" onChange={e => setLicenseFile(e.target.files?.[0] || null)} />
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end pt-4">
+                <Button type="button" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button type="submit" disabled={busy}>
+                  {busy ? "Resubmitting..." : "Resubmit Profile"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border shadow-md">
+          <CardHeader className="flex flex-row justify-between items-center border-b pb-4">
+            <CardTitle className="text-lg font-bold">Your Profile Details</CardTitle>
+            {profile.verification_status !== "suspended" && (
+              <Button size="sm" onClick={() => setEditing(true)}>Edit Profile</Button>
+            )}
+          </CardHeader>
+          <CardContent className="p-6 grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground block text-xs">Full Name</span>
+              <span className="font-semibold">{profile.full_name}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">Phone</span>
+              <span className="font-semibold">{profile.phone}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">Vehicle Type</span>
+              <span className="font-semibold">{profile.vehicle_type}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">Capacity</span>
+              <span className="font-semibold">{profile.vehicle_capacity_kg} kg</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">License Plate</span>
+              <span className="font-semibold">{profile.plate_number}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-xs">License Class</span>
+              <span className="font-semibold">{profile.license_class}</span>
+            </div>
+            <div className="col-span-2">
+              <span className="text-muted-foreground block text-xs">Operational Corridors</span>
+              <span className="font-semibold">{profile.preferred_corridors?.join(", ")}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function DriverDashboard() {
   const { user } = useAuth();
   const {
@@ -33,6 +259,7 @@ export default function DriverDashboard() {
     updateDeliveryJobStatus,
     updateTrackingSessionLocation,
     handleCancelTrip,
+    reload,
   } = useAGTrans();
 
   const navigate = useNavigate();
@@ -62,13 +289,34 @@ export default function DriverDashboard() {
   const [currentLat, setCurrentLat] = useState("5.6037");
   const [currentLon, setCurrentLon] = useState("-0.1870");
 
+  // Transport Offer states
+  const [offerPublished, setOfferPublished] = useState(false);
+  const [features, setFeatures] = useState<string[]>([]);
+  const [cargos, setCargos] = useState<string[]>([]);
+  const [pickupArea, setPickupArea] = useState("");
+  const [destArea, setDestArea] = useState("");
+  const [plannedRoute, setPlannedRoute] = useState("");
+  const [depDate, setDepDate] = useState("");
+  const [depTime, setDepTime] = useState("");
+  const [estArrival, setEstArrival] = useState("");
+  const [flexibility, setFlexibility] = useState<"strict" | "minor_detour" | "off_route">("minor_detour");
+  const [priceType, setPriceType] = useState<"negotiable" | "fixed">("negotiable");
+  const [suggestedFee, setSuggestedFee] = useState("0");
+  const [remCapacity, setRemCapacity] = useState("");
+  const [offerNotes, setOfferNotes] = useState("");
+
+  // Counter Offer dialog state
+  const [counterPriceInput, setCounterPriceInput] = useState("");
+  const [showCounterDialog, setShowCounterDialog] = useState(false);
+  const [negotiatingRequest, setNegotiatingRequest] = useState<TransportRequest | null>(null);
+
   // GPS Simulation state
   const [simulatingJobId, setSimulatingJobId] = useState<string | null>(null);
   const [simProgress, setSimProgress] = useState(0);
   const simIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const routePointsRef = useRef<[number, number][]>([]);
 
-  // Init form states from profile
+  // Init form states from profile and notes
   useEffect(() => {
     if (driverProfile) {
       setFullName(driverProfile.full_name || "");
@@ -84,6 +332,28 @@ export default function DriverDashboard() {
       if (driverProfile.current_location) {
         setCurrentLat(String(driverProfile.current_location.lat));
         setCurrentLon(String(driverProfile.current_location.lon));
+      }
+
+      // Initialize Transport Offer states
+      try {
+        const notesObj = driverProfile.notes ? JSON.parse(driverProfile.notes) : {};
+        const offer = notesObj.offer || {};
+        setOfferPublished(!!offer.is_published);
+        setFeatures(offer.vehicle_features || []);
+        setCargos(offer.cargo_acceptance || []);
+        setPickupArea(offer.pickup_area || "");
+        setDestArea(offer.destination || "");
+        setPlannedRoute(offer.planned_route || "");
+        setDepDate(offer.departure_date || "");
+        setDepTime(offer.departure_time || "");
+        setEstArrival(offer.estimated_arrival || "");
+        setFlexibility(offer.route_flexibility || "minor_detour");
+        setPriceType(offer.pricing_type || "negotiable");
+        setSuggestedFee(String(offer.suggested_fee || "0"));
+        setRemCapacity(String(offer.remaining_capacity ?? driverProfile.vehicle_capacity_kg ?? ""));
+        setOfferNotes(offer.additional_notes || "");
+      } catch (e) {
+        setOfferPublished(false);
       }
     }
   }, [driverProfile]);
@@ -107,11 +377,111 @@ export default function DriverDashboard() {
     </div>
   );
 
+  // Status Screen redirect if not verified
+  if (driverProfile.verification_status !== "verified") {
+    let parsedNotes = {};
+    try {
+      parsedNotes = driverProfile.notes ? JSON.parse(driverProfile.notes) : {};
+    } catch {
+      parsedNotes = { rejection_reason: driverProfile.notes };
+    }
+    return (
+      <DriverStatusScreen
+        profile={driverProfile}
+        notesData={parsedNotes}
+        reload={reload}
+      />
+    );
+  }
+
   // Filter lists
-  const availableRequests = requests.filter(r => r.status === "searching_driver" || (r.driver_id === user?.id && r.status === "Pending"));
+  const availableRequests = requests.filter(r => r.driver_id === user?.id && ["Pending", "pending", "counter_supplier", "counter_driver"].includes(r.status));
   const myActiveJobs = deliveryJobs.filter(j => j.driver_id === user?.id && j.status !== "Delivered" && j.status !== "Cancelled");
   const myCompletedJobs = deliveryJobs.filter(j => j.driver_id === user?.id && j.status === "Delivered");
   const myHistoryJobs = deliveryJobs.filter(j => j.driver_id === user?.id);
+
+  const handleSaveOffer = async (publishState: boolean, isRemove = false) => {
+    try {
+      let notesObj: any = {};
+      try {
+        notesObj = driverProfile?.notes ? JSON.parse(driverProfile.notes) : {};
+      } catch {
+        notesObj = { legacy_notes: driverProfile?.notes };
+      }
+
+      if (isRemove) {
+        delete notesObj.offer;
+      } else {
+        notesObj.offer = {
+          is_published: publishState,
+          vehicle_features: features,
+          cargo_acceptance: cargos,
+          pickup_area: pickupArea,
+          destination: destArea,
+          planned_route: plannedRoute,
+          departure_date: depDate,
+          departure_time: depTime,
+          estimated_arrival: estArrival,
+          route_flexibility: flexibility,
+          pricing_type: priceType,
+          suggested_fee: Number(suggestedFee) || 0,
+          remaining_capacity: Number(remCapacity) || Number(capacity) || 0,
+          additional_notes: offerNotes,
+        };
+      }
+
+      await updateDriverProfile({
+        notes: JSON.stringify(notesObj),
+        availability_status: publishState && !isRemove ? "online" : "offline",
+      });
+
+      setOfferPublished(publishState && !isRemove);
+      toast.success(
+        isRemove
+          ? "Transport offer removed."
+          : publishState
+            ? "Transport offer published successfully!"
+            : "Transport offer paused."
+      );
+      await reload();
+    } catch (err) {
+      toast.error("Failed to update transport offer");
+    }
+  };
+
+  const handleCounterRequest = async (req: TransportRequest, counterPrice: number) => {
+    try {
+      let reqNotes: any = {};
+      try {
+        reqNotes = req.notes ? JSON.parse(req.notes) : {};
+      } catch {
+        reqNotes = { supplier_notes: req.notes };
+      }
+
+      const history = reqNotes.negotiation_history || [];
+      history.push({
+        sender: "driver",
+        price: counterPrice,
+        timestamp: new Date().toISOString(),
+      });
+      reqNotes.negotiation_history = history;
+
+      const { error } = await supabase
+        .from("agtrans_requests")
+        .update({
+          status: "counter_driver",
+          estimated_price: counterPrice,
+          notes: JSON.stringify(reqNotes),
+        } as any)
+        .eq("id", req.id);
+
+      if (error) throw error;
+      toast.success(`Counter offer of GHS ${counterPrice} submitted!`);
+      await reload();
+    } catch (e) {
+      toast.error("Failed to submit counter offer");
+    }
+  };
 
   // Handle vehicle records save
   const handleSaveVehicle = async (e: React.FormEvent) => {
@@ -311,11 +681,10 @@ export default function DriverDashboard() {
               {[
                 { id: "overview", name: "Overview", icon: Activity },
                 { id: "vehicle", name: "My Vehicle", icon: Truck },
-                { id: "availability", name: "Availability & Rates", icon: MapPin },
+                { id: "availability", name: "My Transport Offer", icon: MapPin },
                 { id: "requests", name: "Delivery Requests", icon: Calendar, badge: availableRequests.length },
                 { id: "active", name: "Active Trip Console", icon: Navigation, badge: myActiveJobs.length },
                 { id: "history", name: "Job History", icon: Clock },
-                { id: "earnings", name: "Earnings Ledger", icon: DollarSign },
                 { id: "documents", name: "Credentials & Docs", icon: FileText },
                 { id: "notifications", name: "System Alerts", icon: Bell, badge: driverProfile.verification_status === "suspended" ? 1 : 0 },
               ].map(tab => (
@@ -505,93 +874,301 @@ export default function DriverDashboard() {
             </Card>
           )}
 
-          {/* TAB 3: WORK & AVAILABILITY */}
+          {/* TAB 3: TRANSPORT OFFER MANAGER */}
           {activeTab === "availability" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Work Capacity & Rate Card</CardTitle>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-md">
+              <CardHeader className="flex flex-row justify-between items-center border-b pb-4">
+                <div>
+                  <CardTitle className="text-xl font-bold">Transport Offer Manager</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Publish your planned route, schedule, and vehicle parameters so suppliers can book you directly.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={offerPublished ? "default" : "secondary"}>
+                    {offerPublished ? "Live on Marketplace" : "Draft"}
+                  </Badge>
+                </div>
               </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSaveAvailability} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label>Cargo Specialities (comma separated)</Label>
-                      <Input value={cargoCategories} onChange={e => setCargoCategories(e.target.value)} placeholder="e.g. Cereals, Tuber Crops, Perishables" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Base Rate Structure</Label>
-                      <Input value={rateInformation} onChange={e => setRateInformation(e.target.value)} placeholder="e.g. GHS 12 per km, GHS 500 flat rate" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Current Location Latitude</Label>
-                      <Input type="number" step="any" value={currentLat} onChange={e => setCurrentLat(e.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Current Location Longitude</Label>
-                      <Input type="number" step="any" value={currentLon} onChange={e => setCurrentLon(e.target.value)} />
+              <CardContent className="p-6 space-y-6">
+                <div className="flex items-center justify-between p-4 bg-muted/20 border border-border/40 rounded-2xl">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-bold">Publish Transport Offer</Label>
+                    <p className="text-xs text-muted-foreground">Make this offer searchable in the Market Link logistics directory.</p>
+                  </div>
+                  <Switch 
+                    checked={offerPublished} 
+                    onCheckedChange={(val) => handleSaveOffer(val)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Route details */}
+                  <div className="space-y-4 md:col-span-2">
+                    <h4 className="font-semibold text-sm border-b pb-1">Route & Locations</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Pickup / Departure Area</Label>
+                        <Input value={pickupArea} onChange={e => setPickupArea(e.target.value)} placeholder="e.g. Ejura Farms, Ashanti" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Primary Destination</Label>
+                        <Input value={destArea} onChange={e => setDestArea(e.target.value)} placeholder="e.g. Agbogbloshie Market, Accra" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Planned Transit Corridor</Label>
+                        <Input value={plannedRoute} onChange={e => setPlannedRoute(e.target.value)} placeholder="e.g. Ejura ➔ Kumasi ➔ Accra" />
+                      </div>
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full">
-                    Save Availability Profile
+                  {/* Schedule */}
+                  <div className="space-y-4 md:col-span-2">
+                    <h4 className="font-semibold text-sm border-b pb-1">Schedule & Timeline</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Departure Date</Label>
+                        <Input type="date" value={depDate} onChange={e => setDepDate(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Departure Time</Label>
+                        <Input type="time" value={depTime} onChange={e => setDepTime(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Estimated Arrival Window</Label>
+                        <Input value={estArrival} onChange={e => setEstArrival(e.target.value)} placeholder="e.g. +6 hours, Next morning" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Operational Settings */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-sm border-b pb-1">Operational Policy</h4>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Route Flexibility</Label>
+                        <Select value={flexibility} onValueChange={(val: any) => setFlexibility(val)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="strict">Strict (Direct planned route only)</SelectItem>
+                            <SelectItem value="minor_detour">Minor Detour (Up to 20km deviation)</SelectItem>
+                            <SelectItem value="off_route">Highly Flexible (Can detour anywhere)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Remaining Vehicle Capacity (kg)</Label>
+                        <Input type="number" value={remCapacity} onChange={e => setRemCapacity(e.target.value)} placeholder={capacity} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold text-sm border-b pb-1">Pricing Configuration</h4>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Pricing Model</Label>
+                        <Select value={priceType} onValueChange={(val: any) => setPriceType(val)}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="negotiable">Open to Negotiation</SelectItem>
+                            <SelectItem value="fixed">Fixed Rate</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Suggested / Base Fee (GHS)</Label>
+                        <Input type="number" value={suggestedFee} onChange={e => setSuggestedFee(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Features */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="font-semibold text-sm">Vehicle Features</Label>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {["Refrigerated", "Covered Box", "Flatbed", "Dropside", "Livestock Carrier", "Tanker", "Curtainside"].map(f => {
+                        const active = features.includes(f);
+                        return (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => setFeatures(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                              active 
+                                ? "bg-primary text-primary-foreground border-primary" 
+                                : "bg-muted/30 hover:bg-muted text-muted-foreground border-border/40"
+                            }`}
+                          >
+                            {f}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Cargo Specialities */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="font-semibold text-sm">Accepted Cargo Categories</Label>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {["Maize & Grains", "Tuber Crops", "Perishables", "Livestock", "Timber/Wood", "Cocoa Beans", "General Cargo"].map(c => {
+                        const active = cargos.includes(c);
+                        return (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setCargos(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                              active 
+                                ? "bg-primary text-primary-foreground border-primary" 
+                                : "bg-muted/30 hover:bg-muted text-muted-foreground border-border/40"
+                            }`}
+                          >
+                            {c}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Additional notes */}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Additional Offer Details</Label>
+                    <Textarea 
+                      value={offerNotes} 
+                      onChange={e => setOfferNotes(e.target.value)} 
+                      placeholder="e.g. Will assist with loading, overnight parking available, etc." 
+                      rows={3} 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-4 border-t">
+                  <Button 
+                    type="button" 
+                    variant="destructive" 
+                    onClick={() => handleSaveOffer(false, true)}
+                    className="mr-auto"
+                  >
+                    Delete Offer
                   </Button>
-                </form>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => handleSaveOffer(false)}
+                  >
+                    Pause (Draft)
+                  </Button>
+                  <Button 
+                    type="button" 
+                    onClick={() => handleSaveOffer(true)}
+                  >
+                    Publish Offer
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )}
 
           {/* TAB 4: DELIVERY REQUESTS */}
           {activeTab === "requests" && (
-            <Card>
+            <Card className="border-border/60 bg-card/50 backdrop-blur-md">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Clock className="h-5 w-5" /> Delivery Offers
+                  <Clock className="h-5 w-5 text-primary" /> Delivery Offers & Negotiations
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {availableRequests.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending transport requests at the moment.</p>
+                  <p className="text-sm text-muted-foreground text-center py-6">No active transport requests at the moment.</p>
                 ) : (
-                  availableRequests.map(req => (
-                    <div key={req.id} className="border p-4 rounded-xl space-y-3 bg-muted/5">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <Badge variant="outline" className="text-xs mb-1">Direct Offer</Badge>
-                          <h4 className="font-bold text-lg">{req.product_type}</h4>
-                          <p className="text-xs text-muted-foreground">Qty: {req.quantity} {req.unit}</p>
+                  availableRequests.map(req => {
+                    const isAwaitingSupplier = req.status === "counter_driver";
+                    return (
+                      <div key={req.id} className="border border-border/40 p-5 rounded-2xl space-y-4 bg-muted/10">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-[10px] uppercase font-bold">Direct Offer</Badge>
+                              <Badge variant={isAwaitingSupplier ? "secondary" : "default"} className="text-[10px] uppercase font-bold">
+                                {isAwaitingSupplier ? "Awaiting Supplier Response" : req.status}
+                              </Badge>
+                            </div>
+                            <h4 className="font-extrabold text-lg text-foreground">{req.product_type}</h4>
+                            <p className="text-xs text-muted-foreground font-medium">Quantity: {req.quantity} {req.unit}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">Agreed/Current Price</span>
+                            <p className="font-black text-primary text-xl">GHS {req.estimated_price || "Negotiable"}</p>
+                          </div>
                         </div>
-                        <p className="font-black text-primary text-xl">GHS {req.estimated_price || "Negotiable"}</p>
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-xs border-y py-2 border-border/40">
-                        <div>
-                          <span className="text-muted-foreground block uppercase font-bold tracking-wide text-[9px]">Pickup</span>
-                          <span className="font-medium text-foreground">{req.pickup_location}</span>
+                        <div className="grid grid-cols-2 gap-4 text-xs border-y py-3 border-border/40 bg-background/30 px-3 rounded-xl">
+                          <div>
+                            <span className="text-muted-foreground block uppercase font-bold tracking-wide text-[9px]">Pickup Location</span>
+                            <span className="font-semibold text-foreground">{req.pickup_location}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block uppercase font-bold tracking-wide text-[9px]">Dropoff Destination</span>
+                            <span className="font-semibold text-foreground">{req.delivery_location}</span>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-muted-foreground block uppercase font-bold tracking-wide text-[9px]">Dropoff</span>
-                          <span className="font-medium text-foreground">{req.delivery_location}</span>
-                        </div>
-                      </div>
 
-                      <div className="flex gap-2 justify-end">
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleDeclineRequest(req.id)}
-                        >
-                          Decline
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          onClick={() => triggerAcceptRequest(req)}
-                          disabled={driverProfile.verification_status !== "verified"}
-                        >
-                          Accept Cargo Offer
-                        </Button>
+                        {/* Negotiation History */}
+                        {(() => {
+                          let notesObj: any = {};
+                          try {
+                            notesObj = req.notes ? JSON.parse(req.notes) : {};
+                          } catch {}
+                          const history = notesObj.negotiation_history || [];
+                          if (history.length === 0) return null;
+                          return (
+                            <div className="bg-muted/30 p-3 rounded-xl space-y-2 border border-border/40 text-xs">
+                              <p className="font-bold text-muted-foreground uppercase text-[9px] tracking-wider">Negotiation History</p>
+                              <div className="space-y-1">
+                                {history.map((h: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-border/10 last:border-0 last:pb-0">
+                                    <span className="capitalize text-muted-foreground font-medium">{h.sender === "driver" ? "You (Driver)" : "Supplier"}:</span>
+                                    <span className="font-extrabold text-foreground">GHS {h.price}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        <div className="flex gap-2 justify-end">
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => handleDeclineRequest(req.id)}
+                            disabled={isAwaitingSupplier}
+                          >
+                            Decline Offer
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setNegotiatingRequest(req);
+                              setCounterPriceInput(String(req.estimated_price || "0"));
+                              setShowCounterDialog(true);
+                            }}
+                            disabled={isAwaitingSupplier}
+                          >
+                            Counter Offer
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                            onClick={() => triggerAcceptRequest(req)}
+                            disabled={driverProfile.verification_status !== "verified" || isAwaitingSupplier}
+                          >
+                            Accept Offer
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
@@ -627,20 +1204,28 @@ export default function DriverDashboard() {
 
                           <div className="flex gap-2">
                             {job.status === "Accepted" && (
-                              <Button size="sm" onClick={() => updateDeliveryJobStatus(job.id, "Loading")}>
-                                Mark Loading
+                              <Button size="sm" onClick={() => updateDeliveryJobStatus(job.id, "Driver En Route")}>
+                                Start En Route
                               </Button>
                             )}
-                            {(job.status === "Accepted" || job.status === "Loading") && (
+                            {job.status === "Driver En Route" && (
+                              <Button size="sm" onClick={() => updateDeliveryJobStatus(job.id, "Loading")}>
+                                Arrived at Pickup
+                              </Button>
+                            )}
+                            {job.status === "Loading" && (
                               <Button 
                                 size="sm" 
                                 className="bg-emerald-600 hover:bg-emerald-700"
-                                onClick={() => startGpsSimulation(job)}
+                                onClick={async () => {
+                                  await updateDeliveryJobStatus(job.id, "In Transit");
+                                  startGpsSimulation(job);
+                                }}
                               >
-                                <Play className="h-4 w-4 mr-2" /> Start Trip
+                                <Play className="h-4 w-4 mr-2" /> Confirm Loaded & Start Trip
                               </Button>
                             )}
-                            {job.status === "In Transit" && (
+                            {job.status === "In Transit" && simulatingJobId === job.id && (
                               <Button 
                                 size="sm" 
                                 variant="outline"
@@ -649,22 +1234,33 @@ export default function DriverDashboard() {
                                 Pause GPS
                               </Button>
                             )}
-                            {(job.status === "In Transit" || job.status === "Near Destination") && (
+                            {job.status === "In Transit" && simulatingJobId !== job.id && (
+                              <Button 
+                                size="sm" 
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => startGpsSimulation(job)}
+                              >
+                                <Play className="h-4 w-4 mr-2" /> Resume Trip
+                              </Button>
+                            )}
+                            {job.status === "Near Destination" && (
                               <Button 
                                 size="sm" 
                                 className="bg-green-600 hover:bg-green-700"
                                 onClick={() => updateDeliveryJobStatus(job.id, "Delivered")}
                               >
-                                Mark Delivered
+                                Complete Dropoff
                               </Button>
                             )}
-                            <Button 
-                              size="sm" 
-                              variant="destructive"
-                              onClick={() => triggerCancelJob(job)}
-                            >
-                              Cancel Delivery
-                            </Button>
+                            {job.status !== "Delivered" && (
+                              <Button 
+                                size="sm" 
+                                variant="destructive"
+                                onClick={() => triggerCancelJob(job)}
+                              >
+                                Cancel Delivery
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -879,6 +1475,46 @@ export default function DriverDashboard() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCancellingRulesWarning(false)}>Keep Shipment</Button>
             <Button variant="destructive" onClick={confirmCancelJob}>Confirm Cancel & Pay Fine</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Counter Offer Dialog */}
+      <Dialog open={showCounterDialog} onOpenChange={setShowCounterDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-primary" /> Propose Counter Offer
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold">Propose a new transport rate to the supplier.</p>
+              <p className="text-xs text-muted-foreground">This will update the offer status to "counter_driver" and await their approval.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Counter Price (GHS)</Label>
+              <Input 
+                type="number" 
+                value={counterPriceInput} 
+                onChange={e => setCounterPriceInput(e.target.value)} 
+                placeholder="Enter counter price"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowCounterDialog(false)}>Cancel</Button>
+            <Button 
+              className="bg-primary text-primary-foreground font-bold" 
+              onClick={async () => {
+                if (negotiatingRequest && counterPriceInput) {
+                  await handleCounterRequest(negotiatingRequest, Number(counterPriceInput));
+                  setShowCounterDialog(false);
+                }
+              }}
+            >
+              Submit Counter Offer
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
