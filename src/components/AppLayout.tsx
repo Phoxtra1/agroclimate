@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 import { APP_NAME, APP_VERSION_LABEL } from "@/config/version";
 import AppFooter from "@/components/AppFooter";
+import { NotificationsButton } from "./NotificationsButton";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
@@ -108,7 +109,9 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
               <span className="text-[9px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
             </div>
           </div>
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <div className="flex items-center gap-1">
+            <NotificationsButton />
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
             </SheetTrigger>
@@ -130,6 +133,7 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
               </div>
             </SheetContent>
           </Sheet>
+          </div>
         </header>
 
         <main className="pb-20">{children}<AppFooter compact /></main>
@@ -160,12 +164,15 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
     <div className="flex min-h-screen bg-background">
       {!hideSidebar && (
         <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col fixed h-full z-30">
-          <div className="flex items-center gap-2 px-5 h-16 border-b border-sidebar-border">
-            <img src={agyenkwaIcon} alt={APP_NAME} className="h-9 w-9" />
-            <div className="flex flex-col leading-tight">
-              <span className="font-bold text-lg text-sidebar-foreground">{APP_NAME}</span>
-              <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL} · by Amineva Global</span>
+          <div className="flex items-center justify-between px-5 h-16 border-b border-sidebar-border">
+            <div className="flex items-center gap-2">
+              <img src={agyenkwaIcon} alt={APP_NAME} className="h-9 w-9" />
+              <div className="flex flex-col leading-tight">
+                <span className="font-bold text-lg text-sidebar-foreground">{APP_NAME}</span>
+                <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL} · by Amineva Global</span>
+              </div>
             </div>
+            <NotificationsButton />
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             <NavItems isAdmin={isAdmin} />

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
@@ -41,8 +42,11 @@ import AGTransLayout from "./pages/agtrans-partner/AGTransLayout";
 import DriverOnboarding from "./pages/agtrans-partner/Onboarding";
 import DriverDashboard from "./pages/agtrans-partner/DriverDashboard";
 import TripPage from "./pages/agtrans-partner/TripPage";
+import PendingApproval from "./pages/agtrans-partner/PendingApproval";
+import LiveTracking from "./pages/LiveTracking";
 import Subscription from "./pages/Subscription";
 import SubscriptionVerify from "./pages/SubscriptionVerify";
+import { useDriverStatus } from "@/hooks/useDriverStatus";
 import { PremiumGate } from "@/components/subscription/PremiumGate";
 import { installOfflineSync } from "@/lib/offlineQueue";
 
@@ -97,7 +101,7 @@ function useUserRole() {
           .select("role")
           .eq("user_id", user.id);
 
-        const roles = (data || []).map((r: any) => r.role);
+        const roles = (data || []).map((r: { role: string }) => r.role);
         const metaRole = user.user_metadata?.role || user.user_metadata?.account_type;
 
         // Double check driver registration profile to instantly sync driver role
@@ -119,6 +123,7 @@ function useUserRole() {
       }
     };
     checkRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, location.pathname]);
 
   return { role, roleLoading };
@@ -139,6 +144,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
+function SharedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const isPreview = isPreviewEnvironment();
+
+  if (loading) return <LoadingScreen />;
+  if (!user && !isPreview) return <Navigate to="/" replace />;
+
+  return <AppLayout>{children}</AppLayout>;
+}
+
 function HandlerRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { role, roleLoading } = useUserRole();
@@ -155,13 +170,24 @@ function HandlerRoute({ children }: { children: React.ReactNode }) {
 function DriverRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { role, roleLoading } = useUserRole();
+  const { exists, approvalStatus, loading: driverStatusLoading } = useDriverStatus();
   const isPreview = isPreviewEnvironment();
+  const location = useLocation();
 
-  if (loading || roleLoading) return <LoadingScreen />;
+  if (loading || roleLoading || driverStatusLoading) return <LoadingScreen />;
   if (!user && !isPreview) return <Navigate to="/" replace />;
   
-  const location = useLocation();
   if (role !== "driver" && !isPreview && !location.pathname.includes("onboarding")) return <Navigate to="/dashboard" replace />;
+
+  if (role === "driver" && !isPreview && exists && approvalStatus !== "approved") {
+    if (!location.pathname.includes("pending-approval") && !location.pathname.includes("onboarding")) {
+      return <Navigate to="/agtrans-partner/pending-approval" replace />;
+    }
+  }
+
+  if (location.pathname.includes("onboarding") && exists && approvalStatus === "approved" && !isPreview) {
+    return <Navigate to="/agtrans-partner/dashboard" replace />;
+  }
 
   return <>{children}</>;
 }
@@ -251,10 +277,13 @@ function AppRoutes() {
       {/* Driver workspace (AGTrans Partner) */}
       <Route path="/agtrans-partner" element={<DriverRoute><AGTransLayout /></DriverRoute>}>
         <Route path="onboarding" element={<DriverOnboarding />} />
+        <Route path="pending-approval" element={<PendingApproval />} />
         <Route path="dashboard" element={<DriverDashboard />} />
         <Route path="trip/:id" element={<TripPage />} />
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
+
+      <Route path="/live-tracking/:id" element={<SharedRoute><LiveTracking /></SharedRoute>} />
 
       {/* Farmer/user routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

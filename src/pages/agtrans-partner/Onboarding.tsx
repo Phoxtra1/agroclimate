@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ const validateDriverForm = (values: {
 };
 
 export default function DriverOnboarding() {
-  const { createDriverProfile } = useAGTrans();
+  const { createDriverProfile, driverProfile } = useAGTrans();
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -61,6 +61,19 @@ export default function DriverOnboarding() {
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
+
+  useEffect(() => {
+    if (!driverProfile) return;
+    setFullName(driverProfile.full_name || "");
+    setPhone(driverProfile.phone || "");
+    setRegion(driverProfile.region || "");
+    setDistrict(driverProfile.district || "");
+    setVehicle(driverProfile.vehicle_type || "");
+    setPlateNumber(driverProfile.plate_number || "");
+    setCapacity(driverProfile.vehicle_capacity_kg ? String(driverProfile.vehicle_capacity_kg) : "");
+    setLicenseClass(driverProfile.license_class || "");
+    setCorridors((driverProfile.preferred_corridors || driverProfile.route_coverage || []).join(", "));
+  }, [driverProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,9 +99,9 @@ export default function DriverOnboarding() {
         preferred_corridors: splitCorridors(corridors),
       }, licenseFile || undefined);
       toast.success("Profile submitted for verification");
-      navigate("/agtrans-partner/dashboard");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to submit profile");
+      navigate("/agtrans-partner/pending-approval");
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to submit profile");
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,18 +21,6 @@ import {
   openNegotiation, acceptNegotiation, declineNegotiation,
 } from "@/lib/negotiationEngine";
 import { useAGTrans } from "@/hooks/useAGTrans";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-try {
-  delete (L.Icon.Default.prototype as any)._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  });
-} catch {}
 
 export interface OrderRow {
   id: string; buyer_id: string; buyer_name: string | null; crop_name: string;
@@ -71,7 +60,7 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
     if (!product.trim() || !qty || !price.trim()) { toast.error("Product, quantity and target price required"); return; }
     setBusy(true);
     try {
-      const { error } = await supabase.from("buyer_orders" as any).insert({
+      const { error } = await supabase.from("buyer_orders").insert({
         buyer_id: user.id,
         buyer_name: name || user.email || null,
         crop_name: product.trim(),
@@ -89,12 +78,12 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
         contact_phone: phone || null,
         notes: notes || null,
         order_status: "active",
-      } as any);
+      });
       if (error) throw error;
       toast.success("Order posted to Market Link");
       setProduct(""); setQty(""); setPrice(""); setNotes("");
       onPlaced?.();
-    } catch (err: any) { toast.error(err.message || "Failed to place order"); }
+    } catch (err) { toast.error((err as Error).message || "Failed to place order"); }
     finally { setBusy(false); }
   };
 
@@ -135,7 +124,7 @@ function useOrders(scope: Scope) {
   const load = async () => {
     setLoading(true);
     let query = supabase
-      .from("buyer_orders" as any)
+      .from("buyer_orders")
       .select("*")
       .neq("status", "cancelled")
       .neq("crop_name", "Yam")
@@ -149,7 +138,7 @@ function useOrders(scope: Scope) {
       query = query.neq("buyer_id", user.id);
     }
     const { data } = await query;
-    setItems((data as any) || []);
+    setItems((data as unknown as OrderRow[]) || []);
     setLoading(false);
   };
 
@@ -159,7 +148,7 @@ function useOrders(scope: Scope) {
       .channel(`orders-${scope}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "buyer_orders" }, load)
       .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch {} };
+    return () => { try { supabase.removeChannel(ch); } catch { /* ignore */ } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, scope]);
 
@@ -175,15 +164,15 @@ function useOrders(scope: Scope) {
 /*    • scope="all"   → legacy buyer page alias, treated as mine.  */
 /* ============================================================== */
 export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const { deliveryJobs, trackingSessions } = useAGTrans();
+  const { deliveryJobs, trackingSessions, confirmDelivery } = useAGTrans();
   const { items, loading, reload } = useOrders(scope);
   const [q, setQ] = useState("");
   const [region, setRegion] = useState("");
   const [selected, setSelected] = useState<OrderRow | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [trackingJobId, setTrackingJobId] = useState<string | null>(null);
 
   // Edit-mode state for owner modal
   const [editing, setEditing] = useState(false);
@@ -233,7 +222,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
       toast.success("Accepted — agreement generated");
       reload();
       setSelected(null);
-    } catch (e: any) { toast.error(e?.message || "Could not accept"); }
+    } catch (e) { toast.error((e as Error).message || "Could not accept"); }
     finally { setBusy(false); }
   };
 
@@ -247,7 +236,7 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
       await declineNegotiation(negotiation);
       toast.info("Declined for you — order stays active for other suppliers.");
       setSelected(null);
-    } catch (e: any) { toast.error(e?.message || "Could not decline"); }
+    } catch (e) { toast.error((e as Error).message || "Could not decline"); }
     finally { setBusy(false); }
   };
 
@@ -271,21 +260,21 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
         delivery_end: draft.delivery_end || null,
         notes: draft.notes || null,
       };
-      const { error } = await supabase.from("buyer_orders" as any)
-        .update(patch as any).eq("id", selected.id).eq("buyer_id", user.id);
+      const { error } = await supabase.from("buyer_orders")
+        .update(patch).eq("id", selected.id).eq("buyer_id", user.id);
       if (error) throw error;
       toast.success("Order updated");
       setEditing(false);
       reload();
       setSelected(null);
-    } catch (e: any) { toast.error(e?.message || "Failed to save"); }
+    } catch (e) { toast.error((e as Error).message || "Failed to save"); }
     finally { setSaving(false); }
   };
 
   const deleteOwn = async () => {
     if (!user || !selected) return;
     if (!window.confirm("Delete this order? This cannot be undone.")) return;
-    const { error } = await supabase.from("buyer_orders" as any)
+    const { error } = await supabase.from("buyer_orders")
       .delete().eq("id", selected.id).eq("buyer_id", user.id);
     if (error) { toast.error(error.message); return; }
     toast.success("Order deleted");
@@ -420,31 +409,41 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
                   {(() => {
                     const matchedJob = deliveryJobs.find(
                       j => j.product.toLowerCase() === selected.crop_name.toLowerCase() &&
-                      j.supplier_id === selected.buyer_id &&
+                      (j.buyer_id === user?.id || j.supplier_id === user?.id || j.driver_id === user?.id) &&
                       j.status !== "Cancelled"
                     );
                     if (!matchedJob) return null;
+                    const session = trackingSessions.find(s => s.delivery_job_id === matchedJob.id);
+                    const active = matchedJob.status !== "Completed" && matchedJob.status !== "Delivered" && matchedJob.status !== "Cancelled";
                     return (
                       <div className="mt-4 border-t pt-4 space-y-2">
                         <h4 className="font-bold text-sm text-foreground flex items-center gap-1.5">
                           <Truck className="h-4 w-4 text-primary" /> Shipment Tracking Details
                         </h4>
-                        <div className="flex justify-between items-center bg-muted/20 p-3 rounded-xl border border-border/40">
-                          <div>
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold block">Status</span>
-                            <Badge variant={matchedJob.status === "Delivered" ? "default" : "secondary"}>
-                              {matchedJob.status}
-                            </Badge>
-                          </div>
-                          {(matchedJob.status === "In Transit" || matchedJob.status === "Near Destination") && (
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <I label="Driver" v={matchedJob.driver_name || "Assigned"} />
+                          <I label="Vehicle" v={`${matchedJob.vehicle_type || "—"} · ${matchedJob.plate_number || "—"}`} />
+                          <I label="Status" v={matchedJob.status} />
+                          <I label="ETA" v={session?.eta || "Calculating…"} />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {active && (
                             <Button
                               size="sm"
                               className="bg-blue-600 hover:bg-blue-700 text-xs font-bold"
-                              onClick={() => setTrackingJobId(matchedJob.id)}
+                              onClick={() => navigate(`/live-tracking/${matchedJob.id}`)}
                             >
                               <Navigation className="h-3.5 w-3.5 mr-1" /> Track Shipment
                             </Button>
                           )}
+                          {matchedJob.status === "Delivered" && (
+                            <Button size="sm" onClick={async () => { try { await confirmDelivery(matchedJob.request_id || matchedJob.id); toast.success("Delivery confirmed"); } catch { toast.error("Could not confirm"); } }}>
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm Delivery
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => toast.info("Issue reported. Support will contact you.")}>
+                            Report Issue
+                          </Button>
                         </div>
                       </div>
                     );
@@ -512,101 +511,6 @@ export function OrderListing({ scope = "global" }: { scope?: Scope } = {}) {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Realtime Shipment Tracking Modal for Buyer */}
-      <Dialog open={!!trackingJobId} onOpenChange={() => setTrackingJobId(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Track Your Shipment: {
-              (() => {
-                const job = deliveryJobs.find(j => j.id === trackingJobId);
-                return job?.product || "Cargo";
-              })()
-            }</DialogTitle>
-          </DialogHeader>
-          {(() => {
-            const job = deliveryJobs.find(j => j.id === trackingJobId);
-            const session = job ? trackingSessions.find(s => s.delivery_job_id === job.id) : null;
-            if (!job) return null;
-
-            const defaultPickup: [number, number] = [5.6037, -0.1870]; // Accra
-            const defaultDropoff: [number, number] = [6.6961, -1.6152]; // Kumasi
-            const currentPos: [number, number] = session?.current_lat && session?.current_lon 
-              ? [session.current_lat, session.current_lon] 
-              : defaultPickup;
-
-            const pickupIcon = L.divIcon({
-              html: `<div class="bg-blue-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
-              className: "custom-pin",
-            });
-            const dropoffIcon = L.divIcon({
-              html: `<div class="bg-red-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
-              className: "custom-pin",
-            });
-            const truckIcon = L.divIcon({
-              html: `<div class="bg-emerald-500 p-1.5 rounded-full border border-white shadow-lg text-white" style="transform: rotate(${session?.heading || 0}deg);">
-                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-              </div>`,
-              className: "truck-pin",
-              iconSize: [24, 24],
-              iconAnchor: [12, 12],
-            });
-
-            return (
-              <div className="space-y-4">
-                <div className="h-[350px] rounded-xl overflow-hidden border">
-                  <MapContainer center={currentPos} zoom={8} className="h-full w-full animate-in fade-in duration-300">
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <Marker position={defaultPickup} icon={pickupIcon}>
-                      <Popup>Pickup: {job.pickup_location}</Popup>
-                    </Marker>
-                    <Marker position={defaultDropoff} icon={dropoffIcon}>
-                      <Popup>Dropoff: {job.destination}</Popup>
-                    </Marker>
-                    {session && (
-                      <Marker position={currentPos} icon={truckIcon}>
-                        <Popup>
-                          <strong>{session.driver_name}</strong><br />
-                          Speed: {session.speed_kn} km/h<br />
-                          Plate: {session.plate_number}
-                        </Popup>
-                      </Marker>
-                    )}
-                    {session?.route && (
-                      <Polyline positions={session.route} color="#10b981" weight={4} dashArray="5, 10" />
-                    )}
-                  </MapContainer>
-                </div>
-
-                {session && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border p-4 rounded-xl bg-muted/10">
-                    <div>
-                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">Driver Name</span>
-                      <span className="font-semibold text-sm">{session.driver_name}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">Speed</span>
-                      <span className="font-semibold text-sm">{session.speed_kn || 0} km/h</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">ETA</span>
-                      <span className="font-semibold text-sm text-primary">{session.eta || "Calculating..."}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block font-bold text-[9px] uppercase">Distance left</span>
-                      <span className="font-semibold text-sm">
-                        {session.distance_m ? `${Math.round(session.distance_m / 1000)} km` : "Pending..."}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
