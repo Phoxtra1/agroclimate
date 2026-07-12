@@ -1,18 +1,14 @@
 -- Fix AGTrans RLS policies
--- 1. The newer "Authenticated can view approved drivers" policy from 20260710 migration
---    conflicts with the original "Authenticated can view verified drivers" policy.
---    Drop the old one and keep the new stricter one.
+-- 1. Drop the old conflicting driver visibility policy (uses verification_status='verified')
+--    The newer one from 20260710 uses approval_status='approved' with stricter conditions.
 DROP POLICY IF EXISTS "Authenticated can view verified drivers" ON public.agtrans_drivers;
 
--- 2. The "Approved drivers see open requests" policy from 20260710 migration
---    conflicts with the original "Verified drivers see open requests" from 20260601.
---    Drop the old ones and keep the newer ones.
+-- 2. Drop old conflicting request policies (use verification_status instead of approval_status)
 DROP POLICY IF EXISTS "Verified drivers see open requests" ON public.agtrans_requests;
 DROP POLICY IF EXISTS "Verified drivers can claim open requests" ON public.agtrans_requests;
+DROP POLICY IF EXISTS "Supplier reads own requests" ON public.agtrans_requests;
 
--- 3. Add missing: suppliers must be able to INSERT their own transport requests.
---    The original "Supplier manages own requests" policy (FOR ALL) should cover INSERT,
---    but re-create it explicitly as FOR INSERT to be safe in case it was not applied.
+-- 3. Ensure "Supplier manages own requests" FOR ALL policy exists (covers INSERT + SELECT)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -27,9 +23,16 @@ BEGIN
   END IF;
 END $$;
 
--- 4. Ensure suppliers can also SELECT their own requests regardless of status.
---    This was included in "Supplier manages own requests" (FOR ALL), but in case
---    only a SELECT policy exists, add a dedicated one.
-CREATE POLICY IF NOT EXISTS "Supplier reads own requests" ON public.agtrans_requests
-  FOR SELECT TO authenticated
-  USING (auth.uid() = supplier_id);
+-- 4. Add a dedicated SELECT policy so suppliers always see their own requests
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'agtrans_requests'
+      AND policyname = 'Supplier reads own requests'
+  ) THEN
+    CREATE POLICY "Supplier reads own requests" ON public.agtrans_requests
+      FOR SELECT TO authenticated
+      USING (auth.uid() = supplier_id);
+  END IF;
+END $$;
