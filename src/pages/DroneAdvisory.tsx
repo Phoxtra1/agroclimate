@@ -65,7 +65,7 @@ export default function DroneAdvisory() {
         <Plane className="h-6 w-6 text-primary" />
         <div>
           <h1 className="text-xl font-bold">Drone Operations &amp; Aerial Intelligence</h1>
-          <p className="text-sm text-muted-foreground">Mission control · Odeneho AI advisory · vision analytics</p>
+          <p className="text-sm text-muted-foreground">Mission control · Dipa advisory · vision analytics</p>
         </div>
       </div>
 
@@ -198,7 +198,7 @@ export default function DroneAdvisory() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-xs text-muted-foreground">Upload aerial data for Odeneho AI to interpret patterns and generate advisories.</p>
+                <p className="text-xs text-muted-foreground">Upload aerial data for Dipa to interpret patterns and generate advisories.</p>
 
                 <UploadSection label="Aerial Images" accept="image/*" description="Upload aerial photos from drone or satellite" />
                 <UploadSection label="Survey Videos" accept="video/*" description="Short survey footage for analysis" />
@@ -208,7 +208,7 @@ export default function DroneAdvisory() {
                   <p className="text-xs font-medium mb-1">How it works</p>
                   <ul className="text-xs text-muted-foreground space-y-1">
                     <li>• Data stored securely in your account</li>
-                    <li>• Odeneho AI interprets patterns</li>
+                    <li>• Dipa interprets patterns</li>
                     <li>• Outputs are advisory, not diagnostic</li>
                   </ul>
                 </div>
@@ -269,11 +269,11 @@ export default function DroneAdvisory() {
             <CardContent className="pt-4 flex items-center gap-3">
               <Bot className="h-5 w-5 text-primary shrink-0" />
               <div className="flex-1">
-                <p className="text-sm font-medium">Odeneho Intelligence Layer</p>
-                <p className="text-xs text-muted-foreground">Odeneho AI unifies both manual uploads and API data — interpreting patterns, simplifying outputs, translating into local language, and explaining risks with actionable recommendations.</p>
+                <p className="text-sm font-medium">Dipa Intelligence Layer</p>
+                <p className="text-xs text-muted-foreground">Dipa unifies both manual uploads and API data — interpreting patterns, simplifying outputs, translating into local language, and explaining risks with actionable recommendations.</p>
               </div>
-              <Link to="/odeneho">
-                <Button size="sm" variant="default" className="shrink-0">Ask Odeneho</Button>
+              <Link to="/dipa">
+                <Button size="sm" variant="default" className="shrink-0">Ask Dipa</Button>
               </Link>
             </CardContent>
           </Card>

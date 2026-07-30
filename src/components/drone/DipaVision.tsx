@@ -15,7 +15,7 @@ const ICONS: Record<string, any> = {
 
 const RISK_CLS = (s: number) => s >= 70 ? "text-red-400" : s >= 40 ? "text-amber-400" : "text-emerald-400";
 
-export function OdenehoVision({ missionId }: { missionId?: string | null }) {
+export function DipaVision({ missionId }: { missionId?: string | null }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const { findings, loading, error, analyzeFile } = useDroneVision();
@@ -31,7 +31,7 @@ export function OdenehoVision({ missionId }: { missionId?: string | null }) {
     <Card className="bg-slate-900 border-slate-800 text-slate-100">
       <CardHeader className="py-4 border-b border-slate-800 flex flex-row justify-between items-center">
         <CardTitle className="text-sm font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-2">
-          <ScanSearch className="h-4 w-4" /> Odeneho Vision
+          <ScanSearch className="h-4 w-4" /> Dipa Vision
         </CardTitle>
         <Button size="sm" variant="ghost" className="h-7 text-cyan-400 hover:bg-slate-800 font-mono text-[10px]" onClick={() => fileInputRef.current?.click()} disabled={loading}>
           {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />} ANALYZE IMAGE
@@ -51,7 +51,7 @@ export function OdenehoVision({ missionId }: { missionId?: string | null }) {
 
         {loading && (
           <div className="flex items-center gap-2 text-[11px] font-mono text-cyan-400">
-            <Loader2 className="h-3 w-3 animate-spin" /> Odeneho is analyzing the imagery…
+            <Loader2 className="h-3 w-3 animate-spin" /> Dipa is analyzing the imagery…
           </div>
         )}
 

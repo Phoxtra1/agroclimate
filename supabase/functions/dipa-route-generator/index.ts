@@ -58,7 +58,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Provide at least three farm boundary coordinates as lat,lng pairs." }, 400);
     }
 
-    const system = "You are Odeneho AI, an agricultural drone mission route planner for West African farms. Generate safe, practical mission waypoints only from provided farm boundaries. If uncertainty exists, state it in advisory_notes. Return only structured tool output.";
+    const system = "You are Dipa, an agricultural drone mission route planner for West African farms. Generate safe, practical mission waypoints only from provided farm boundaries. If uncertainty exists, state it in advisory_notes. Return only structured tool output.";
     const user = `Farm: ${farmName}\nMission type: ${missionType}\nPreferred route: ${routePreference}\nAltitude meters: ${altitude}\nSpeed m/s: ${speed}\nBoundary coordinates: ${JSON.stringify(boundary)}\n\nCreate mission waypoints, route pattern, estimated coverage hectares, estimated duration minutes, estimated battery percentage, and operational notes. Keep all waypoints inside or on the boundary approximation.`;
 
     const ai = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -101,9 +101,9 @@ serve(async (req) => {
       }),
     });
 
-    if (ai.status === 429) return jsonResponse({ error: "Odeneho AI route generator is rate limited. Try again shortly." }, 429);
+    if (ai.status === 429) return jsonResponse({ error: "Dipa route generator is rate limited. Try again shortly." }, 429);
     if (ai.status === 402) return jsonResponse({ error: "AI credits exhausted" }, 402);
-    if (!ai.ok) return jsonResponse({ error: `Odeneho AI route generation failed (${ai.status})` }, 502);
+    if (!ai.ok) return jsonResponse({ error: `Dipa route generation failed (${ai.status})` }, 502);
 
     const data = await ai.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
@@ -111,7 +111,7 @@ serve(async (req) => {
     return jsonResponse({ route: { ...route, boundary, farm_name: farmName, generated_at: new Date().toISOString() } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown route generator error";
-    console.error("odeneho-route-generator:", message);
+    console.error("dipa-route-generator:", message);
     return jsonResponse({ error: message }, 500);
   }
 });

@@ -16,7 +16,7 @@ export interface FlightHistoryItem {
 const DEFAULT_AIRCRAFT: AircraftAsset[] = [
   {
     id: "active-drone-1",
-    name: "Odeneho Multi-Spectral UAV",
+    name: "Dipa Multi-Spectral UAV",
     type: "drone",
     manufacturer: "Amineva Systems",
     model: "AgroCop-X4",

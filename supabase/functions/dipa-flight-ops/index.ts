@@ -14,7 +14,7 @@ serve(async (req) => {
 
     const { telemetry, environment, mission } = await req.json();
 
-    const system = `You are Odeneho — an aviation-grade drone flight safety analyst for West African agricultural operations. Be concise, factual, and decisive. If data is missing or low-confidence, say so. Never invent telemetry. Output ONLY via the structured tool.`;
+    const system = `You are Dipa — an aviation-grade drone flight safety analyst for West African agricultural operations. Be concise, factual, and decisive. If data is missing or low-confidence, say so. Never invent telemetry. Output ONLY via the structured tool.`;
 
     const user = `Live telemetry: ${JSON.stringify(telemetry)}
 Environment: ${JSON.stringify(environment)}
@@ -77,7 +77,7 @@ List concrete alerts (high_wind, rain_risk, low_battery, signal_loss, unsafe_alt
     return new Response(JSON.stringify({ advisory }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     const m = e instanceof Error ? e.message : "Unknown error";
-    console.error("odeneho-flight-ops:", m);
+    console.error("dipa-flight-ops:", m);
     return new Response(JSON.stringify({ error: m }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

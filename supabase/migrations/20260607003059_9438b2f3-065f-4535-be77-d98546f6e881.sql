@@ -56,7 +56,7 @@ GRANT ALL ON public.drone_media TO service_role;
 ALTER TABLE public.drone_media ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users manage own drone media" ON public.drone_media FOR ALL TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- AI detections (Odeneho Vision results)
+-- AI detections (Dipa Vision results)
 CREATE TABLE IF NOT EXISTS public.drone_ai_detections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,

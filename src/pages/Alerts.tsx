@@ -293,7 +293,7 @@ export default function Alerts() {
             ) : (
               <Sparkles className="h-4 w-4 text-primary-foreground group-hover:scale-110 transition-transform" />
             )}
-            Analyze with Odeneho AI
+            Analyze with Dipa
           </Button>
           <Button size="sm" variant="outline" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={`mr-1 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh
@@ -474,7 +474,7 @@ export default function Alerts() {
                   ) : (
                     <div className="text-center py-6 text-[11px] text-muted-foreground">
                       <Sparkles className="h-5 w-5 mx-auto mb-2 text-primary animate-pulse" />
-                      Click "Analyze with Odeneho AI" above to load real-time alerts.
+                      Click "Analyze with Dipa" above to load real-time alerts.
                     </div>
                   )}
                 </div>

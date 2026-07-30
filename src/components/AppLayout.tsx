@@ -16,7 +16,7 @@ import { NotificationsButton } from "./NotificationsButton";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
-  { to: "/odeneho", icon: Bot, label: "Odeneho", id: "odeneho" },
+  { to: "/dipa", icon: Bot, label: "Dipa", id: "dipa" },
   { to: "/weather", icon: Cloud, label: "Agro Forecast", id: "weather" },
   { to: "/environment", icon: Leaf, label: "Environment", id: "environment" },
   { to: "/crops", icon: Sprout, label: "Crops", id: "crops" },
@@ -32,7 +32,7 @@ const navItems = [
 
 const bottomNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
-  { to: "/odeneho", icon: Bot, label: "Odeneho" },
+  { to: "/dipa", icon: Bot, label: "Dipa" },
   { to: "/weather", icon: Cloud, label: "Weather" },
   { to: "/learning", icon: BookOpen, label: "Learn" },
   { to: "/alerts", icon: Bell, label: "Alerts" },

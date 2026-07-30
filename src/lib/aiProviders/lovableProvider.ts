@@ -1,16 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { OdenehoProvider, SummaryRequest, PredictionRequest, ChatMessage, RiskAssessment, AIAlertAdvisory, AIEnvironmentalAssessment, AIAgroRiskAssessment } from "./index";
+import type { DipaProvider, SummaryRequest, PredictionRequest, ChatMessage, RiskAssessment, AIAlertAdvisory, AIEnvironmentalAssessment, AIAgroRiskAssessment } from "./index";
 import { levelFromScore } from "./index";
 
 import { getActiveModelSync } from "@/hooks/useAiModel";
 
-// Calls the `odeneho-intelligence` edge function which proxies Lovable AI.
+// Calls the `dipa-intelligence` edge function which proxies Lovable AI.
 // The active model is chosen in the admin AI Layer and forwarded per call so
 // every Agyenkwa component uses the currently selected engine.
 async function call(action: string, payload: unknown): Promise<any> {
   const model = getActiveModelSync().gatewayModel;
   const started = performance.now();
-  const { data, error } = await supabase.functions.invoke("odeneho-intelligence", {
+  const { data, error } = await supabase.functions.invoke("dipa-intelligence", {
     body: { action, payload, model },
   });
   // Fire-and-forget usage log (best effort)
@@ -26,7 +26,7 @@ async function call(action: string, payload: unknown): Promise<any> {
   return data;
 }
 
-export const lovableProvider: OdenehoProvider = {
+export const lovableProvider: DipaProvider = {
   id: "lovable-ai-gateway",
   async generateSummary(req: SummaryRequest) {
     const r = await call("summary", req);

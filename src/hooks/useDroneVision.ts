@@ -36,7 +36,7 @@ export function useDroneVision() {
     setLoading(true); setError(null);
     try {
       const imageBase64 = await fileToBase64(file);
-      const { data, error: invErr } = await supabase.functions.invoke("odeneho-vision", {
+      const { data, error: invErr } = await supabase.functions.invoke("dipa-vision", {
         body: { imageBase64, context: { source: "drone-upload" } },
       });
       if (invErr) throw new Error(invErr.message);
@@ -67,7 +67,7 @@ export function useDroneVision() {
   const analyzeBase64 = async (imageBase64: string, missionId?: string) => {
     setLoading(true); setError(null);
     try {
-      const { data, error: invErr } = await supabase.functions.invoke("odeneho-vision", {
+      const { data, error: invErr } = await supabase.functions.invoke("dipa-vision", {
         body: { imageBase64, context: { source: "drone-frame" } },
       });
       if (invErr) throw new Error(invErr.message);

@@ -215,9 +215,9 @@ export class AirIntegrationHub {
 
   /**
    * FUTURE AI READINESS
-   * Preparation hooks for Odeneho AI Integration
+   * Preparation hooks for Dipa AI Integration
    */
-  static prepareOdenehoAiHook(
+  static prepareDipaAiHook(
     capability:
       | "crop_monitoring"
       | "flood_detection"
@@ -234,11 +234,11 @@ export class AirIntegrationHub {
     description: string;
     pipelineUrl: string;
   } {
-    console.log(`[AIH Odeneho AI] Preparing integration hook for pipeline: ${capability} on asset: ${aircraftId}`);
+    console.log(`[AIH Dipa AI] Preparing integration hook for pipeline: ${capability} on asset: ${aircraftId}`);
     
     const capabilitiesMap: Record<string, string> = {
-      crop_monitoring: "Crop Stress & Yield Prediction Model (Odeneho v2.4)",
-      flood_detection: "Terrace Flooding & Saturation Analysis (Odeneho Hydrology)",
+      crop_monitoring: "Crop Stress & Yield Prediction Model (Dipa v2.4)",
+      flood_detection: "Terrace Flooding & Saturation Analysis (Dipa Hydrology)",
       environmental: "CO2 Canopy & Air Quality Sensors Ingestion",
       infrastructure: "Thermal Power & Irrigation Line Fault Detection",
       disaster: "Wildfire & Flood Devastation Rapid Area Mapping",
@@ -248,10 +248,10 @@ export class AirIntegrationHub {
     };
 
     return {
-      hookId: `odeneho-hook-${capability}-${crypto.randomUUID().slice(0, 8)}`,
+      hookId: `dipa-hook-${capability}-${crypto.randomUUID().slice(0, 8)}`,
       prepared: true,
       description: `Hook prepared for: ${capabilitiesMap[capability] || capability}. Fully configured to ingest telemetry from asset ${aircraftId}.`,
-      pipelineUrl: `/api/v1/ai/hooks/odeneho/${capability}?aircraft_id=${aircraftId}`,
+      pipelineUrl: `/api/v1/ai/hooks/dipa/${capability}?aircraft_id=${aircraftId}`,
     };
   }
 }
