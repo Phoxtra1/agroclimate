@@ -217,7 +217,7 @@ export default function FarmBusinessHub() {
                                   <p className="text-sm font-medium">{action.step}</p>
                                   <p className="text-xs text-muted-foreground mt-0.5">{action.detail}</p>
                                   {action.tool && (
-                                    <Link to={action.tool === "Agro Inventory" ? "/inventory" : "/odeneho"}>
+                                    <Link to={action.tool === "Agro Inventory" ? "/inventory" : "/dipa"}>
                                       <Badge variant="outline" className="mt-1.5 text-[10px] cursor-pointer hover:bg-primary/10">
                                         <Package className="h-3 w-3 mr-1" /> Use {action.tool} <ArrowRight className="h-3 w-3 ml-1" />
                                       </Badge>
@@ -238,16 +238,16 @@ export default function FarmBusinessHub() {
         })}
       </div>
 
-      {/* Odeneho CTA */}
+      {/* Dipa CTA */}
       <Card className="mt-6 border-dashed border-primary/40 bg-primary/5">
         <CardContent className="pt-4 flex items-center gap-3">
           <Bot className="h-6 w-6 text-primary shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-semibold">Need personalized business advice?</p>
-            <p className="text-xs text-muted-foreground">Ask Odeneho for strategies tailored to your crops, location, and season.</p>
+            <p className="text-xs text-muted-foreground">Ask Dipa for strategies tailored to your crops, location, and season.</p>
           </div>
-          <Link to="/odeneho">
-            <Button size="sm">Ask Odeneho</Button>
+          <Link to="/dipa">
+            <Button size="sm">Ask Dipa</Button>
           </Link>
         </CardContent>
       </Card>

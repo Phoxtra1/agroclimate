@@ -140,7 +140,7 @@ function SelectedDrone({ drone }: { drone: FleetDrone }) {
       <Detail icon={<Battery className="h-4 w-4" />} label="Battery" value={`${drone.battery.toFixed(0)}%`} />
       <Detail icon={<Signal className="h-4 w-4" />} label="Connection" value={`${drone.connectionHealth.toFixed(0)}%`} />
       <div className="rounded-lg border border-cyan-900/50 bg-cyan-950/20 p-3 text-[11px] text-cyan-100">
-        Odeneho AI is monitoring fleet separation, battery risk, signal health, GPS quality, and return-to-home readiness in real time.
+        Dipa is monitoring fleet separation, battery risk, signal health, GPS quality, and return-to-home readiness in real time.
       </div>
     </div>
   );

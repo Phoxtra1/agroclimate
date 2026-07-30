@@ -18,7 +18,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
   emergency_land: { label: "DEVIATE / LAND IMMEDIATELY", color: "text-red-400" },
 };
 
-export function OdenehoAiAdvisory({
+export function DipaAiAdvisory({
   telemetry, environment, status = "flying",
 }: { telemetry: TelemetryData; environment: EnvironmentData; status?: DroneStatus }) {
   const { advisory, loading, evaluate, error } = useFlightAdvisor({
@@ -126,4 +126,4 @@ export function OdenehoAiAdvisory({
     </Card>
   );
 }
-export default OdenehoAiAdvisory;
+export default DipaAiAdvisory;

@@ -250,7 +250,7 @@ Alert IDs are deterministic (prefix + location + date) ensuring stable read/dism
 - **weather**: fetch live weather and daily forecast from Tomorrow.io.
 - **weather-sms-alerts**: evaluate critical conditions and send SMS alerts to users with phone numbers, with 6-hour deduplication.
 - **crop-advisory**: generate crop guidance using AI.
-- **odeneho-ai**: AI advisory and research responses.
+- **dipa-ai**: AI advisory and research responses.
 - **send-sms**: single-message delivery helper.
 - **drone-advisory**: flight condition analysis.
 

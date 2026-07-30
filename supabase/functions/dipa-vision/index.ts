@@ -15,7 +15,7 @@ serve(async (req) => {
     const { imageBase64, imageUrl, context } = await req.json();
     if (!imageBase64 && !imageUrl) throw new Error("imageBase64 or imageUrl required");
 
-    const system = `You are Odeneho Vision — an expert aerial analyst for agriculture and environment in West Africa. Analyze the drone image and return STRUCTURED findings only via the tool. Be honest about uncertainty — never invent diseases. Avoid specific chemical dosages.`;
+    const system = `You are Dipa Vision — an expert aerial analyst for agriculture and environment in West Africa. Analyze the drone image and return STRUCTURED findings only via the tool. Be honest about uncertainty — never invent diseases. Avoid specific chemical dosages.`;
 
     const imagePart = imageBase64
       ? { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
@@ -79,7 +79,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ findings }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     const m = e instanceof Error ? e.message : "Unknown error";
-    console.error("odeneho-vision:", m);
+    console.error("dipa-vision:", m);
     return new Response(JSON.stringify({ error: m }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

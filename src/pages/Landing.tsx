@@ -103,7 +103,7 @@ export default function Landing() {
   };
 
   const features = [
-    { icon: Bot, title: "Odeneho", desc: "Voice-first AI farming assistant powered by Amineva" },
+    { icon: Bot, title: "Dipa", desc: "Voice-first AI farming assistant powered by Amineva" },
     { icon: Cloud, title: "Climate Intelligence", desc: "Hyperlocal weather, rainfall prediction, disaster alerts" },
     { icon: Sprout, title: "Crop Advisory", desc: "AI-powered planting windows, irrigation, pest risk" },
     { icon: Fish, title: "Aquaculture", desc: "Fish pond monitoring with water quality tracking" },

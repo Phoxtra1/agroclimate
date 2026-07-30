@@ -26,7 +26,7 @@ serve(async (req) => {
         ? "Minor Rainy Season"
         : "Dry Season";
 
-    const systemPrompt = `You are Odeneho, the embedded agricultural intelligence of AgroClimate, powered by Amineva.
+    const systemPrompt = `You are Dipa, the embedded agricultural intelligence of AgroClimate, powered by Amineva.
 You serve as a coherent, self-serving digital extension officer and AgroClimate assistant.
 You serve West African farmers, extension officers, surveyors, and forestry agents.
 
@@ -174,7 +174,7 @@ Communication rules:
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("odeneho-ai error:", message);
+    console.error("dipa-ai error:", message);
     return new Response(JSON.stringify({ error: message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

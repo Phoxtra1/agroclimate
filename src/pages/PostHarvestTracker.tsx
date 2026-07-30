@@ -287,20 +287,20 @@ function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; ope
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Get Odeneho AI advice</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Get Dipa advice</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm">
           <p><b>Crop:</b> {entry.crop_name}</p>
           <p><b>Days stored:</b> {risk.days}</p>
           <p><b>Storage method:</b> {entry.storage_method || "N/A"}</p>
           <p><b>Risk level:</b> {risk.level}</p>
-          <p className="text-muted-foreground text-xs">We'll send this context to Odeneho AI for a detailed recommendation.</p>
+          <p className="text-muted-foreground text-xs">We'll send this context to Dipa for a detailed recommendation.</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={() => {
-            try { sessionStorage.setItem("odeneho-prefill", prompt); } catch {}
-            navigate("/odeneho");
-          }}>Open Odeneho</Button>
+            try { sessionStorage.setItem("dipa-prefill", prompt); } catch {}
+            navigate("/dipa");
+          }}>Open Dipa</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

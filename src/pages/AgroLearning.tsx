@@ -23,11 +23,11 @@ const topics: LearningTopic[] = [
     sections: [
       {
         title: "Getting Started with AgroClimate",
-        content: "Welcome to AgroClimate, your intelligent farming companion.\n\nAgroClimate helps you make better farming decisions using real-time weather data, AI-powered crop advisories, and environmental monitoring.\n\nKey Features:\n\n1) Dashboard: Your personalized farming hub with real-time weather, alerts, and crop recommendations based on your exact location.\n\n2) Odeneho: Your intelligent assistant. Ask anything about farming, weather, livestock, aquaculture, or food safety. Voice-enabled for hands-free use.\n\n3) Weather and Forecast: Live weather with 7-day forecasts, irrigation advisories, and seasonal crop planning.\n\n4) Alerts: Smart notifications triggered by real weather conditions: heavy rain, extreme heat, high winds, disease risk. Mark as read or dismiss permanently.\n\n5) Agro Inventory: Track all farm inputs, labor, land costs, harvest, losses, and sales with real-time profit calculations.\n\n6) Farm Business Hub: Practical strategies for improving profitability, pricing power, and financial resilience.",
+        content: "Welcome to AgroClimate, your intelligent farming companion.\n\nAgroClimate helps you make better farming decisions using real-time weather data, AI-powered crop advisories, and environmental monitoring.\n\nKey Features:\n\n1) Dashboard: Your personalized farming hub with real-time weather, alerts, and crop recommendations based on your exact location.\n\n2) Dipa: Your intelligent assistant. Ask anything about farming, weather, livestock, aquaculture, or food safety. Voice-enabled for hands-free use.\n\n3) Weather and Forecast: Live weather with 7-day forecasts, irrigation advisories, and seasonal crop planning.\n\n4) Alerts: Smart notifications triggered by real weather conditions: heavy rain, extreme heat, high winds, disease risk. Mark as read or dismiss permanently.\n\n5) Agro Inventory: Track all farm inputs, labor, land costs, harvest, losses, and sales with real-time profit calculations.\n\n6) Farm Business Hub: Practical strategies for improving profitability, pricing power, and financial resilience.",
       },
       {
-        title: "Using Odeneho",
-        content: "Odeneho is your personal agricultural intelligence assistant.\n\nHow to use:\n\nText: Type your question in the chat box and press Send.\n\nVoice: Press the microphone button, speak your question clearly, then press the mic again to stop. Review the transcribed text and edit if needed before sending.\n\nListen: Press 'Listen' on any response to hear it read aloud.\n\nWhat you can ask:\nWhat crops should I plant this season?\nIs it safe to spray pesticides today?\nHow do I manage my fish pond in this weather?\nWhen should I vaccinate my poultry?\nWhat's the best fertilizer for my maize?\nHow do I reduce post-harvest losses?\nWhat's a good pricing strategy for my produce?\n\nTips for best results:\nBe specific about your crop, location, or concern.\nOdeneho uses your real-time weather and location data.\nFor complex topics (disease diagnosis, market strategy), Odeneho provides research-grade guidance.\nIf unsure about advice, Odeneho will redirect you to expert support.",
+        title: "Using Dipa",
+        content: "Dipa is your personal agricultural intelligence assistant.\n\nHow to use:\n\nText: Type your question in the chat box and press Send.\n\nVoice: Press the microphone button, speak your question clearly, then press the mic again to stop. Review the transcribed text and edit if needed before sending.\n\nListen: Press 'Listen' on any response to hear it read aloud.\n\nWhat you can ask:\nWhat crops should I plant this season?\nIs it safe to spray pesticides today?\nHow do I manage my fish pond in this weather?\nWhen should I vaccinate my poultry?\nWhat's the best fertilizer for my maize?\nHow do I reduce post-harvest losses?\nWhat's a good pricing strategy for my produce?\n\nTips for best results:\nBe specific about your crop, location, or concern.\nDipa uses your real-time weather and location data.\nFor complex topics (disease diagnosis, market strategy), Dipa provides research-grade guidance.\nIf unsure about advice, Dipa will redirect you to expert support.",
       },
       {
         title: "Understanding Alerts & Advisories",
@@ -287,7 +287,7 @@ export default function AgroLearning() {
             </div>
           </div>
 
-          {/* Ask Odeneho CTA */}
+          {/* Ask Dipa CTA */}
           {(selectedTopic === "explainer" || selectedTopic === "post-harvest") && (
             <Card className="mt-4 border-dashed border-primary/40">
               <CardContent className="pt-4 flex items-center gap-3">
@@ -297,11 +297,11 @@ export default function AgroLearning() {
                     {selectedTopic === "post-harvest" ? "Need personalized business or preservation advice?" : "Need help understanding a feature?"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedTopic === "post-harvest" ? "Ask Odeneho for strategies tailored to your crops, location, and season." : "Ask Odeneho AI for a personalized walkthrough."}
+                    {selectedTopic === "post-harvest" ? "Ask Dipa for strategies tailored to your crops, location, and season." : "Ask Dipa for a personalized walkthrough."}
                   </p>
                 </div>
-                <Link to="/odeneho">
-                  <Button size="sm">Ask Odeneho</Button>
+                <Link to="/dipa">
+                  <Button size="sm">Ask Dipa</Button>
                 </Link>
               </CardContent>
             </Card>

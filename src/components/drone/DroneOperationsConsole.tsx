@@ -4,8 +4,8 @@ import { LiveFlightView } from "./LiveFlightView";
 import { TelemetryDashboard } from "./TelemetryDashboard";
 import { DroneConnectionCenter } from "./DroneConnectionCenter";
 import { AgNavDroneMap } from "./AgNavDroneMap";
-import { OdenehoAiAdvisory } from "./OdenehoAiAdvisory";
-import { OdenehoVision } from "./OdenehoVision";
+import { DipaAiAdvisory } from "./DipaAiAdvisory";
+import { DipaVision } from "./DipaVision";
 import { MissionPlanning } from "./MissionPlanning";
 import { DroneMediaCenter } from "./DroneMediaCenter";
 import { DroneAnalytics } from "./DroneAnalytics";
@@ -43,7 +43,7 @@ export function DroneOperationsConsole() {
         <div className="flex items-start justify-between gap-2">
           <div>
             <h2 className="text-lg sm:text-xl font-mono font-bold text-cyan-400 tracking-wider">AERIAL CONTROL</h2>
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">UNIVERSAL AIR OPERATIONS · POWERED BY ODENEHO AI &amp; AIR INTEGRATION HUB</p>
+            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">UNIVERSAL AIR OPERATIONS · POWERED BY DIPA &amp; AIR INTEGRATION HUB</p>
           </div>
           <Button variant="ghost" size="icon" onClick={toggleFullscreen} className="lg:hidden text-slate-400 hover:text-cyan-400 hover:bg-slate-800 shrink-0" title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -73,7 +73,7 @@ export function DroneOperationsConsole() {
               <DroneConnectionCenter {...droneState} />
               <ConnectionDiagnostics diagnostics={droneState.diagnostics} protocol={droneState.protocol} status={droneState.status} />
               <ConnectionProcedure />
-              <OdenehoAiAdvisory telemetry={droneState.telemetry} environment={droneState.environment} status={droneState.status} />
+              <DipaAiAdvisory telemetry={droneState.telemetry} environment={droneState.environment} status={droneState.status} />
             </div>
             <div className="lg:col-span-3 space-y-4">
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -95,8 +95,8 @@ export function DroneOperationsConsole() {
 
         <TabsContent value="intelligence" className="m-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <OdenehoAiAdvisory telemetry={droneState.telemetry} environment={droneState.environment} status={droneState.status} />
-            <OdenehoVision missionId={droneState.missionId} />
+            <DipaAiAdvisory telemetry={droneState.telemetry} environment={droneState.environment} status={droneState.status} />
+            <DipaVision missionId={droneState.missionId} />
           </div>
         </TabsContent>
 
