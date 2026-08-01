@@ -336,14 +336,14 @@ export function AGTransSupplierPanel() {
               <SelectTrigger><SelectValue placeholder="Vehicle feature" /></SelectTrigger>
               <SelectContent>{VEHICLE_FEATURES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
             </Select>
-            <Select value={pricingFilter} onValueChange={setPricingFilter}>
+            <Select value={pricingFilter || "any"} onValueChange={(v) => setPricingFilter(v === "any" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="Pricing type" /></SelectTrigger>
-              <SelectContent><SelectItem value="">Any</SelectItem>{PRICING_TYPE.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="any">Any</SelectItem>{PRICING_TYPE.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
-            <Select value={minRating} onValueChange={setMinRating}>
+            <Select value={minRating || "any"} onValueChange={(v) => setMinRating(v === "any" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="Min rating" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Any</SelectItem>
+                <SelectItem value="any">Any</SelectItem>
                 <SelectItem value="4">4+</SelectItem>
                 <SelectItem value="3">3+</SelectItem>
                 <SelectItem value="2">2+</SelectItem>
