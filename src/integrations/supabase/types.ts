@@ -119,80 +119,164 @@ export type Database = {
       }
       agtrans_drivers: {
         Row: {
+          admin_suspended: boolean
+          approval_status: string
           availability_status: string
           cancellations: number | null
           cancelled_trips: number | null
+          cargo_categories: string[] | null
+          cargo_types_accepted: string[]
           completed_deliveries: number | null
           created_at: string
+          current_location: Json | null
+          current_location_text: string | null
+          departure_date: string | null
+          departure_time: string | null
+          destination: string | null
           disputes: number | null
           district: string | null
+          driver_photo_url: string | null
+          driver_rating: number
+          estimated_arrival: string | null
           full_name: string
           id: string
+          insurance_status: string | null
           late_deliveries: number | null
           license_class: string | null
           license_url: string | null
           notes: string | null
+          offer_notes: string | null
+          offer_status: string
           phone: string
+          pickup_area: string | null
+          planned_route: string | null
           plate_number: string
           preferred_corridors: string[] | null
+          pricing_type: string
+          rate_information: string | null
+          rating_count: number
           region: string | null
+          rejection_reason: string | null
           reliability_score: number | null
+          remaining_capacity: number
+          roadworthiness_status: string | null
           route_coverage: string[] | null
+          route_flexibility: string | null
+          special_cargo_instructions: string | null
+          suggested_fee: number | null
           updated_at: string
           user_id: string
           vehicle_capacity_kg: number | null
+          vehicle_features: string[]
+          vehicle_images: string[] | null
           vehicle_type: string
           verification_status: string
         }
         Insert: {
+          admin_suspended?: boolean
+          approval_status?: string
           availability_status?: string
           cancellations?: number | null
           cancelled_trips?: number | null
+          cargo_categories?: string[] | null
+          cargo_types_accepted?: string[]
           completed_deliveries?: number | null
           created_at?: string
+          current_location?: Json | null
+          current_location_text?: string | null
+          departure_date?: string | null
+          departure_time?: string | null
+          destination?: string | null
           disputes?: number | null
           district?: string | null
+          driver_photo_url?: string | null
+          driver_rating?: number
+          estimated_arrival?: string | null
           full_name: string
           id?: string
+          insurance_status?: string | null
           late_deliveries?: number | null
           license_class?: string | null
           license_url?: string | null
           notes?: string | null
+          offer_notes?: string | null
+          offer_status?: string
           phone: string
+          pickup_area?: string | null
+          planned_route?: string | null
           plate_number: string
           preferred_corridors?: string[] | null
+          pricing_type?: string
+          rate_information?: string | null
+          rating_count?: number
           region?: string | null
+          rejection_reason?: string | null
           reliability_score?: number | null
+          remaining_capacity?: number
+          roadworthiness_status?: string | null
           route_coverage?: string[] | null
+          route_flexibility?: string | null
+          special_cargo_instructions?: string | null
+          suggested_fee?: number | null
           updated_at?: string
           user_id: string
           vehicle_capacity_kg?: number | null
+          vehicle_features?: string[]
+          vehicle_images?: string[] | null
           vehicle_type: string
           verification_status?: string
         }
         Update: {
+          admin_suspended?: boolean
+          approval_status?: string
           availability_status?: string
           cancellations?: number | null
           cancelled_trips?: number | null
+          cargo_categories?: string[] | null
+          cargo_types_accepted?: string[]
           completed_deliveries?: number | null
           created_at?: string
+          current_location?: Json | null
+          current_location_text?: string | null
+          departure_date?: string | null
+          departure_time?: string | null
+          destination?: string | null
           disputes?: number | null
           district?: string | null
+          driver_photo_url?: string | null
+          driver_rating?: number
+          estimated_arrival?: string | null
           full_name?: string
           id?: string
+          insurance_status?: string | null
           late_deliveries?: number | null
           license_class?: string | null
           license_url?: string | null
           notes?: string | null
+          offer_notes?: string | null
+          offer_status?: string
           phone?: string
+          pickup_area?: string | null
+          planned_route?: string | null
           plate_number?: string
           preferred_corridors?: string[] | null
+          pricing_type?: string
+          rate_information?: string | null
+          rating_count?: number
           region?: string | null
+          rejection_reason?: string | null
           reliability_score?: number | null
+          remaining_capacity?: number
+          roadworthiness_status?: string | null
           route_coverage?: string[] | null
+          route_flexibility?: string | null
+          special_cargo_instructions?: string | null
+          suggested_fee?: number | null
           updated_at?: string
           user_id?: string
           vehicle_capacity_kg?: number | null
+          vehicle_features?: string[]
+          vehicle_images?: string[] | null
           vehicle_type?: string
           verification_status?: string
         }
@@ -241,15 +325,24 @@ export type Database = {
       }
       agtrans_requests: {
         Row: {
+          agreed_fee: number | null
           agreement_id: string | null
+          agreement_timestamp: string | null
           buyer_id: string | null
+          cargo_features: string[] | null
+          cargo_types: string[] | null
+          cargo_weight: number | null
+          counter_note: string | null
           created_at: string
           delivery_lat: number | null
           delivery_location: string
           delivery_lon: number | null
+          driver_counter_price: number | null
           driver_id: string | null
           estimated_price: number | null
           id: string
+          marketplace_order_id: string | null
+          negotiation_status: string | null
           notes: string | null
           pickup_lat: number | null
           pickup_location: string
@@ -257,23 +350,36 @@ export type Database = {
           preferred_pickup_at: string | null
           product_type: string
           quantity: number
+          rejection_reason: string | null
+          request_type: string | null
           status: string
           supplier_id: string
+          supplier_offer_price: number | null
           tracking_code: string
+          transport_offer_id: string | null
           unit: string
           updated_at: string
           urgency: string
         }
         Insert: {
+          agreed_fee?: number | null
           agreement_id?: string | null
+          agreement_timestamp?: string | null
           buyer_id?: string | null
+          cargo_features?: string[] | null
+          cargo_types?: string[] | null
+          cargo_weight?: number | null
+          counter_note?: string | null
           created_at?: string
           delivery_lat?: number | null
           delivery_location: string
           delivery_lon?: number | null
+          driver_counter_price?: number | null
           driver_id?: string | null
           estimated_price?: number | null
           id?: string
+          marketplace_order_id?: string | null
+          negotiation_status?: string | null
           notes?: string | null
           pickup_lat?: number | null
           pickup_location: string
@@ -281,23 +387,36 @@ export type Database = {
           preferred_pickup_at?: string | null
           product_type: string
           quantity?: number
+          rejection_reason?: string | null
+          request_type?: string | null
           status?: string
           supplier_id: string
+          supplier_offer_price?: number | null
           tracking_code?: string
+          transport_offer_id?: string | null
           unit?: string
           updated_at?: string
           urgency?: string
         }
         Update: {
+          agreed_fee?: number | null
           agreement_id?: string | null
+          agreement_timestamp?: string | null
           buyer_id?: string | null
+          cargo_features?: string[] | null
+          cargo_types?: string[] | null
+          cargo_weight?: number | null
+          counter_note?: string | null
           created_at?: string
           delivery_lat?: number | null
           delivery_location?: string
           delivery_lon?: number | null
+          driver_counter_price?: number | null
           driver_id?: string | null
           estimated_price?: number | null
           id?: string
+          marketplace_order_id?: string | null
+          negotiation_status?: string | null
           notes?: string | null
           pickup_lat?: number | null
           pickup_location?: string
@@ -305,9 +424,13 @@ export type Database = {
           preferred_pickup_at?: string | null
           product_type?: string
           quantity?: number
+          rejection_reason?: string | null
+          request_type?: string | null
           status?: string
           supplier_id?: string
+          supplier_offer_price?: number | null
           tracking_code?: string
+          transport_offer_id?: string | null
           unit?: string
           updated_at?: string
           urgency?: string
@@ -502,6 +625,69 @@ export type Database = {
           target_price?: number
           unit?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      delivery_jobs: {
+        Row: {
+          agreement_id: string | null
+          buyer_id: string | null
+          created_at: string
+          destination: string
+          driver_id: string
+          driver_name: string | null
+          id: string
+          pickup_location: string
+          plate_number: string | null
+          product: string
+          quantity: number
+          request_id: string | null
+          status: string
+          supplier_id: string
+          transport_agreement_id: string | null
+          transport_fee: number | null
+          updated_at: string
+          vehicle_type: string | null
+        }
+        Insert: {
+          agreement_id?: string | null
+          buyer_id?: string | null
+          created_at?: string
+          destination: string
+          driver_id: string
+          driver_name?: string | null
+          id?: string
+          pickup_location: string
+          plate_number?: string | null
+          product: string
+          quantity?: number
+          request_id?: string | null
+          status?: string
+          supplier_id: string
+          transport_agreement_id?: string | null
+          transport_fee?: number | null
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Update: {
+          agreement_id?: string | null
+          buyer_id?: string | null
+          created_at?: string
+          destination?: string
+          driver_id?: string
+          driver_name?: string | null
+          id?: string
+          pickup_location?: string
+          plate_number?: string | null
+          product?: string
+          quantity?: number
+          request_id?: string | null
+          status?: string
+          supplier_id?: string
+          transport_agreement_id?: string | null
+          transport_fee?: number | null
+          updated_at?: string
+          vehicle_type?: string | null
         }
         Relationships: []
       }
@@ -1912,6 +2098,152 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tracking_sessions: {
+        Row: {
+          created_at: string
+          current_lat: number | null
+          current_lon: number | null
+          delivery_job_id: string
+          destination: string | null
+          distance_m: number | null
+          driver_id: string
+          driver_name: string | null
+          eta: string | null
+          heading: number | null
+          id: string
+          pickup_location: string | null
+          plate_number: string | null
+          route: Json | null
+          speed_kn: number | null
+          status: string
+          updated_at: string
+          vehicle_type: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_lat?: number | null
+          current_lon?: number | null
+          delivery_job_id: string
+          destination?: string | null
+          distance_m?: number | null
+          driver_id: string
+          driver_name?: string | null
+          eta?: string | null
+          heading?: number | null
+          id?: string
+          pickup_location?: string | null
+          plate_number?: string | null
+          route?: Json | null
+          speed_kn?: number | null
+          status?: string
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_lat?: number | null
+          current_lon?: number | null
+          delivery_job_id?: string
+          destination?: string | null
+          distance_m?: number | null
+          driver_id?: string
+          driver_name?: string | null
+          eta?: string | null
+          heading?: number | null
+          id?: string
+          pickup_location?: string | null
+          plate_number?: string | null
+          route?: Json | null
+          speed_kn?: number | null
+          status?: string
+          updated_at?: string
+          vehicle_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_sessions_delivery_job_id_fkey"
+            columns: ["delivery_job_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_agreements: {
+        Row: {
+          agreed_fee: number
+          agreement_timestamp: string
+          buyer_id: string | null
+          created_at: string
+          delivery_status: string
+          driver_id: string
+          id: string
+          marketplace_order_id: string | null
+          request_id: string | null
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          agreed_fee?: number
+          agreement_timestamp?: string
+          buyer_id?: string | null
+          created_at?: string
+          delivery_status?: string
+          driver_id: string
+          id?: string
+          marketplace_order_id?: string | null
+          request_id?: string | null
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          agreed_fee?: number
+          agreement_timestamp?: string
+          buyer_id?: string | null
+          created_at?: string
+          delivery_status?: string
+          driver_id?: string
+          id?: string
+          marketplace_order_id?: string | null
+          request_id?: string | null
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transport_notifications: {
+        Row: {
+          created_at: string
+          data: Json | null
+          id: string
+          is_read: boolean
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          is_read?: boolean
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_alert_events: {
         Row: {
