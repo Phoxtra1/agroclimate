@@ -42,6 +42,7 @@ import {
   segmentColour,
   scoreRisk,
   type RouteResult,
+  type RouteStep,
   type SosResponse,
   type RiskLevel,
   type OperatorType,
@@ -926,6 +927,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         vessel_id: vesselId, user_id: user?.id,
         load: { passengers, cargo_kg: cargoKg },
         rainProb: today?.rainProb,
+        profile: navMode === "road" ? travelMode : "car",
       });
       setRouteResult(result);
       lastTurnAnnouncedIdxRef.current = -1;
@@ -964,6 +966,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         vessel_id: vesselId, user_id: user?.id,
         load: { passengers, cargo_kg: cargoKg },
         rainProb: today?.rainProb,
+        profile: navMode === "road" ? travelMode : "car",
       });
       setRouteResult(result);
       lastTurnAnnouncedIdxRef.current = -1;
