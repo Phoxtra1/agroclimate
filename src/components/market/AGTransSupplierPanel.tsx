@@ -190,12 +190,12 @@ export function AGTransSupplierPanel() {
 
   const pickupForContract = (contract: MarketContract) => {
     const listing = supply.find((s) => s.id === contract.farmer_input_id);
-    return listing?.region || listing?.district || "";
+    return listing?.region || "";
   };
 
   const deliveryForContract = (contract: MarketContract) => {
     const order = orders.find((o) => o.id === contract.buyer_order_id);
-    return order?.region || order?.district || "";
+    return order?.region || "";
   };
 
   const openRequest = (offer: DriverProfile) => {
