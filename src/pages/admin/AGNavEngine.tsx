@@ -157,6 +157,15 @@ export type VesselStatus = "ACTIVE" | "BUSY" | "OFFLINE";
 export type OperatorType = "private" | "commercial" | "rescue_team" | "navy";
 
 export interface RouteSegment { coords: [number, number][]; level: RiskLevel; }
+export interface RouteStep {
+  instruction: string;
+  distance_m: number;
+  duration_s: number;
+  modifier?: string;
+  type?: string;
+  location?: [number, number];
+}
+export type TravelProfile = "car" | "motorcycle" | "train" | "walking";
 export interface RouteResult {
   route: [number, number][];
   risk_segments: RouteSegment[];
@@ -165,6 +174,8 @@ export interface RouteResult {
   risk_level: RiskLevel;
   distance_m: number;
   duration_s: number;
+  steps?: RouteStep[];
+  profile?: TravelProfile;
 }
 export interface SosResponse {
   status: "BROADCAST" | "ACCEPTED" | "RESOLVED";
