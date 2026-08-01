@@ -1427,6 +1427,37 @@ Generate a JSON response assessing the route safety, weather constraints, potent
             {/* SIMULATION GPS PLAYER CONTROLS & AI CO-PILOT ADVISORY */}
             {routeResult && (
               <div className="space-y-3">
+                {/* GOOGLE-MAPS STYLE TURN-BY-TURN DIRECTIONS */}
+                {routeResult.steps && routeResult.steps.length > 0 && (
+                  <div className="rounded-lg border border-border bg-card text-left overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-muted/60 border-b border-border">
+                      <span className="text-xs font-semibold flex items-center gap-1">
+                        <RouteIcon className="h-3.5 w-3.5 text-primary" /> Directions
+                      </span>
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {(routeResult.distance_m / 1000).toFixed(1)} km · {Math.round(routeResult.duration_s / 60)} min
+                      </span>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto divide-y divide-border/60">
+                      {routeResult.steps.map((st, i) => (
+                        <div key={`step-${i}`} className="flex items-start gap-2 px-3 py-2">
+                          <span className="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium leading-snug">{st.instruction}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono">
+                              {st.distance_m >= 1000 ? `${(st.distance_m / 1000).toFixed(1)} km` : `${Math.round(st.distance_m)} m`}
+                              {" · "}
+                              {Math.max(1, Math.round(st.duration_s / 60))} min
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-emerald-500/10 border border-emerald-500/25 p-3 rounded-lg space-y-3 mt-2 text-left">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-emerald-700 flex items-center gap-1">
