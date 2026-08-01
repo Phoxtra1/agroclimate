@@ -170,8 +170,8 @@ export default function AdminAGTransPanel() {
                         <div className="absolute top-0 right-0 p-2">
                           <span className="flex h-3 w-3 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span></span>
                         </div>
-                        <p className="font-semibold">{job.tracking_code}</p>
-                        <p className="text-xs text-muted-foreground mb-2">{job.product} · {job.quantity} {job.unit}</p>
+                        <p className="font-semibold">{job.product}</p>
+                        <p className="text-xs text-muted-foreground mb-2">{job.quantity} units</p>
                         <div className="text-xs space-y-1">
                           <p>From: {job.pickup_location}</p>
                           <p>To: {job.destination}</p>

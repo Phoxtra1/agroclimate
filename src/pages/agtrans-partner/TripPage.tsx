@@ -212,12 +212,12 @@ export default function TripPage() {
 
           {/* Action Buttons */}
           <div className="flex gap-4">
-            {job?.status === "Accepted" && (
+            {job?.status === "Assigned" && (
               <Button onClick={handleStartTrip} className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-12 text-lg">
                 <Navigation className="mr-2 h-5 w-5" /> Start Simulated Transit
               </Button>
             )}
-            {(job?.status === "In Transit" || job?.status === "Near Destination") && (
+            {(job?.status === "In Transit" || job?.status === "Near Delivery") && (
               <Button onClick={handleComplete} className="flex-1 bg-green-600 hover:bg-green-700 h-12 text-lg">
                 <CheckCircle className="mr-2 h-5 w-5" /> Mark Delivered
               </Button>

@@ -61,7 +61,7 @@ export default function LiveTracking() {
     if (!job) return;
     const loadEvents = async () => {
       const { data } = await supabase
-        .from("agtrans_tracking_events")
+        .from("agtrans_tracking_events" as any)
         .select("*")
         .eq("delivery_job_id", job.id)
         .order("created_at", { ascending: true });
