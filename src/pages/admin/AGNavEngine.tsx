@@ -157,6 +157,15 @@ export type VesselStatus = "ACTIVE" | "BUSY" | "OFFLINE";
 export type OperatorType = "private" | "commercial" | "rescue_team" | "navy";
 
 export interface RouteSegment { coords: [number, number][]; level: RiskLevel; }
+export interface RouteStep {
+  instruction: string;
+  distance_m: number;
+  duration_s: number;
+  modifier?: string;
+  type?: string;
+  location?: [number, number];
+}
+export type TravelProfile = "car" | "motorcycle" | "train" | "walking";
 export interface RouteResult {
   route: [number, number][];
   risk_segments: RouteSegment[];
@@ -165,6 +174,8 @@ export interface RouteResult {
   risk_level: RiskLevel;
   distance_m: number;
   duration_s: number;
+  steps?: RouteStep[];
+  profile?: TravelProfile;
 }
 export interface SosResponse {
   status: "BROADCAST" | "ACCEPTED" | "RESOLVED";
@@ -233,15 +244,43 @@ function segmentise(coords: [number, number][], scoreFn: (p: LatLng) => RiskLeve
 }
 
 // ---------- ROUTE ENGINE — POST /api/navigation/route ----------
+// Speed factors applied to OSRM's car duration so Motor / Walking give
+// realistic ETAs on the same road graph (the public OSRM demo is car-only).
+const PROFILE_SPEED_FACTOR: Record<TravelProfile, number> = {
+  car: 1,
+  motorcycle: 0.85,
+  train: 0.6,
+  walking: 4.8,
+};
+
+function humaniseStep(s: any, profile: TravelProfile): string {
+  const m = s?.maneuver ?? {};
+  const road = s?.name ? ` onto ${s.name}` : "";
+  const verb = profile === "walking" ? "Walk" : "Continue";
+  switch (m.type) {
+    case "depart": return `Head ${m.modifier || "out"}${road}`;
+    case "arrive": return "Arrive at your destination";
+    case "roundabout":
+    case "rotary": return `Enter the roundabout and take exit ${s.maneuver?.exit ?? ""}`.trim() + road;
+    case "merge": return `Merge ${m.modifier || ""}${road}`.replace("  ", " ");
+    case "fork": return `Keep ${m.modifier || "straight"}${road}`;
+    case "new name": return `${verb} straight${road}`;
+    case "turn": return `Turn ${m.modifier || "ahead"}${road}`;
+    default: return `${verb} ${m.modifier || "straight"}${road}`;
+  }
+}
+
 export async function computeRoute(params: {
   start: LatLng; end: LatLng; vessel_id: string;
   load: { passengers: number; cargo_kg: number };
   capacity?: { passengers: number; cargo_kg: number };
   rainProb?: number;
   user_id?: string;
+  profile?: TravelProfile;
 }): Promise<RouteResult> {
   const { start, end, vessel_id, load, capacity, rainProb, user_id } = params;
-  const url = `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&alternatives=true`;
+  const profile: TravelProfile = params.profile ?? "car";
+  const url = `https://router.project-osrm.org/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson&alternatives=true&steps=true`;
   
   try {
     const res = await fetch(url);
@@ -253,6 +292,16 @@ export async function computeRoute(params: {
     const route: [number, number][] = main.geometry.coordinates.map((c: number[]) => [c[1], c[0]]);
     const altRoutes: [number, number][][] = (json.routes.slice(1) || []).map((r: any) => r.geometry.coordinates.map((c: number[]) => [c[1], c[0]]));
 
+    const factor = PROFILE_SPEED_FACTOR[profile] ?? 1;
+    const steps: RouteStep[] = (main.legs?.[0]?.steps ?? []).map((s: any) => ({
+      instruction: humaniseStep(s, profile),
+      distance_m: Number(s.distance ?? 0),
+      duration_s: Number(s.duration ?? 0) * factor,
+      modifier: s?.maneuver?.modifier,
+      type: s?.maneuver?.type,
+      location: s?.maneuver?.location ? [s.maneuver.location[1], s.maneuver.location[0]] : undefined,
+    }));
+
     const scoreLevel = (p: LatLng) => scoreRisk(p, { rainProb, load, capacity }).level;
     const segs = segmentise(route, scoreLevel);
     const mid = route[Math.floor(route.length / 2)];
@@ -261,7 +310,8 @@ export async function computeRoute(params: {
     const result: RouteResult = {
       route, risk_segments: segs, alternatives: altRoutes,
       risk_score: overall.score, risk_level: overall.level,
-      distance_m: main.distance, duration_s: main.duration,
+      distance_m: main.distance, duration_s: main.duration * factor,
+      steps, profile,
     };
 
     try {
