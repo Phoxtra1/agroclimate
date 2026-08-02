@@ -1761,7 +1761,24 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                 SPEED: {speedKn.toFixed(1)} KN · HDG: {bearing.toFixed(0)}°
               </Badge>
             )}
-          </div>
+            {liveNav && (
+              <div className="rounded-lg border bg-background/95 shadow-md px-2.5 py-1.5 max-w-[190px]">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                  {liveNav.live ? "Live ETA" : "Estimated ETA"}
+                </p>
+                <p className="text-sm font-bold leading-tight">
+                  {liveNav.etaSeconds < 60 ? "<1 min" : `${Math.round(liveNav.etaSeconds / 60)} min`}
+                  <span className="text-[11px] font-normal text-muted-foreground"> · {liveNav.etaClock}</span>
+                </p>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  {liveNav.remainingM >= 1000 ? `${(liveNav.remainingM / 1000).toFixed(1)} km left` : `${Math.round(liveNav.remainingM)} m left`}
+                </p>
+                <div className="h-1 w-full rounded bg-muted mt-1 overflow-hidden">
+                  <div className="h-full bg-primary transition-all duration-500" style={{ width: `${liveNav.progress}%` }} />
+                </div>
+              </div>
+            )}
+
 
           {/* Floating Recenter button */}
           {!isAutoFollow && (
