@@ -60,8 +60,10 @@ export default defineConfig(({ mode }) => ({
       },
 
       workbox: {
-        skipWaiting: true,
+        // Prompt flow: the new SW waits until the user accepts the update
+        skipWaiting: false,
         clientsClaim: true,
+
 
         // FIX: Increase default 2MB precache limit
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
