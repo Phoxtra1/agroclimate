@@ -16,14 +16,25 @@ export function useSubscription() {
 
   const load = useCallback(async () => {
     if (!user) { setSub(null); setLoading(false); return; }
-    const { data } = await supabase
-      .from("user_subscriptions")
-      .select("plan,status,expires_at")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .maybeSingle();
-    setSub((data as any) ?? { plan: "freemium", status: "active", expires_at: null });
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from("user_subscriptions")
+        .select("plan,status,expires_at")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+      if (error) {
+        console.warn("[useSubscription] Fetch error:", error);
+        setSub({ plan: "freemium", status: "active", expires_at: null });
+      } else {
+        setSub((data as any) ?? { plan: "freemium", status: "active", expires_at: null });
+      }
+    } catch (err) {
+      console.error("[useSubscription] Fetch failed:", err);
+      setSub({ plan: "freemium", status: "active", expires_at: null });
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {

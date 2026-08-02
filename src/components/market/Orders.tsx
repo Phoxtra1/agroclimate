@@ -123,23 +123,32 @@ function useOrders(scope: Scope) {
 
   const load = async () => {
     setLoading(true);
-    let query = supabase
-      .from("buyer_orders")
-      .select("*")
-      .neq("status", "cancelled")
-      .neq("crop_name", "Yam")
-      .order("created_at", { ascending: false })
-      .limit(200);
+    try {
+      let query = supabase
+        .from("buyer_orders")
+        .select("*")
+        .neq("status", "cancelled")
+        .neq("crop_name", "Yam")
+        .order("created_at", { ascending: false })
+        .limit(200);
 
-    if (scope === "mine" || scope === "all") {
-      if (!user) { setItems([]); setLoading(false); return; }
-      query = query.eq("buyer_id", user.id);
-    } else if (scope === "marketplace" && user) {
-      query = query.neq("buyer_id", user.id);
+      if (scope === "mine" || scope === "all") {
+        if (!user) { setItems([]); setLoading(false); return; }
+        query = query.eq("buyer_id", user.id);
+      } else if (scope === "marketplace" && user) {
+        query = query.neq("buyer_id", user.id);
+      }
+      const { data, error } = await query;
+      if (error) {
+        console.warn("[useOrders] Fetch error:", error);
+      } else {
+        setItems((data as unknown as OrderRow[]) || []);
+      }
+    } catch (err) {
+      console.error("[useOrders] Fetch failed:", err);
+    } finally {
+      setLoading(false);
     }
-    const { data } = await query;
-    setItems((data as unknown as OrderRow[]) || []);
-    setLoading(false);
   };
 
   useEffect(() => {
