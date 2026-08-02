@@ -19,9 +19,12 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
 
     VitePWA({
-      registerType: "autoUpdate",
+      // Prompt the user whenever a new version is deployed from the web app
+      registerType: "prompt",
+      injectRegister: null,
 
       includeAssets: ["favicon.png", "placeholder.svg"],
+
 
       manifest: {
         name: "Agyenkwa",
