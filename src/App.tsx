@@ -177,9 +177,14 @@ function DriverRoute({ children }: { children: React.ReactNode }) {
   if (loading || roleLoading || driverStatusLoading) return <LoadingScreen />;
   if (!user && !isPreview) return <Navigate to="/" replace />;
   
-  if (role !== "driver" && !isPreview && !location.pathname.includes("onboarding")) return <Navigate to="/dashboard" replace />;
+  // If driver profile exists, we treat them as a driver, regardless of potential role loading/cache delays
+  const isDriverOrPending = role === "driver" || exists;
 
-  if (role === "driver" && !isPreview && exists && approvalStatus !== "approved") {
+  if (!isDriverOrPending && !isPreview && !location.pathname.includes("onboarding")) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (isDriverOrPending && !isPreview && approvalStatus !== "approved") {
     if (!location.pathname.includes("pending-approval") && !location.pathname.includes("onboarding")) {
       return <Navigate to="/agtrans-partner/pending-approval" replace />;
     }

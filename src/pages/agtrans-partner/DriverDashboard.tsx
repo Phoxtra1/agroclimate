@@ -142,6 +142,8 @@ export default function DriverDashboard() {
   useEffect(() => {
     if (!loading && !driverProfile) {
       navigate("/agtrans-partner/onboarding");
+    } else if (!loading && driverProfile && driverProfile.approval_status !== "approved") {
+      navigate("/agtrans-partner/pending-approval");
     }
   }, [driverProfile, loading, navigate]);
 

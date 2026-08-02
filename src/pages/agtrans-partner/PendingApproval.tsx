@@ -11,10 +11,12 @@ export default function PendingApproval() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && approvalStatus === "approved" && !adminSuspended) {
+    if (!loading && !exists) {
+      navigate("/agtrans-partner/onboarding", { replace: true });
+    } else if (!loading && approvalStatus === "approved" && !adminSuspended) {
       navigate("/agtrans-partner/dashboard", { replace: true });
     }
-  }, [loading, approvalStatus, adminSuspended, navigate]);
+  }, [loading, exists, approvalStatus, adminSuspended, navigate]);
 
   if (loading) {
     return (
