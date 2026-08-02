@@ -431,7 +431,7 @@ export default function AgroInventory() {
                 Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {displayMetrics.totalLosses.toLocaleString()} units | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
               </p>
             </div>
-            <Link to="/odeneho">
+            <Link to="/dipa">
               <Button size="sm" className="shadow-sm">
                 <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Consult AI
               </Button>

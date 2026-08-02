@@ -1,5 +1,5 @@
 // Risk Scoring Engine — deterministic, fast, dependable. Used as a fallback to AI predictions
-// and to feed structured signals to the Odeneho AI for second-pass refinement.
+// and to feed structured signals to the Dipa for second-pass refinement.
 import { levelFromScore, type RiskAssessment } from "./aiProviders";
 
 interface WeatherSignals {

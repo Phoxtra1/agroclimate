@@ -615,7 +615,7 @@ export default function EnvironmentalMonitor() {
   const [farmName, setFarmName] = useState("");
   const [savingFarm, setSavingFarm] = useState(false);
 
-  // Existing Odeneho AI summary states
+  // Existing Dipa AI summary states
   const [aiEnv, setAiEnv] = useState<AIEnvironmentalAssessment | null>(null);
   const [isAiEnvLoading, setIsAiEnvLoading] = useState(false);
 
@@ -1073,7 +1073,7 @@ export default function EnvironmentalMonitor() {
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
                     <Badge className="bg-primary text-primary-foreground border-transparent animate-pulse flex items-center gap-1 text-[10px]">
-                      <Sparkles className="h-3 w-3" /> Odeneho AI Ecological Analysis
+                      <Sparkles className="h-3 w-3" /> Dipa Ecological Analysis
                     </Badge>
                   </div>
                   <p className="text-sm font-semibold text-foreground">Community Ecological Health Summary</p>

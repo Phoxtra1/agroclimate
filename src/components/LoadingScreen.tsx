@@ -35,7 +35,7 @@ export function LoadingScreen() {
       {/* Loading Text */}
       <div className="mt-8 flex flex-col items-center space-y-2 text-center">
         <h2 className="text-xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-400 animate-pulse">
-          AGROCLIMATE
+          AGYENKWA
         </h2>
         <p className="text-sm font-medium text-muted-foreground animate-pulse">
           Cultivating data...

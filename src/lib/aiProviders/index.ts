@@ -1,4 +1,4 @@
-// Odeneho AI — Provider Abstraction Layer
+// Dipa — Provider Abstraction Layer
 // Goal: swap providers (Lovable AI Gateway, OpenAI, future proprietary models, local SLMs)
 // without rewriting feature code. Every feature talks to the unified Provider interface.
 
@@ -73,7 +73,7 @@ export interface AIAgroRiskAssessment {
   recommendations: string[];
 }
 
-export interface OdenehoProvider {
+export interface DipaProvider {
   id: string;
   generateSummary(req: SummaryRequest): Promise<string>;
   generatePrediction(req: PredictionRequest): Promise<{ headline: string; detail: string; confidence: number }>;

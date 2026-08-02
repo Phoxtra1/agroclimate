@@ -24,7 +24,7 @@ interface ToolCallPayload {
 }
 
 const SYSTEM_PROMPT =
-  "You are Odeneho, the centralized operational intelligence engine for AgroClimate. " +
+  "You are Dipa, the centralized operational intelligence engine for AgroClimate. " +
   "Provide concise, factual, action-oriented insight for African farmers, admins and traders. " +
   "If signals are weak, state the uncertainty. Never invent precise medical/chemical dosages.";
 

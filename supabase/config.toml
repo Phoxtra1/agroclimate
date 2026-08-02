@@ -1,6 +1,6 @@
 project_id = "apoqexuhlysoirtcvgfo"
 
-[functions.odeneho-ai]
+[functions.dipa-ai]
 verify_jwt = false
 
 [functions.drone-advisory]

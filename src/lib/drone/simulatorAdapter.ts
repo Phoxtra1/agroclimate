@@ -50,8 +50,8 @@ export function createSimulatorAdapter(): ConnectionAdapter {
       await new Promise((r) => setTimeout(r, 600));
       diag.endpoint = "in-memory"; emitDiag();
       return [
-        { id: "sim-x1", name: "Odeneho Sim-X1", model: "Simulated Quad", protocol: "simulator", signal: 98, firmware: "sim-1.0" },
-        { id: "sim-x2", name: "Odeneho Sim-X2", model: "Simulated Hex", protocol: "simulator", signal: 92, firmware: "sim-1.0" },
+        { id: "sim-x1", name: "Dipa Sim-X1", model: "Simulated Quad", protocol: "simulator", signal: 98, firmware: "sim-1.0" },
+        { id: "sim-x2", name: "Dipa Sim-X2", model: "Simulated Hex", protocol: "simulator", signal: 92, firmware: "sim-1.0" },
       ];
     },
     async connect() {

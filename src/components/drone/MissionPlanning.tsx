@@ -67,7 +67,7 @@ export function MissionPlanning() {
   const generateRoute = async () => {
     setGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("odeneho-route-generator", {
+      const { data, error } = await supabase.functions.invoke("dipa-route-generator", {
         body: {
           farmName,
           missionType: type,
@@ -83,7 +83,7 @@ export function MissionPlanning() {
       setAiRoute(data.route as GeneratedRoute);
       setAreaHa(Number(data.route?.estimated_coverage_ha || areaHa));
       setPattern(data.route?.route_pattern || pattern);
-      toast({ title: "Odeneho route generated", description: `${data.route?.waypoints?.length || 0} mission waypoint(s) ready.` });
+      toast({ title: "Dipa route generated", description: `${data.route?.waypoints?.length || 0} mission waypoint(s) ready.` });
     } catch (e: any) {
       toast({ title: "Route generation failed", description: e.message || "Check farm boundary coordinates.", variant: "destructive" });
     } finally {
@@ -100,7 +100,7 @@ export function MissionPlanning() {
         altitude_m: altitude,
         speed_ms: speed,
         route_pattern: pattern,
-        area_polygon: aiRoute ? { boundary: aiRoute.boundary, waypoints: aiRoute.waypoints, source: "odeneho-ai" } : null,
+        area_polygon: aiRoute ? { boundary: aiRoute.boundary, waypoints: aiRoute.waypoints, source: "dipa-ai" } : null,
         camera_settings: aiRoute ? { advisory_notes: aiRoute.advisory_notes, coverage_summary: aiRoute.coverage_summary, waypoint_spacing_m: aiRoute.waypoint_spacing_m } : {},
         estimated_battery_pct: estimates.batteryPct,
         estimated_duration_min: estimates.min,
@@ -159,7 +159,7 @@ export function MissionPlanning() {
             </Field>
             <Button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-mono" onClick={generateRoute} disabled={generating}>
               {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-              GENERATE ODENEHO AI ROUTE
+              GENERATE DIPA AI ROUTE
             </Button>
             {aiRoute && (
               <div className="rounded-lg border border-cyan-900/50 bg-cyan-950/20 p-3 font-mono text-xs text-slate-200 space-y-3">

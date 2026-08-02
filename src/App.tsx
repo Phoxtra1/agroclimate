@@ -19,7 +19,7 @@ import Livestock from "./pages/Livestock";
 import Alerts from "./pages/Alerts";
 import Profile from "./pages/Profile";
 import Aquaculture from "./pages/Aquaculture";
-import OdenehoAI from "./pages/OdenehoAI";
+import DipaAI from "./pages/DipaAI";
 import DroneAdvisory from "./pages/DroneAdvisory";
 import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
@@ -300,7 +300,7 @@ function AppRoutes() {
       <Route path="/aquaculture" element={<ProtectedRoute><Aquaculture /></ProtectedRoute>} />
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      <Route path="/odeneho" element={<ProtectedRoute><PremiumGate component="ai_assistant"><OdenehoAI /></PremiumGate></ProtectedRoute>} />
+      <Route path="/dipa" element={<ProtectedRoute><PremiumGate component="ai_assistant"><DipaAI /></PremiumGate></ProtectedRoute>} />
       <Route path="/flight-advisory" element={<ProtectedRoute><PremiumGate component="flight_advisory"><DroneAdvisory /></PremiumGate></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><PremiumGate component="agro_inventory"><AgroInventory /></PremiumGate></ProtectedRoute>} />
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />

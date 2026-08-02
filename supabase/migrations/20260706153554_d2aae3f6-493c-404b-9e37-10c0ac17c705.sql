@@ -45,5 +45,5 @@ CREATE POLICY "ai logs any insert" ON public.ai_usage_logs FOR INSERT TO authent
 
 -- Seed default active model row (idempotent)
 INSERT INTO public.system_settings (key, value)
-VALUES ('active_ai_model', '{"id":"odeai-1.0","gateway_model":"google/gemini-3-flash-preview","label":"OdeAI 1.0"}'::jsonb)
+VALUES ('active_ai_model', '{"id":"dipa-1.0","gateway_model":"google/gemini-3-flash-preview","label":"Dipa 1.0"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;

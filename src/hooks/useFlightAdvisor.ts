@@ -31,7 +31,7 @@ export function useFlightAdvisor(args: {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: invErr } = await supabase.functions.invoke("odeneho-flight-ops", {
+      const { data, error: invErr } = await supabase.functions.invoke("dipa-flight-ops", {
         body: { telemetry, environment, mission },
       });
       if (invErr) throw new Error(invErr.message);

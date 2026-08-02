@@ -7,11 +7,11 @@ import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
 import aminevaLogo from "@/assets/amineva-logo.png";
-import odenehoLogo from "@/assets/odeneho.png"; 
+import dipaLogo from "@/assets/dipa.png";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-export default function OdenehoAI() {
+export default function DipaAI() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -30,13 +30,13 @@ export default function OdenehoAI() {
   // Pick up a prefilled prompt (e.g. from Post-Harvest Tracker "Get Advice")
   useEffect(() => {
     try {
-      const prefill = sessionStorage.getItem("odeneho-prefill");
-      if (prefill) { setInput(prefill); sessionStorage.removeItem("odeneho-prefill"); }
+      const prefill = sessionStorage.getItem("dipa-prefill");
+      if (prefill) { setInput(prefill); sessionStorage.removeItem("dipa-prefill"); }
     } catch {}
   }, []);
 
   const streamChat = useCallback(async (allMessages: Msg[]) => {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/odeneho-ai`;
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dipa-ai`;
     const weatherContext = forecast[0]
       ? `Temp ${forecast[0].tempHigh}°C, Humidity ${forecast[0].humidity}%, Rain ${forecast[0].rainProb}%, Wind ${forecast[0].wind} km/h, ${forecast[0].description}`
       : undefined;
@@ -96,7 +96,7 @@ export default function OdenehoAI() {
         }
       }
     } catch (e: any) {
-      toast({ title: "Odeneho Error", description: e.message, variant: "destructive" });
+      toast({ title: "Dipa Error", description: e.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -209,9 +209,9 @@ export default function OdenehoAI() {
     <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen">
       {/* Header */}
       <div className="bg-card border-b border-border px-4 py-3 flex items-center gap-3">
-        <img src={odenehoLogo} alt="Odeneho AI" className="h-8 w-8 rounded-full border border-primary/20 shadow-sm" />
+        <img src={dipaLogo} alt="Dipa" className="h-8 w-8 rounded-full border border-primary/20 shadow-sm" />
         <div>
-          <h1 className="font-bold text-sm tracking-tight">Odeneho AI</h1>
+          <h1 className="font-bold text-sm tracking-tight">Dipa</h1>
           <p className="text-[10px] text-muted-foreground uppercase">Expert Agricultural Intelligence</p>
         </div>
         {isSpeaking && (
@@ -225,7 +225,7 @@ export default function OdenehoAI() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/30">
         {messages.length === 0 && (
           <div className="text-center py-12">
-            <img src={odenehoLogo} alt="Odeneho AI" className="h-20 w-20 rounded-full mx-auto mb-4 border border-primary/20 shadow-md" />
+            <img src={dipaLogo} alt="Dipa" className="h-20 w-20 rounded-full mx-auto mb-4 border border-primary/20 shadow-md" />
             <h2 className="font-bold text-lg mb-2">Welcome to your AI Partner</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6 px-4">
               I can help with crop advisory, fish farm management, and climate predictions.
@@ -249,7 +249,7 @@ export default function OdenehoAI() {
           <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}>
             {msg.role === "assistant" && (
               <div className="h-8 w-8 rounded-full flex-shrink-0 mt-1 border border-primary/10 overflow-hidden shadow-sm">
-                <img src={odenehoLogo} alt="AI" className="h-full w-full object-cover" />
+                <img src={dipaLogo} alt="AI" className="h-full w-full object-cover" />
               </div>
             )}
             <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${msg.role === "user" ? "bg-primary text-primary-foreground border-transparent" : "bg-card border border-border"}`}>
@@ -275,7 +275,7 @@ export default function OdenehoAI() {
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex gap-3">
             <div className="h-8 w-8 rounded-full flex-shrink-0 mt-1 border border-primary/10 overflow-hidden animate-pulse">
-                <img src={odenehoLogo} alt="AI Thinking" className="h-full w-full object-cover grayscale opacity-50" />
+                <img src={dipaLogo} alt="AI Thinking" className="h-full w-full object-cover grayscale opacity-50" />
             </div>
             <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-sm">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -300,7 +300,7 @@ export default function OdenehoAI() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isListening ? "Listening..." : "Message Odeneho AI..."}
+            placeholder={isListening ? "Listening..." : "Message Dipa..."}
             disabled={isLoading}
             className="flex-1 rounded-full bg-muted border-none ring-offset-background focus-visible:ring-1"
           />
