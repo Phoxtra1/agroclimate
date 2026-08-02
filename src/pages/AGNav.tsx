@@ -1858,7 +1858,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
             {/* Glowing gold logo route line for remaining path */}
             {routeResult && routeResult.route && (
               <Polyline
-                positions={routeResult.route.slice(activeRouteIdx)}
+                positions={remainingPath}
                 pathOptions={{ color: "#d4af37", weight: 6, opacity: 0.95 }}
               />
             )}
