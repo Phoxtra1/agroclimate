@@ -19,9 +19,12 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
 
     VitePWA({
-      registerType: "autoUpdate",
+      // Prompt the user whenever a new version is deployed from the web app
+      registerType: "prompt",
+      injectRegister: null,
 
       includeAssets: ["favicon.png", "placeholder.svg"],
+
 
       manifest: {
         name: "Agyenkwa",
@@ -57,8 +60,10 @@ export default defineConfig(({ mode }) => ({
       },
 
       workbox: {
-        skipWaiting: true,
+        // Prompt flow: the new SW waits until the user accepts the update
+        skipWaiting: false,
         clientsClaim: true,
+
 
         // FIX: Increase default 2MB precache limit
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
@@ -124,14 +129,69 @@ export default defineConfig(({ mode }) => ({
               },
             },
           },
+          // AGNav offline support: map tiles
+          {
+            urlPattern:
+              /^https:\/\/(?:[a-c]\.)?tile\.openstreetmap\.org\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "agnav-osm-tiles",
+              expiration: { maxEntries: 1500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+
+          {
+            urlPattern:
+              /^https:\/\/(?:[a-c]\.)?tile\.opentopomap\.org\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "agnav-topo-tiles",
+              expiration: { maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+
+          {
+            urlPattern:
+              /^https:\/\/services\.arcgisonline\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "agnav-satellite-tiles",
+              expiration: { maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+
+          // AGNav offline support: routing + geocoding responses
+          {
+            urlPattern: /^https:\/\/router\.project-osrm\.org\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "agnav-routing",
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+
+          {
+            urlPattern: /^https:\/\/nominatim\.openstreetmap\.org\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "agnav-geocoding",
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
 
         navigateFallbackDenylist: [/^\/~oauth/],
       },
 
       devOptions: {
-        enabled: mode === "development",
+        enabled: false,
       },
+
     }),
   ].filter(Boolean),
 

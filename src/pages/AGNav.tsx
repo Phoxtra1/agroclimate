@@ -1076,12 +1076,47 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     finally { setRegBusy(false); }
   };
 
+  // ---- Live remaining distance / ETA (recomputes continuously as position updates) ----
+  const liveNav = (() => {
+    const route = routeResult?.route;
+    if (!route || route.length < 2) return null;
+    const idx = Math.min(Math.max(activeRouteIdx, 0), route.length - 1);
+    let remaining = 0;
+    if (currentPos.lat && currentPos.lon) {
+      remaining += haversineDist(currentPos.lat, currentPos.lon, route[idx][0], route[idx][1]);
+    }
+    for (let i = idx; i < route.length - 1; i++) {
+      remaining += haversineDist(route[i][0], route[i][1], route[i + 1][0], route[i + 1][1]);
+    }
+    const total = routeResult!.distance_m || remaining || 1;
+    // Prefer live speed when actually moving, otherwise fall back to planned average speed.
+    const liveMps = speedKn > 0.5 ? speedKn * 0.514444 : 0;
+    const plannedMps = routeResult!.duration_s > 0 ? total / routeResult!.duration_s : 8;
+    const mps = Math.max(0.5, liveMps || plannedMps);
+    const etaSeconds = remaining / mps;
+    return {
+      remainingM: remaining,
+      etaSeconds,
+      etaClock: new Date(Date.now() + etaSeconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      progress: Math.min(100, Math.max(0, ((total - remaining) / total) * 100)),
+      live: liveMps > 0,
+    };
+  })();
+
+  // Remaining polyline anchored to the live position so the line redraws smoothly with tracking
+  const remainingPath: [number, number][] = routeResult?.route
+    ? ((currentPos.lat && currentPos.lon
+        ? [[currentPos.lat, currentPos.lon] as [number, number], ...routeResult.route.slice(activeRouteIdx)]
+        : routeResult.route.slice(activeRouteIdx)) as [number, number][])
+    : [];
+
   const center: [number, number] = simulating
     ? [currentPos.lat || 7.95, currentPos.lon || -1.03]
     : destination
     ? [destination.lat, destination.lon]
     : farmTarget ? [farmTarget.lat, farmTarget.lon]
     : [currentPos.lat || 7.95, currentPos.lon || -1.03];
+
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
@@ -1726,7 +1761,26 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                 SPEED: {speedKn.toFixed(1)} KN · HDG: {bearing.toFixed(0)}°
               </Badge>
             )}
+            {liveNav && (
+              <div className="rounded-lg border bg-background/95 shadow-md px-2.5 py-1.5 max-w-[190px]">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                  {liveNav.live ? "Live ETA" : "Estimated ETA"}
+                </p>
+                <p className="text-sm font-bold leading-tight">
+                  {liveNav.etaSeconds < 60 ? "<1 min" : `${Math.round(liveNav.etaSeconds / 60)} min`}
+                  <span className="text-[11px] font-normal text-muted-foreground"> · {liveNav.etaClock}</span>
+                </p>
+                <p className="text-[10px] font-mono text-muted-foreground">
+                  {liveNav.remainingM >= 1000 ? `${(liveNav.remainingM / 1000).toFixed(1)} km left` : `${Math.round(liveNav.remainingM)} m left`}
+                </p>
+                <div className="h-1 w-full rounded bg-muted mt-1 overflow-hidden">
+                  <div className="h-full bg-primary transition-all duration-500" style={{ width: `${liveNav.progress}%` }} />
+                </div>
+              </div>
+            )}
           </div>
+
+
 
           {/* Floating Recenter button */}
           {!isAutoFollow && (
@@ -1823,7 +1877,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
             {/* Glowing gold logo route line for remaining path */}
             {routeResult && routeResult.route && (
               <Polyline
-                positions={routeResult.route.slice(activeRouteIdx)}
+                positions={remainingPath}
                 pathOptions={{ color: "#d4af37", weight: 6, opacity: 0.95 }}
               />
             )}

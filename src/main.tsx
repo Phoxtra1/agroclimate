@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { registerAppSW } from "./lib/pwa/registerAppSW";
+
 
 const bootstrapRedirect = () => {
   const url = new URL(window.location.href);
@@ -19,4 +21,7 @@ const bootstrapRedirect = () => {
 bootstrapRedirect();
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+void registerAppSW();
+
 
