@@ -22,3 +22,6 @@ bootstrapRedirect();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
+void registerAppSW();
+
+
