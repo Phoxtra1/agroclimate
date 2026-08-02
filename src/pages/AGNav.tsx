@@ -1076,12 +1076,47 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     finally { setRegBusy(false); }
   };
 
+  // ---- Live remaining distance / ETA (recomputes continuously as position updates) ----
+  const liveNav = (() => {
+    const route = routeResult?.route;
+    if (!route || route.length < 2) return null;
+    const idx = Math.min(Math.max(activeRouteIdx, 0), route.length - 1);
+    let remaining = 0;
+    if (currentPos.lat && currentPos.lon) {
+      remaining += haversineDist(currentPos.lat, currentPos.lon, route[idx][0], route[idx][1]);
+    }
+    for (let i = idx; i < route.length - 1; i++) {
+      remaining += haversineDist(route[i][0], route[i][1], route[i + 1][0], route[i + 1][1]);
+    }
+    const total = routeResult!.distance_m || remaining || 1;
+    // Prefer live speed when actually moving, otherwise fall back to planned average speed.
+    const liveMps = speedKn > 0.5 ? speedKn * 0.514444 : 0;
+    const plannedMps = routeResult!.duration_s > 0 ? total / routeResult!.duration_s : 8;
+    const mps = Math.max(0.5, liveMps || plannedMps);
+    const etaSeconds = remaining / mps;
+    return {
+      remainingM: remaining,
+      etaSeconds,
+      etaClock: new Date(Date.now() + etaSeconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      progress: Math.min(100, Math.max(0, ((total - remaining) / total) * 100)),
+      live: liveMps > 0,
+    };
+  })();
+
+  // Remaining polyline anchored to the live position so the line redraws smoothly with tracking
+  const remainingPath: [number, number][] = routeResult?.route
+    ? ((currentPos.lat && currentPos.lon
+        ? [[currentPos.lat, currentPos.lon] as [number, number], ...routeResult.route.slice(activeRouteIdx)]
+        : routeResult.route.slice(activeRouteIdx)) as [number, number][])
+    : [];
+
   const center: [number, number] = simulating
     ? [currentPos.lat || 7.95, currentPos.lon || -1.03]
     : destination
     ? [destination.lat, destination.lon]
     : farmTarget ? [farmTarget.lat, farmTarget.lon]
     : [currentPos.lat || 7.95, currentPos.lon || -1.03];
+
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
