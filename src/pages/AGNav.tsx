@@ -1778,6 +1778,8 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                 </div>
               </div>
             )}
+          </div>
+
 
 
           {/* Floating Recenter button */}
