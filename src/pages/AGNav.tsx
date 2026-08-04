@@ -492,7 +492,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         const distance = haversineDist(location[0], location[1], route[r][0], route[r][1]);
         if (distance < stepDistance) { stepDistance = distance; stepRouteIdx = r; }
       }
-      if (closestIdx >= Math.max(0, stepRouteIdx - 1)) nextStep = Math.min(i + 1, steps.length - 1);
+      if (closestIdx >= Math.max(0, stepRouteIdx - 1)) nextStep = i;
     }
     setActiveStepIdx(nextStep);
   }, [currentPos, routeResult, simulating, gpsLocked, gpsAccuracy, liveRouteIdx]);

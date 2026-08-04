@@ -200,7 +200,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (p1 && p2) {
           const dy = p2[0] - p1[0];
           const dx = p2[1] - p1[1];
-          let brng = (Math.atan2(dx, dy) * 180) / Math.PI;
+          const brng = (Math.atan2(dx, dy) * 180) / Math.PI;
           setBearing((brng + 360) % 360);
 
           const dt = intervalMs / 1000;
@@ -240,7 +240,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const previous = lastNavigationPointRef.current;
       if (previous) {
         const travelled = thisHaversine(previous.lat, previous.lon, lat, lon);
-        if (travelled >= 2 && travelled <= 150) navigationTravelRef.current += travelled;
+        if (isMoving && travelled >= 2 && travelled <= 150) navigationTravelRef.current += travelled;
       }
       lastNavigationPointRef.current = currentPos;
     }
@@ -249,10 +249,12 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // three consecutive fixes at the destination. Merely calculating a route can
     // never announce arrival.
     const distToDest = thisHaversine(lat, lon, route[route.length - 1][0], route[route.length - 1][1]);
+    const start = navigationStartRef.current;
+    const netTravel = start ? thisHaversine(start.lat, start.lon, lat, lon) : 0;
     const arrivalRadius = Math.max(20, Math.min(45, (gpsAccuracy ?? 20) * 1.25));
     const reliableArrivalFix = simulating || (
       isNavigating && gpsLocked && (gpsAccuracy ?? Infinity) <= 50 &&
-      navigationTravelRef.current >= 20 && distToDest <= arrivalRadius
+      navigationTravelRef.current >= 30 && netTravel >= 15 && distToDest <= arrivalRadius
     );
     arrivalFixCountRef.current = reliableArrivalFix ? arrivalFixCountRef.current + 1 : 0;
     if (arrivalFixCountRef.current >= 3) {

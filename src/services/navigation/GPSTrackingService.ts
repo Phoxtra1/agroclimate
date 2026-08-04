@@ -110,7 +110,7 @@ export class GPSTrackingService {
     const x =
       Math.cos(lat1Rad) * Math.sin(lat2Rad) -
       Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-    let brng = (Math.atan2(y, x) * 180) / Math.PI;
+    const brng = (Math.atan2(y, x) * 180) / Math.PI;
     return (brng + 360) % 360;
   }
 }
