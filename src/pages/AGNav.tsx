@@ -198,6 +198,7 @@ function AGNavInner() {
     currentPos,
     bearing,
     speedKn,
+    gpsAccuracy,
     isMoving,
     gpsLocked,
     destination,
@@ -230,7 +231,11 @@ function AGNavInner() {
 
   const { forecast } = useWeather(currentPos.lat, currentPos.lon);
 
-  const activeRouteIdx = simulating ? simStepIdx : 0;
+  const [liveRouteIdx, setLiveRouteIdx] = useState(0);
+  const [activeStepIdx, setActiveStepIdx] = useState(0);
+  const [stableEtaSeconds, setStableEtaSeconds] = useState<number | null>(null);
+  const etaSampleRef = useRef<{ remaining: number; accuracy: number; updatedAt: number } | null>(null);
+  const activeRouteIdx = simulating ? simStepIdx : liveRouteIdx;
 
   // AI Advisory states
   const [aiAdvisory, setAiAdvisory] = useState<AIAssistantAdvisory | null>(null);
@@ -457,6 +462,48 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     }
   }, [routeResult]);
 
+  useEffect(() => {
+    const route = routeResult?.route;
+    if (!route || route.length < 2 || simulating || !gpsLocked) return;
+
+    const start = Math.max(0, liveRouteIdx - 8);
+    const end = Math.min(route.length - 1, liveRouteIdx + 120);
+    let closestIdx = liveRouteIdx;
+    let closestDistance = Infinity;
+    for (let i = start; i <= end; i++) {
+      const distance = haversineDist(currentPos.lat, currentPos.lon, route[i][0], route[i][1]);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIdx = i;
+      }
+    }
+    if (closestDistance <= Math.max(80, (gpsAccuracy ?? 30) * 2)) {
+      setLiveRouteIdx((previous) => Math.max(previous, closestIdx));
+    }
+
+    const steps = routeResult.steps || [];
+    let nextStep = 0;
+    for (let i = 0; i < steps.length; i++) {
+      const location = steps[i].location;
+      if (!location) continue;
+      let stepRouteIdx = 0;
+      let stepDistance = Infinity;
+      for (let r = 0; r < route.length; r++) {
+        const distance = haversineDist(location[0], location[1], route[r][0], route[r][1]);
+        if (distance < stepDistance) { stepDistance = distance; stepRouteIdx = r; }
+      }
+      if (closestIdx >= Math.max(0, stepRouteIdx - 1)) nextStep = i;
+    }
+    setActiveStepIdx(nextStep);
+  }, [currentPos, routeResult, simulating, gpsLocked, gpsAccuracy, liveRouteIdx]);
+
+  useEffect(() => {
+    setLiveRouteIdx(0);
+    setActiveStepIdx(0);
+    setStableEtaSeconds(null);
+    etaSampleRef.current = null;
+  }, [routeResult]);
+
   const handleSearch = async (textOverride?: string) => {
     const text = (textOverride ?? searchText).trim();
     if (!text) { toast.error("Type a place, address or GPS coordinate"); return; }
@@ -655,15 +702,36 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     const liveMps = speedKn > 0.5 ? speedKn * 0.514444 : 0;
     const plannedMps = routeResult!.duration_s > 0 ? total / routeResult!.duration_s : 8;
     const mps = Math.max(0.5, liveMps || plannedMps);
-    const etaSeconds = remaining / mps;
+    const rawEtaSeconds = remaining / mps;
     return {
       remainingM: remaining,
-      etaSeconds,
-      etaClock: new Date(Date.now() + etaSeconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      etaSeconds: stableEtaSeconds ?? rawEtaSeconds,
+      etaClock: new Date(Date.now() + (stableEtaSeconds ?? rawEtaSeconds) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       progress: Math.min(100, Math.max(0, ((total - remaining) / total) * 100)),
       live: liveMps > 0,
     };
   })();
+
+  useEffect(() => {
+    if (!routeResult?.route || routeResult.route.length < 2) return;
+    const idx = Math.min(activeRouteIdx, routeResult.route.length - 1);
+    let remaining = haversineDist(currentPos.lat, currentPos.lon, routeResult.route[idx][0], routeResult.route[idx][1]);
+    for (let i = idx; i < routeResult.route.length - 1; i++) {
+      remaining += haversineDist(routeResult.route[i][0], routeResult.route[i][1], routeResult.route[i + 1][0], routeResult.route[i + 1][1]);
+    }
+    const accuracy = gpsAccuracy ?? 999;
+    const previous = etaSampleRef.current;
+    const significantDistanceChange = !previous || Math.abs(previous.remaining - remaining) >= Math.max(35, previous.remaining * 0.015);
+    const significantAccuracyChange = !previous || Math.abs(previous.accuracy - accuracy) >= 12;
+    const refreshDue = !previous || Date.now() - previous.updatedAt >= 15000;
+    if (accuracy <= 50 && (significantDistanceChange || significantAccuracyChange || refreshDue)) {
+      const liveMps = speedKn > 1 ? speedKn * 0.514444 : 0;
+      const plannedMps = routeResult.duration_s > 0 ? routeResult.distance_m / routeResult.duration_s : 8;
+      const nextEta = remaining / Math.max(0.5, liveMps || plannedMps);
+      setStableEtaSeconds((current) => current === null ? nextEta : current * 0.72 + nextEta * 0.28);
+      etaSampleRef.current = { remaining, accuracy, updatedAt: Date.now() };
+    }
+  }, [currentPos, routeResult, activeRouteIdx, gpsAccuracy, speedKn]);
 
   const remainingPath: [number, number][] = routeResult?.route
     ? ((currentPos.lat && currentPos.lon
@@ -1018,8 +1086,8 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                         </div>
                         <div className="max-h-56 overflow-y-auto divide-y divide-border/60">
                           {routeResult.steps.map((st, i) => (
-                            <div key={`step-${i}`} className="flex items-start gap-2 px-3 py-2">
-                              <span className="mt-0.5 h-5 w-5 shrink-0 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
+                            <div key={`step-${i}`} className={`flex items-start gap-2 px-3 py-2 transition-colors ${i === activeStepIdx ? "bg-primary/10 border-l-4 border-primary" : i < activeStepIdx ? "opacity-55" : ""}`} aria-current={i === activeStepIdx ? "step" : undefined}>
+                              <span className={`mt-0.5 h-5 w-5 shrink-0 rounded-full text-[10px] font-bold flex items-center justify-center ${i === activeStepIdx ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
                                 {i + 1}
                               </span>
                               <div className="min-w-0 flex-1">
@@ -1122,12 +1190,12 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                           <div className="flex-1 space-y-1">
                             <div className="flex justify-between text-[10px] text-muted-foreground">
                               <span>Progress</span>
-                              <span>{routeResult.route ? Math.round((activeRouteIdx / (routeResult.route.length - 1)) * 100) : 0}%</span>
+                              <span>{liveNav ? Math.round(liveNav.progress) : 0}%</span>
                             </div>
                             <div className="w-full bg-emerald-500/20 h-1.5 rounded-full overflow-hidden">
                               <div
                                 className="bg-emerald-600 h-full transition-all duration-300"
-                                style={{ width: `${routeResult.route ? (activeRouteIdx / (routeResult.route.length - 1)) * 100 : 0}%` }}
+                                style={{ width: `${liveNav?.progress ?? 0}%` }}
                               />
                             </div>
                           </div>
@@ -1399,7 +1467,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                 {routeResult && routeResult.route && (
                   <Polyline
                     positions={remainingPath}
-                    pathOptions={{ color: "#d4af37", weight: 6, opacity: 0.95 }}
+                    pathOptions={{ color: "#7e22ce", weight: 8, opacity: 1, lineCap: "round", lineJoin: "round" }}
                   />
                 )}
 
