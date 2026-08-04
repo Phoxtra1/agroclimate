@@ -20,11 +20,39 @@ interface NotificationDoc {
 }
 
 export default function AdminAGTransPanel() {
-  const { drivers, requests, deliveryJobs, trackingSessions } = useAGTrans();
+  const { requests, deliveryJobs, trackingSessions } = useAGTrans();
+  const [drivers, setDrivers] = useState<DriverProfile[]>([]);
+  const [driversLoading, setDriversLoading] = useState(true);
+  const [driversError, setDriversError] = useState<string | null>(null);
   const [agreements, setAgreements] = useState<TransportAgreement[]>([]);
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
   const [selectedAgreement, setSelectedAgreement] = useState<TransportAgreement | null>(null);
+
+  const loadDrivers = async () => {
+    setDriversLoading(true);
+    const { data, error } = await supabase
+      .from("agtrans_drivers")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      setDriversError("Driver approvals could not be loaded for this console session.");
+      setDrivers([]);
+    } else {
+      setDriversError(null);
+      setDrivers((data as unknown as DriverProfile[]) || []);
+    }
+    setDriversLoading(false);
+  };
+
+  useEffect(() => {
+    loadDrivers();
+    const channel = supabase
+      .channel("admin-agtrans-drivers")
+      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadDrivers)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -60,6 +88,7 @@ export default function AdminAGTransPanel() {
       return;
     }
     toast.success(`Driver ${status.replace("_", " ")}`);
+    await loadDrivers();
     try {
       await supabase.from("transport_notifications").insert({
         user_id: driver.user_id,
@@ -73,7 +102,10 @@ export default function AdminAGTransPanel() {
   const toggleSuspend = async (driver: DriverProfile, suspend: boolean) => {
     const { error } = await supabase.from("agtrans_drivers").update({ admin_suspended: suspend }).eq("id", driver.id);
     if (error) toast.error("Failed to update suspension");
-    else toast.success(suspend ? "Driver suspended" : "Driver reactivated");
+    else {
+      toast.success(suspend ? "Driver suspended" : "Driver reactivated");
+      await loadDrivers();
+    }
   };
 
   const pendingDrivers = drivers.filter((d) => d.approval_status === "pending");
@@ -106,7 +138,7 @@ export default function AdminAGTransPanel() {
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-yellow-600" /> Pending Driver Approvals ({pendingDrivers.length})</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {pendingDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No pending drivers.</p> : (
+              {driversError ? <p className="text-sm text-destructive">{driversError}</p> : driversLoading ? <p className="text-sm text-muted-foreground">Loading pending drivers…</p> : pendingDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No pending drivers.</p> : (
                 pendingDrivers.map((d) => (
                   <div key={d.id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-muted/10">
                     <div className="space-y-1">
@@ -131,7 +163,7 @@ export default function AdminAGTransPanel() {
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><User className="h-5 w-5" /> All Drivers</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {allDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No driver profiles.</p> : (
+              {driversError ? <p className="text-sm text-destructive">{driversError}</p> : driversLoading ? <p className="text-sm text-muted-foreground">Loading driver profiles…</p> : allDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No driver profiles.</p> : (
                 allDrivers.map((d) => (
                   <div key={d.id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="space-y-1">

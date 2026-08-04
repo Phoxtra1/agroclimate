@@ -11,6 +11,7 @@ export interface GPSUpdate {
 export class GPSTrackingService {
   private watchId: number | null = null;
   private lastPosition: { lat: number; lon: number; time: number } | null = null;
+  private smoothedSpeedMps = 0;
 
   startTracking(
     onUpdate: (update: GPSUpdate) => void,
@@ -29,7 +30,7 @@ export class GPSTrackingService {
       (pos) => {
         const { latitude: lat, longitude: lon, heading, speed, accuracy } = pos.coords;
         const now = Date.now();
-        let speedKn = 0;
+        let measuredSpeedMps = speed !== null && Number.isFinite(speed) ? Math.max(0, speed) : 0;
         let bearing = heading || 0;
         let isMoving = false;
 
@@ -37,19 +38,27 @@ export class GPSTrackingService {
           const dt = (now - this.lastPosition.time) / 1000; // in seconds
           if (dt > 0.5) {
             const dist = this.haversineDist(this.lastPosition.lat, this.lastPosition.lon, lat, lon);
-            const speedMps = dist / dt;
-            speedKn = speedMps * 1.94384; // convert m/s to knots
+            const calculatedSpeedMps = dist / dt;
+            // Device speed is usually less noisy than point-to-point speed. Ignore
+            // displacement-derived spikes when the reported GPS accuracy is poor.
+            if (speed === null || !Number.isFinite(speed)) {
+              measuredSpeedMps = accuracy <= 50 ? calculatedSpeedMps : 0;
+            }
 
             // Filter out minor indoor GPS drift (movement threshold > 0.7 m/s / 2.5 km/h)
-            if (speedMps > 0.7) {
+            if (measuredSpeedMps > 0.7 && accuracy <= 50 && dist >= Math.max(3, accuracy * 0.2)) {
               isMoving = true;
               bearing = this.getBearing(this.lastPosition.lat, this.lastPosition.lon, lat, lon);
             }
           }
-        } else if (speed !== null && speed > 0.7) {
-          speedKn = speed * 1.94384;
+        } else if (measuredSpeedMps > 0.7 && accuracy <= 50) {
           isMoving = true;
         }
+
+        const smoothing = isMoving ? 0.28 : 0.12;
+        this.smoothedSpeedMps += smoothing * (measuredSpeedMps - this.smoothedSpeedMps);
+        if (!isMoving && this.smoothedSpeedMps < 0.35) this.smoothedSpeedMps = 0;
+        const speedKn = this.smoothedSpeedMps * 1.94384;
 
         this.lastPosition = { lat, lon, time: now };
 
@@ -78,6 +87,7 @@ export class GPSTrackingService {
       this.watchId = null;
     }
     this.lastPosition = null;
+    this.smoothedSpeedMps = 0;
   }
 
   private haversineDist(lat1: number, lon1: number, lat2: number, lon2: number): number {

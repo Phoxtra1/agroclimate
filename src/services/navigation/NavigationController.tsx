@@ -17,6 +17,7 @@ interface NavigationContextType {
   currentPos: LatLng;
   bearing: number;
   speedKn: number;
+  gpsAccuracy: number | null;
   isMoving: boolean;
   gpsLocked: boolean;
   destination: Destination | null;
@@ -71,6 +72,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [currentPos, setCurrentPos] = useState<LatLng>(() => ({ lat: 5.6037, lon: -0.187 }));
   const [bearing, setBearing] = useState<number>(0);
   const [speedKn, setSpeedKn] = useState<number>(0);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [isMoving, setIsMoving] = useState<boolean>(false);
   const [gpsLocked, setGpsLocked] = useState<boolean>(false);
 
@@ -93,6 +95,10 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     index: -1,
     stage: "none",
   });
+  const navigationStartRef = useRef<LatLng | null>(null);
+  const navigationTravelRef = useRef(0);
+  const lastNavigationPointRef = useRef<LatLng | null>(null);
+  const arrivalFixCountRef = useRef(0);
 
   // Track state transitions based on changes to destination & route calculation
   useEffect(() => {
@@ -112,6 +118,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     gpsService.startTracking(
       (update) => {
         setGpsLocked(true);
+        setGpsAccuracy(update.accuracy ?? null);
         if (!simulating) {
           setCurrentPos(update.coords);
           setSpeedKn(update.speedKn);
@@ -128,6 +135,20 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       gpsService.stopTracking();
     };
   }, [simulating]);
+
+  useEffect(() => {
+    if (!isNavigating) {
+      navigationStartRef.current = null;
+      navigationTravelRef.current = 0;
+      lastNavigationPointRef.current = null;
+      arrivalFixCountRef.current = 0;
+      return;
+    }
+    if (!navigationStartRef.current) {
+      navigationStartRef.current = currentPos;
+      lastNavigationPointRef.current = currentPos;
+    }
+  }, [isNavigating, currentPos]);
 
   // Simulator Player Loop
   useEffect(() => {
@@ -215,9 +236,26 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const { lat, lon } = currentPos;
     const isRoad = navMode === "road";
 
-    // Distance to endpoint check
+    if (isNavigating && !simulating && gpsLocked && (gpsAccuracy ?? Infinity) <= 50) {
+      const previous = lastNavigationPointRef.current;
+      if (previous) {
+        const travelled = thisHaversine(previous.lat, previous.lon, lat, lon);
+        if (travelled >= 2 && travelled <= 150) navigationTravelRef.current += travelled;
+      }
+      lastNavigationPointRef.current = currentPos;
+    }
+
+    // Arrival requires active navigation, a reliable GPS fix, actual travel, and
+    // three consecutive fixes at the destination. Merely calculating a route can
+    // never announce arrival.
     const distToDest = thisHaversine(lat, lon, route[route.length - 1][0], route[route.length - 1][1]);
-    if (distToDest < 30) {
+    const arrivalRadius = Math.max(20, Math.min(45, (gpsAccuracy ?? 20) * 1.25));
+    const reliableArrivalFix = simulating || (
+      isNavigating && gpsLocked && (gpsAccuracy ?? Infinity) <= 50 &&
+      navigationTravelRef.current >= 20 && distToDest <= arrivalRadius
+    );
+    arrivalFixCountRef.current = reliableArrivalFix ? arrivalFixCountRef.current + 1 : 0;
+    if (arrivalFixCountRef.current >= 3) {
       if (!lastArrivalAnnouncedRef.current) {
         lastArrivalAnnouncedRef.current = true;
         setState("DESTINATION_REACHED");
@@ -232,7 +270,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setIsNavigating(false);
       }
       return;
-    } else if (distToDest > 50) {
+    } else if (distToDest > arrivalRadius + 20) {
       lastArrivalAnnouncedRef.current = false;
     }
 
@@ -334,7 +372,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         scanIdx++;
       }
     }
-  }, [currentPos, routeResult, voiceOn, navMode, simulating, simStepIdx, isNavigating, isMoving, gpsLocked]);
+  }, [currentPos, routeResult, voiceOn, navMode, simulating, simStepIdx, isNavigating, isMoving, gpsLocked, gpsAccuracy]);
 
   const thisHaversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371000;
@@ -369,6 +407,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setRouteResult(result);
       setSimStepIdx(0);
       lastTurnAnnouncementStageRef.current = { index: -1, stage: "none" };
+      arrivalFixCountRef.current = 0;
       toast.success("Rerouting completed automatically");
       speak("Re-routing. A new route has been computed.", voiceOn);
     } catch {
@@ -451,6 +490,8 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setSimStepIdx(0);
       setSimulating(false);
       setIsNavigating(false);
+      lastArrivalAnnouncedRef.current = false;
+      arrivalFixCountRef.current = 0;
 
       const km = (result.distance_m / 1000).toFixed(1);
       const min = (result.duration_s / 60).toFixed(0);
@@ -480,6 +521,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         currentPos,
         bearing,
         speedKn,
+        gpsAccuracy,
         isMoving,
         gpsLocked,
         destination,
