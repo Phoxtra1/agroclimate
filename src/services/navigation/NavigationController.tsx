@@ -554,6 +554,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         simStepIdx,
         routeBusy,
         voiceOn,
+        voiceVolume,
 
         setDestination,
         setStartLocation,
@@ -562,6 +563,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setIsNavigating,
         setIsAutoFollow,
         setVoiceOn,
+        setVoiceVolume,
         setSimulating,
         setSimStepIdx,
 
