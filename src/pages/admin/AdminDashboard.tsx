@@ -228,6 +228,21 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
         <Metric label={`Alert Open Rate`} value={openRate} suffix="%" />
       </div>
 
+      <Card className={pendingApprovals > 0 ? "border-primary/60" : undefined}>
+        <CardContent className="pt-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold">Driver registrations awaiting approval</p>
+            <p className="text-xs text-muted-foreground">Live queue from AGTrans partner sign-ups.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold">{pendingApprovals}</span>
+            <Button size="sm" onClick={() => onNavigate?.("approvals")}>Review</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+
+
       <Card>
         <CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">User breakdown</p>
