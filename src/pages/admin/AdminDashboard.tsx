@@ -11,6 +11,7 @@ import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
 import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
 import AGNavEngine from "./AGNavEngine";
 import AdminAGTransPanel from "./AdminAGTransPanel";
+import DriverApprovals, { useDriverApprovals } from "@/components/admin/DriverApprovals";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -23,10 +24,11 @@ import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type EngineKey =
   | "overview" | "alert" | "ai" | "flight" | "system"
-  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans";
+  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans" | "approvals";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
+  { key: "approvals", label: "Driver Approvals", icon: ShieldAlert },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "AI Layer", icon: Layers },
   { key: "flight", label: "Flight Advisory", icon: Plane },
@@ -50,7 +52,11 @@ function rangeStart(r: Range) {
   return d;
 }
 
-function OverviewPanel() {
+function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }) {
+  const { drivers: approvalDrivers } = useDriverApprovals();
+  const pendingApprovals = approvalDrivers.filter(
+    (d) => d.approval_status === "pending" || d.approval_status === "more_info"
+  ).length;
   const [range, setRange] = useState<Range>("today");
   const [counts, setCounts] = useState({
     totalUsers: 0, activeUsers: 0, alertsTotal: 0, alertsToday: 0,
@@ -222,6 +228,21 @@ function OverviewPanel() {
         <Metric label={`Alert Open Rate`} value={openRate} suffix="%" />
       </div>
 
+      <Card className={pendingApprovals > 0 ? "border-primary/60" : undefined}>
+        <CardContent className="pt-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-semibold">Driver registrations awaiting approval</p>
+            <p className="text-xs text-muted-foreground">Live queue from AGTrans partner sign-ups.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold">{pendingApprovals}</span>
+            <Button size="sm" onClick={() => onNavigate?.("approvals")}>Review</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+
+
       <Card>
         <CardContent className="pt-4">
           <p className="text-sm font-semibold mb-2">User breakdown</p>
@@ -346,7 +367,8 @@ export default function AdminDashboard() {
       case "market-link": return <MarketLinkAdminPanel />;
       case "agnav": return <AGNavEngine />;
       case "agtrans": return <AdminAGTransPanel />;
-      default: return <OverviewPanel />;
+      case "approvals": return <DriverApprovals />;
+      default: return <OverviewPanel onNavigate={setActiveEngine} />;
     }
   };
 

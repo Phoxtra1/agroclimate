@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -117,13 +119,8 @@ function parseCoords(text: string): { lat: number; lon: number } | null {
   return { lat, lon };
 }
 
-function speak(text: string, enabled: boolean) {
-  if (!enabled || typeof window === "undefined" || !window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 1; u.pitch = 1; u.lang = "en-US";
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
+import { speak } from "@/lib/voice";
+
 
 function beep() {
   try {
@@ -212,6 +209,7 @@ function AGNavInner() {
     simStepIdx,
     routeBusy,
     voiceOn,
+    voiceVolume,
 
     setDestination,
     setStartLocation,
@@ -220,6 +218,7 @@ function AGNavInner() {
     setIsNavigating,
     setIsAutoFollow,
     setVoiceOn,
+    setVoiceVolume,
     setSimulating,
     setSimStepIdx,
 
@@ -235,6 +234,9 @@ function AGNavInner() {
   const [activeStepIdx, setActiveStepIdx] = useState(0);
   const [stableEtaSeconds, setStableEtaSeconds] = useState<number | null>(null);
   const etaSampleRef = useRef<{ remaining: number; accuracy: number; updatedAt: number } | null>(null);
+  // Debounce state for turn-by-turn auto-highlighting: a candidate step must be
+  // confirmed by consecutive fixes over a minimum dwell time before it becomes active.
+  const stepCandidateRef = useRef<{ index: number; hits: number; since: number }>({ index: 0, hits: 0, since: 0 });
   const activeRouteIdx = simulating ? simStepIdx : liveRouteIdx;
 
   // AI Advisory states
@@ -462,9 +464,17 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     }
   }, [routeResult]);
 
+  // Route-progress + turn-by-turn auto-highlighting.
+  // Guarded by three gates so noisy GPS can never skip ahead:
+  //  1. on-route gate  — the fix must be within the corridor threshold of the polyline
+  //  2. segment gate   — the step's manoeuvre point must actually be behind us
+  //  3. debounce gate  — the candidate step must repeat across fixes and dwell >1.2s
   useEffect(() => {
     const route = routeResult?.route;
     if (!route || route.length < 2 || simulating || !gpsLocked) return;
+
+    const accuracy = gpsAccuracy ?? 30;
+    const corridor = Math.max(40, Math.min(120, accuracy * 2));
 
     const start = Math.max(0, liveRouteIdx - 8);
     const end = Math.min(route.length - 1, liveRouteIdx + 120);
@@ -477,12 +487,15 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         closestIdx = i;
       }
     }
-    if (closestDistance <= Math.max(80, (gpsAccuracy ?? 30) * 2)) {
-      setLiveRouteIdx((previous) => Math.max(previous, closestIdx));
-    }
+
+    // Gate 1: ignore fixes that are not credibly on the route.
+    if (closestDistance > corridor) return;
+    setLiveRouteIdx((previous) => Math.max(previous, closestIdx));
 
     const steps = routeResult.steps || [];
-    let nextStep = 0;
+    if (steps.length === 0) return;
+
+    let candidate = 0;
     for (let i = 0; i < steps.length; i++) {
       const location = steps[i].location;
       if (!location) continue;
@@ -492,9 +505,23 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         const distance = haversineDist(location[0], location[1], route[r][0], route[r][1]);
         if (distance < stepDistance) { stepDistance = distance; stepRouteIdx = r; }
       }
-      if (closestIdx >= Math.max(0, stepRouteIdx - 1)) nextStep = i;
+      // Gate 2: only count the step once we have physically passed its manoeuvre
+      // point and are close enough to the route portion that owns it.
+      const passedSegment = closestIdx >= stepRouteIdx;
+      const nearManoeuvre = haversineDist(currentPos.lat, currentPos.lon, location[0], location[1]) <= corridor * 4;
+      if (passedSegment && (nearManoeuvre || closestIdx > stepRouteIdx + 2)) candidate = i;
     }
-    setActiveStepIdx(nextStep);
+
+    // Gate 3: debounce — confirm across fixes before advancing, never step back.
+    const now = Date.now();
+    const tracker = stepCandidateRef.current;
+    if (tracker.index !== candidate) {
+      stepCandidateRef.current = { index: candidate, hits: 1, since: now };
+      return;
+    }
+    tracker.hits += 1;
+    if (tracker.hits < 2 || now - tracker.since < 1200) return;
+    setActiveStepIdx((previous) => (candidate > previous ? candidate : previous));
   }, [currentPos, routeResult, simulating, gpsLocked, gpsAccuracy, liveRouteIdx]);
 
   useEffect(() => {
@@ -502,6 +529,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     setActiveStepIdx(0);
     setStableEtaSeconds(null);
     etaSampleRef.current = null;
+    stepCandidateRef.current = { index: 0, hits: 0, since: 0 };
   }, [routeResult]);
 
   const handleSearch = async (textOverride?: string) => {
@@ -1026,7 +1054,41 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                 </div>
                 <Button onClick={() => handleSearch()} disabled={searchBusy} className="h-11">{searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}</Button>
                 <Button variant="outline" onClick={toggleVoiceInput} className="h-11">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
-                <Button variant="outline" onClick={() => setVoiceOn(!voiceOn)} className="h-11">{voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-11" aria-label="Voice direction settings">
+                      {voiceOn && voiceVolume > 0 ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">Voice directions</p>
+                        <p className="text-xs text-muted-foreground">Spoken turn-by-turn guidance</p>
+                      </div>
+                      <Switch checked={voiceOn} onCheckedChange={setVoiceOn} aria-label="Enable voice directions" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Volume</span>
+                        <span className="font-medium">{Math.round(voiceVolume * 100)}%</span>
+                      </div>
+                      <Slider
+                        value={[Math.round(voiceVolume * 100)]}
+                        onValueChange={(v) => setVoiceVolume((v[0] ?? 0) / 100)}
+                        min={0}
+                        max={100}
+                        step={5}
+                        disabled={!voiceOn}
+                        aria-label="Voice volume"
+                      />
+                    </div>
+                    <Button size="sm" variant="secondary" className="w-full"
+                      onClick={() => speak("Voice directions are active.", voiceOn)}>
+                      Test voice
+                    </Button>
+                  </PopoverContent>
+                </Popover>
                 <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11"><Crosshair className="h-4 w-4" /></Button>
               </div>
             )}

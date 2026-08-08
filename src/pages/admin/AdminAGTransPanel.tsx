@@ -1,58 +1,19 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Truck, Navigation, AlertTriangle, ShieldCheck, User, FileText, CheckCircle2, XCircle, HelpCircle, PauseCircle, PlayCircle, Eye } from "lucide-react";
-import { useAGTrans, DriverProfile, DeliveryJob, TransportRequest, TransportAgreement } from "@/hooks/useAGTrans";
-import type { ApprovalStatus } from "@/hooks/useTransport";
-
-interface NotificationDoc {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  created_at: string;
-}
+import { Truck, Navigation, AlertTriangle, FileText } from "lucide-react";
+import { useAGTrans, DriverProfile, DeliveryJob, TransportAgreement } from "@/hooks/useAGTrans";
+import DriverApprovals from "@/components/admin/DriverApprovals";
 
 export default function AdminAGTransPanel() {
   const { requests, deliveryJobs, trackingSessions } = useAGTrans();
-  const [drivers, setDrivers] = useState<DriverProfile[]>([]);
-  const [driversLoading, setDriversLoading] = useState(true);
-  const [driversError, setDriversError] = useState<string | null>(null);
   const [agreements, setAgreements] = useState<TransportAgreement[]>([]);
-  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
   const [selectedAgreement, setSelectedAgreement] = useState<TransportAgreement | null>(null);
 
-  const loadDrivers = async () => {
-    setDriversLoading(true);
-    const { data, error } = await supabase
-      .from("agtrans_drivers")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) {
-      setDriversError("Driver approvals could not be loaded for this console session.");
-      setDrivers([]);
-    } else {
-      setDriversError(null);
-      setDrivers((data as unknown as DriverProfile[]) || []);
-    }
-    setDriversLoading(false);
-  };
-
-  useEffect(() => {
-    loadDrivers();
-    const channel = supabase
-      .channel("admin-agtrans-drivers")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadDrivers)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -71,47 +32,8 @@ export default function AdminAGTransPanel() {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  const setApproval = async (driver: DriverProfile, status: ApprovalStatus, reason?: string) => {
-    const patch: Partial<DriverProfile> = { approval_status: status };
-    if (status === "approved") {
-      patch.verification_status = "verified";
-      patch.admin_suspended = false;
-    } else if (status === "rejected") {
-      patch.rejection_reason = reason || "Application does not meet requirements";
-    } else if (status === "more_info") {
-      patch.rejection_reason = reason || "Additional information required";
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from("agtrans_drivers").update(patch as any).eq("id", driver.id);
-    if (error) {
-      toast.error("Failed to update driver");
-      return;
-    }
-    toast.success(`Driver ${status.replace("_", " ")}`);
-    await loadDrivers();
-    try {
-      await supabase.from("transport_notifications").insert({
-        user_id: driver.user_id,
-        type: status === "approved" ? "driver_approved" : status === "rejected" ? "driver_rejected" : "driver_more_info",
-        title: `Driver ${status === "more_info" ? "More Info" : status}`,
-        message: reason || `Your driver application has been ${status}.`,
-      });
-    } catch { /* notification best-effort */ }
-  };
-
-  const toggleSuspend = async (driver: DriverProfile, suspend: boolean) => {
-    const { error } = await supabase.from("agtrans_drivers").update({ admin_suspended: suspend }).eq("id", driver.id);
-    if (error) toast.error("Failed to update suspension");
-    else {
-      toast.success(suspend ? "Driver suspended" : "Driver reactivated");
-      await loadDrivers();
-    }
-  };
-
-  const pendingDrivers = drivers.filter((d) => d.approval_status === "pending");
-  const allDrivers = drivers;
   const activeDeliveries = deliveryJobs.filter((j) => j.status !== "Completed" && j.status !== "Cancelled");
-  const completedDeliveries = deliveryJobs.filter((j) => j.status === "Completed");
+
   const disputedRequests = requests.filter((r) => r.status === "disputed" || r.negotiation_status === "disputed");
 
   const getSession = (job: DeliveryJob) => trackingSessions.find((s) => s.delivery_job_id === job.id);
@@ -135,59 +57,9 @@ export default function AdminAGTransPanel() {
         </TabsList>
 
         <TabsContent value="drivers" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-yellow-600" /> Pending Driver Approvals ({pendingDrivers.length})</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {driversError ? <p className="text-sm text-destructive">{driversError}</p> : driversLoading ? <p className="text-sm text-muted-foreground">Loading pending drivers…</p> : pendingDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No pending drivers.</p> : (
-                pendingDrivers.map((d) => (
-                  <div key={d.id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-muted/10">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-sm">{d.full_name || "Unknown Partner"}</p>
-                      <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · {d.phone}</p>
-                      {d.license_url && <a href={d.license_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View License Document</a>}
-                    </div>
-                    <div className="flex flex-col gap-2 w-full sm:w-auto">
-                      <Input className="text-xs" placeholder="Reason / info request" value={rejectionReasons[d.id] || ""} onChange={(e) => setRejectionReasons({ ...rejectionReasons, [d.id]: e.target.value })} />
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" variant="outline" onClick={() => setApproval(d, "rejected", rejectionReasons[d.id])}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
-                        <Button size="sm" variant="outline" onClick={() => setApproval(d, "more_info", rejectionReasons[d.id])}><HelpCircle className="h-3.5 w-3.5 mr-1" /> More Info</Button>
-                        <Button size="sm" onClick={() => setApproval(d, "approved")}><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><User className="h-5 w-5" /> All Drivers</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {driversError ? <p className="text-sm text-destructive">{driversError}</p> : driversLoading ? <p className="text-sm text-muted-foreground">Loading driver profiles…</p> : allDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No driver profiles.</p> : (
-                allDrivers.map((d) => (
-                  <div key={d.id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm">{d.full_name}</p>
-                        <Badge variant={d.approval_status === "approved" ? "default" : d.approval_status === "rejected" ? "destructive" : "secondary"}>{d.approval_status}</Badge>
-                        {d.admin_suspended && <Badge variant="destructive">Suspended</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · Cap {d.vehicle_capacity_kg} kg</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedDriver(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>
-                      {d.admin_suspended ? (
-                        <Button size="sm" onClick={() => toggleSuspend(d, false)}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
-                      ) : (
-                        <Button size="sm" variant="destructive" onClick={() => toggleSuspend(d, true)}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          <DriverApprovals onViewDocs={setSelectedDriver} />
         </TabsContent>
+
 
         <TabsContent value="live" className="mt-4">
           <Card>
