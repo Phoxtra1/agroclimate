@@ -135,59 +135,9 @@ export default function AdminAGTransPanel() {
         </TabsList>
 
         <TabsContent value="drivers" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-yellow-600" /> Pending Driver Approvals ({pendingDrivers.length})</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {driversError ? <p className="text-sm text-destructive">{driversError}</p> : driversLoading ? <p className="text-sm text-muted-foreground">Loading pending drivers…</p> : pendingDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No pending drivers.</p> : (
-                pendingDrivers.map((d) => (
-                  <div key={d.id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-muted/10">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-sm">{d.full_name || "Unknown Partner"}</p>
-                      <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · {d.phone}</p>
-                      {d.license_url && <a href={d.license_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View License Document</a>}
-                    </div>
-                    <div className="flex flex-col gap-2 w-full sm:w-auto">
-                      <Input className="text-xs" placeholder="Reason / info request" value={rejectionReasons[d.id] || ""} onChange={(e) => setRejectionReasons({ ...rejectionReasons, [d.id]: e.target.value })} />
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" variant="outline" onClick={() => setApproval(d, "rejected", rejectionReasons[d.id])}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
-                        <Button size="sm" variant="outline" onClick={() => setApproval(d, "more_info", rejectionReasons[d.id])}><HelpCircle className="h-3.5 w-3.5 mr-1" /> More Info</Button>
-                        <Button size="sm" onClick={() => setApproval(d, "approved")}><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-base flex items-center gap-2"><User className="h-5 w-5" /> All Drivers</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {driversError ? <p className="text-sm text-destructive">{driversError}</p> : driversLoading ? <p className="text-sm text-muted-foreground">Loading driver profiles…</p> : allDrivers.length === 0 ? <p className="text-sm text-muted-foreground">No driver profiles.</p> : (
-                allDrivers.map((d) => (
-                  <div key={d.id} className="border p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm">{d.full_name}</p>
-                        <Badge variant={d.approval_status === "approved" ? "default" : d.approval_status === "rejected" ? "destructive" : "secondary"}>{d.approval_status}</Badge>
-                        {d.admin_suspended && <Badge variant="destructive">Suspended</Badge>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · Cap {d.vehicle_capacity_kg} kg</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedDriver(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>
-                      {d.admin_suspended ? (
-                        <Button size="sm" onClick={() => toggleSuspend(d, false)}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
-                      ) : (
-                        <Button size="sm" variant="destructive" onClick={() => toggleSuspend(d, true)}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+          <DriverApprovals onViewDocs={setSelectedDriver} />
         </TabsContent>
+
 
         <TabsContent value="live" className="mt-4">
           <Card>
