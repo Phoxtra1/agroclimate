@@ -57,15 +57,15 @@ const destService = new DestinationService();
 const routingService = new RoutingService();
 const recalculationService = new RouteRecalculationService();
 
-function speak(text: string, enabled: boolean) {
-  if (!enabled || typeof window === "undefined" || !window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 1;
-  u.pitch = 1;
-  u.lang = "en-US";
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
+import {
+  speak,
+  getVoiceVolume,
+  setVoiceVolume as persistVoiceVolume,
+  getStoredVoiceEnabled,
+  setStoredVoiceEnabled,
+  stopSpeaking,
+} from "@/lib/voice";
+
 
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<NavigationState>("IDLE");
