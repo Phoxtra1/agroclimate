@@ -11,6 +11,7 @@ import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
 import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
 import AGNavEngine from "./AGNavEngine";
 import AdminAGTransPanel from "./AdminAGTransPanel";
+import DriverApprovals, { useDriverApprovals } from "@/components/admin/DriverApprovals";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
