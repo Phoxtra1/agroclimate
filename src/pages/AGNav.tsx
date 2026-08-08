@@ -117,13 +117,8 @@ function parseCoords(text: string): { lat: number; lon: number } | null {
   return { lat, lon };
 }
 
-function speak(text: string, enabled: boolean) {
-  if (!enabled || typeof window === "undefined" || !window.speechSynthesis) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 1; u.pitch = 1; u.lang = "en-US";
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
+import { speak } from "@/lib/voice";
+
 
 function beep() {
   try {
