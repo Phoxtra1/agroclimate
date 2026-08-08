@@ -87,7 +87,7 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                     <Badge variant="secondary">{d.approval_status}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · {d.phone}</p>
-                  <p className="text-xs text-muted-foreground">Registered {new Date(d.created_at).toLocaleString()}</p>
+                  {d.created_at && <p className="text-xs text-muted-foreground">Registered {new Date(d.created_at).toLocaleString()}</p>}
                   {d.license_url && <a href={d.license_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View License Document</a>}
                 </div>
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
