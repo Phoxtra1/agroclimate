@@ -207,6 +207,7 @@ function AGNavInner() {
     simStepIdx,
     routeBusy,
     voiceOn,
+    voiceVolume,
 
     setDestination,
     setStartLocation,
@@ -215,6 +216,7 @@ function AGNavInner() {
     setIsNavigating,
     setIsAutoFollow,
     setVoiceOn,
+    setVoiceVolume,
     setSimulating,
     setSimStepIdx,
 
@@ -230,6 +232,9 @@ function AGNavInner() {
   const [activeStepIdx, setActiveStepIdx] = useState(0);
   const [stableEtaSeconds, setStableEtaSeconds] = useState<number | null>(null);
   const etaSampleRef = useRef<{ remaining: number; accuracy: number; updatedAt: number } | null>(null);
+  // Debounce state for turn-by-turn auto-highlighting: a candidate step must be
+  // confirmed by consecutive fixes over a minimum dwell time before it becomes active.
+  const stepCandidateRef = useRef<{ index: number; hits: number; since: number }>({ index: 0, hits: 0, since: 0 });
   const activeRouteIdx = simulating ? simStepIdx : liveRouteIdx;
 
   // AI Advisory states
