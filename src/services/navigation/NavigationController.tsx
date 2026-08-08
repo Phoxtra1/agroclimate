@@ -31,6 +31,7 @@ interface NavigationContextType {
   simStepIdx: number;
   routeBusy: boolean;
   voiceOn: boolean;
+  voiceVolume: number;
 
   setDestination: (dest: Destination | null) => void;
   setStartLocation: (start: Destination | null) => void;
@@ -39,6 +40,7 @@ interface NavigationContextType {
   setIsNavigating: (navigating: boolean) => void;
   setIsAutoFollow: (autoFollow: boolean) => void;
   setVoiceOn: (voiceOn: boolean) => void;
+  setVoiceVolume: (volume: number) => void;
   setSimulating: (sim: boolean) => void;
   setSimStepIdx: (idx: number) => void;
 
