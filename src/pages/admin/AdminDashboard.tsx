@@ -24,10 +24,11 @@ import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type EngineKey =
   | "overview" | "alert" | "ai" | "flight" | "system"
-  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans";
+  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans" | "approvals";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
+  { key: "approvals", label: "Driver Approvals", icon: ShieldAlert },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "AI Layer", icon: Layers },
   { key: "flight", label: "Flight Advisory", icon: Plane },
