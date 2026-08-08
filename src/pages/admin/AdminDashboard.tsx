@@ -348,7 +348,8 @@ export default function AdminDashboard() {
       case "market-link": return <MarketLinkAdminPanel />;
       case "agnav": return <AGNavEngine />;
       case "agtrans": return <AdminAGTransPanel />;
-      default: return <OverviewPanel />;
+      case "approvals": return <DriverApprovals />;
+      default: return <OverviewPanel onNavigate={setActiveEngine} />;
     }
   };
 
