@@ -52,7 +52,11 @@ function rangeStart(r: Range) {
   return d;
 }
 
-function OverviewPanel() {
+function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }) {
+  const { drivers: approvalDrivers } = useDriverApprovals();
+  const pendingApprovals = approvalDrivers.filter(
+    (d) => d.approval_status === "pending" || d.approval_status === "more_info"
+  ).length;
   const [range, setRange] = useState<Range>("today");
   const [counts, setCounts] = useState({
     totalUsers: 0, activeUsers: 0, alertsTotal: 0, alertsToday: 0,
