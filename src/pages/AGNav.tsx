@@ -462,9 +462,17 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     }
   }, [routeResult]);
 
+  // Route-progress + turn-by-turn auto-highlighting.
+  // Guarded by three gates so noisy GPS can never skip ahead:
+  //  1. on-route gate  — the fix must be within the corridor threshold of the polyline
+  //  2. segment gate   — the step's manoeuvre point must actually be behind us
+  //  3. debounce gate  — the candidate step must repeat across fixes and dwell >1.2s
   useEffect(() => {
     const route = routeResult?.route;
     if (!route || route.length < 2 || simulating || !gpsLocked) return;
+
+    const accuracy = gpsAccuracy ?? 30;
+    const corridor = Math.max(40, Math.min(120, accuracy * 2));
 
     const start = Math.max(0, liveRouteIdx - 8);
     const end = Math.min(route.length - 1, liveRouteIdx + 120);
@@ -477,12 +485,15 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         closestIdx = i;
       }
     }
-    if (closestDistance <= Math.max(80, (gpsAccuracy ?? 30) * 2)) {
-      setLiveRouteIdx((previous) => Math.max(previous, closestIdx));
-    }
+
+    // Gate 1: ignore fixes that are not credibly on the route.
+    if (closestDistance > corridor) return;
+    setLiveRouteIdx((previous) => Math.max(previous, closestIdx));
 
     const steps = routeResult.steps || [];
-    let nextStep = 0;
+    if (steps.length === 0) return;
+
+    let candidate = 0;
     for (let i = 0; i < steps.length; i++) {
       const location = steps[i].location;
       if (!location) continue;
@@ -492,9 +503,23 @@ Generate a JSON response assessing the route safety, weather constraints, potent
         const distance = haversineDist(location[0], location[1], route[r][0], route[r][1]);
         if (distance < stepDistance) { stepDistance = distance; stepRouteIdx = r; }
       }
-      if (closestIdx >= Math.max(0, stepRouteIdx - 1)) nextStep = i;
+      // Gate 2: only count the step once we have physically passed its manoeuvre
+      // point and are close enough to the route portion that owns it.
+      const passedSegment = closestIdx >= stepRouteIdx;
+      const nearManoeuvre = haversineDist(currentPos.lat, currentPos.lon, location[0], location[1]) <= corridor * 4;
+      if (passedSegment && (nearManoeuvre || closestIdx > stepRouteIdx + 2)) candidate = i;
     }
-    setActiveStepIdx(nextStep);
+
+    // Gate 3: debounce — confirm across fixes before advancing, never step back.
+    const now = Date.now();
+    const tracker = stepCandidateRef.current;
+    if (tracker.index !== candidate) {
+      stepCandidateRef.current = { index: candidate, hits: 1, since: now };
+      return;
+    }
+    tracker.hits += 1;
+    if (tracker.hits < 2 || now - tracker.since < 1200) return;
+    setActiveStepIdx((previous) => (candidate > previous ? candidate : previous));
   }, [currentPos, routeResult, simulating, gpsLocked, gpsAccuracy, liveRouteIdx]);
 
   useEffect(() => {
@@ -502,6 +527,7 @@ Generate a JSON response assessing the route safety, weather constraints, potent
     setActiveStepIdx(0);
     setStableEtaSeconds(null);
     etaSampleRef.current = null;
+    stepCandidateRef.current = { index: 0, hits: 0, since: 0 };
   }, [routeResult]);
 
   const handleSearch = async (textOverride?: string) => {
