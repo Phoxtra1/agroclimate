@@ -1052,7 +1052,41 @@ Generate a JSON response assessing the route safety, weather constraints, potent
                 </div>
                 <Button onClick={() => handleSearch()} disabled={searchBusy} className="h-11">{searchBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}</Button>
                 <Button variant="outline" onClick={toggleVoiceInput} className="h-11">{listening ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
-                <Button variant="outline" onClick={() => setVoiceOn(!voiceOn)} className="h-11">{voiceOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-11" aria-label="Voice direction settings">
+                      {voiceOn && voiceVolume > 0 ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">Voice directions</p>
+                        <p className="text-xs text-muted-foreground">Spoken turn-by-turn guidance</p>
+                      </div>
+                      <Switch checked={voiceOn} onCheckedChange={setVoiceOn} aria-label="Enable voice directions" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Volume</span>
+                        <span className="font-medium">{Math.round(voiceVolume * 100)}%</span>
+                      </div>
+                      <Slider
+                        value={[Math.round(voiceVolume * 100)]}
+                        onValueChange={(v) => setVoiceVolume((v[0] ?? 0) / 100)}
+                        min={0}
+                        max={100}
+                        step={5}
+                        disabled={!voiceOn}
+                        aria-label="Voice volume"
+                      />
+                    </div>
+                    <Button size="sm" variant="secondary" className="w-full"
+                      onClick={() => speak("Voice directions are active.", voiceOn)}>
+                      Test voice
+                    </Button>
+                  </PopoverContent>
+                </Popover>
                 <Button variant="ghost" onClick={useCurrentAsDestination} className="h-11"><Crosshair className="h-4 w-4" /></Button>
               </div>
             )}
