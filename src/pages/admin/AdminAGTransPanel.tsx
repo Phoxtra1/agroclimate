@@ -1,58 +1,19 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Truck, Navigation, AlertTriangle, ShieldCheck, User, FileText, CheckCircle2, XCircle, HelpCircle, PauseCircle, PlayCircle, Eye } from "lucide-react";
-import { useAGTrans, DriverProfile, DeliveryJob, TransportRequest, TransportAgreement } from "@/hooks/useAGTrans";
-import type { ApprovalStatus } from "@/hooks/useTransport";
-
-interface NotificationDoc {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  created_at: string;
-}
+import { Truck, Navigation, AlertTriangle, FileText } from "lucide-react";
+import { useAGTrans, DriverProfile, DeliveryJob, TransportAgreement } from "@/hooks/useAGTrans";
+import DriverApprovals from "@/components/admin/DriverApprovals";
 
 export default function AdminAGTransPanel() {
   const { requests, deliveryJobs, trackingSessions } = useAGTrans();
-  const [drivers, setDrivers] = useState<DriverProfile[]>([]);
-  const [driversLoading, setDriversLoading] = useState(true);
-  const [driversError, setDriversError] = useState<string | null>(null);
   const [agreements, setAgreements] = useState<TransportAgreement[]>([]);
-  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [selectedDriver, setSelectedDriver] = useState<DriverProfile | null>(null);
   const [selectedAgreement, setSelectedAgreement] = useState<TransportAgreement | null>(null);
 
-  const loadDrivers = async () => {
-    setDriversLoading(true);
-    const { data, error } = await supabase
-      .from("agtrans_drivers")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) {
-      setDriversError("Driver approvals could not be loaded for this console session.");
-      setDrivers([]);
-    } else {
-      setDriversError(null);
-      setDrivers((data as unknown as DriverProfile[]) || []);
-    }
-    setDriversLoading(false);
-  };
-
-  useEffect(() => {
-    loadDrivers();
-    const channel = supabase
-      .channel("admin-agtrans-drivers")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, loadDrivers)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
 
   useEffect(() => {
     const load = async () => {
