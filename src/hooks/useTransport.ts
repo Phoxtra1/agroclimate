@@ -78,6 +78,8 @@ export interface DriverProfile {
   offer_notes?: string;
   special_cargo_instructions?: string;
   offer_status: OfferStatus;
+  created_at?: string;
+  updated_at?: string;
   remaining_capacity: number;
 }
 
