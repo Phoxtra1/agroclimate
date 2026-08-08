@@ -32,47 +32,8 @@ export default function AdminAGTransPanel() {
     return () => { supabase.removeChannel(ch); };
   }, []);
 
-  const setApproval = async (driver: DriverProfile, status: ApprovalStatus, reason?: string) => {
-    const patch: Partial<DriverProfile> = { approval_status: status };
-    if (status === "approved") {
-      patch.verification_status = "verified";
-      patch.admin_suspended = false;
-    } else if (status === "rejected") {
-      patch.rejection_reason = reason || "Application does not meet requirements";
-    } else if (status === "more_info") {
-      patch.rejection_reason = reason || "Additional information required";
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from("agtrans_drivers").update(patch as any).eq("id", driver.id);
-    if (error) {
-      toast.error("Failed to update driver");
-      return;
-    }
-    toast.success(`Driver ${status.replace("_", " ")}`);
-    await loadDrivers();
-    try {
-      await supabase.from("transport_notifications").insert({
-        user_id: driver.user_id,
-        type: status === "approved" ? "driver_approved" : status === "rejected" ? "driver_rejected" : "driver_more_info",
-        title: `Driver ${status === "more_info" ? "More Info" : status}`,
-        message: reason || `Your driver application has been ${status}.`,
-      });
-    } catch { /* notification best-effort */ }
-  };
-
-  const toggleSuspend = async (driver: DriverProfile, suspend: boolean) => {
-    const { error } = await supabase.from("agtrans_drivers").update({ admin_suspended: suspend }).eq("id", driver.id);
-    if (error) toast.error("Failed to update suspension");
-    else {
-      toast.success(suspend ? "Driver suspended" : "Driver reactivated");
-      await loadDrivers();
-    }
-  };
-
-  const pendingDrivers = drivers.filter((d) => d.approval_status === "pending");
-  const allDrivers = drivers;
   const activeDeliveries = deliveryJobs.filter((j) => j.status !== "Completed" && j.status !== "Cancelled");
-  const completedDeliveries = deliveryJobs.filter((j) => j.status === "Completed");
+
   const disputedRequests = requests.filter((r) => r.status === "disputed" || r.negotiation_status === "disputed");
 
   const getSession = (job: DeliveryJob) => trackingSessions.find((s) => s.delivery_job_id === job.id);
