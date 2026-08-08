@@ -86,7 +86,22 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [simulating, setSimulating] = useState<boolean>(false);
   const [simStepIdx, setSimStepIdx] = useState<number>(0);
   const [routeBusy, setRouteBusy] = useState<boolean>(false);
-  const [voiceOn, setVoiceOn] = useState<boolean>(true);
+  const [voiceOn, setVoiceOnState] = useState<boolean>(() => getStoredVoiceEnabled(true));
+  const [voiceVolume, setVoiceVolumeState] = useState<number>(() => getVoiceVolume());
+
+  const setVoiceOn = (enabled: boolean) => {
+    setVoiceOnState(enabled);
+    setStoredVoiceEnabled(enabled);
+    if (!enabled) stopSpeaking();
+  };
+
+  const setVoiceVolume = (value: number) => {
+    const clamped = Math.min(1, Math.max(0, value));
+    persistVoiceVolume(clamped);
+    setVoiceVolumeState(clamped);
+    if (clamped === 0) stopSpeaking();
+  };
+
 
   const deviationCountRef = useRef<number>(0);
   const lastArrivalAnnouncedRef = useRef<boolean>(false);
