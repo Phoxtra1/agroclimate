@@ -175,7 +175,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-interface ThreadSummary { other: string; lastBody: string; unread: number; lastAt: string; }
+interface ThreadSummary { key: string; other: string; supplyId: string | null; orderId: string | null; lastBody: string; unread: number; lastAt: string; }
 
 function useDisplayNames(userIds: string[]) {
   const [names, setNames] = useState<Record<string, string>>({});
@@ -218,8 +218,15 @@ function useMarketInboxThreads() {
       const map = new Map<string, ThreadSummary>();
       (data as any[] | null)?.forEach((m) => {
         const other = m.sender_id === user.id ? m.recipient_id : m.sender_id;
-        const key = makeThreadKey(user.id, other);
-        if (!map.has(key)) map.set(key, { other, lastBody: m.body, unread: 0, lastAt: m.created_at });
+        const key = (m.thread_key as string) || makeThreadKey(user.id, other);
+        if (!map.has(key)) {
+          map.set(key, {
+            key, other,
+            supplyId: m.related_supply_id ?? null,
+            orderId: m.related_order_id ?? null,
+            lastBody: m.body, unread: 0, lastAt: m.created_at,
+          });
+        }
         if (m.recipient_id === user.id && !m.read_at) map.get(key)!.unread += 1;
       });
       setThreads(Array.from(map.values()));
@@ -237,7 +244,7 @@ function useMarketInboxThreads() {
 
 function DashboardMarketInbox({ threads }: { threads: ThreadSummary[] }) {
   const { user } = useAuth();
-  const [active, setActive] = useState<string | null>(null);
+  const [active, setActive] = useState<ThreadSummary | null>(null);
   const names = useDisplayNames(threads.map((t) => t.other));
 
   return (
@@ -249,14 +256,22 @@ function DashboardMarketInbox({ threads }: { threads: ThreadSummary[] }) {
           {threads.map((t) => {
             const displayName = names[t.other] || `User · ${t.other.slice(0, 8)}`;
             return (
-              <button key={t.other} onClick={() => setActive(t.other)} className={`w-full text-left p-2 rounded-md hover:bg-accent ${active === t.other ? "bg-accent" : ""}`}>
+              <button key={t.key} onClick={() => setActive(t)} className={`w-full text-left p-2 rounded-md hover:bg-accent ${active?.key === t.key ? "bg-accent" : ""}`}>
                 <div className="flex items-center justify-between text-sm font-medium"><span>{displayName}</span>{t.unread > 0 && <Badge>{t.unread}</Badge>}</div>
                 <div className="text-[11px] text-muted-foreground truncate">{t.lastBody}</div>
               </button>
             );
           })}
         </CardContent></Card>
-        <div className="md:col-span-2">{active ? <ChatPanel key={`${user?.id}-${active}`} otherUserId={active} otherName={names[active] || `User · ${active.slice(0, 8)}`} /> : <p className="text-sm text-muted-foreground p-6 text-center">Select a message thread.</p>}</div>
+        <div className="md:col-span-2">{active ? (
+          <ChatPanel
+            key={active.key}
+            otherUserId={active.other}
+            otherName={names[active.other] || `User · ${active.other.slice(0, 8)}`}
+            relatedSupplyId={active.supplyId || undefined}
+            relatedOrderId={active.orderId || undefined}
+          />
+        ) : <p className="text-sm text-muted-foreground p-6 text-center">Select a message thread.</p>}</div>
       </div>
     </DialogContent>
   );

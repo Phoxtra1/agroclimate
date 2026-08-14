@@ -15,27 +15,34 @@ export interface MarketMessage {
   created_at: string;
 }
 
-export function makeThreadKey(a: string, b: string): string {
-  return [a, b].sort().join(":");
+/**
+ * A thread is always scoped to the exact pair of users, and — when the chat is
+ * about a specific listing or order — to that item too. This keeps every
+ * conversation private and separate per counterpart and per deal.
+ */
+export function makeThreadKey(a: string, b: string, contextId?: string | null): string {
+  const pair = [a, b].sort().join(":");
+  return contextId ? `${pair}#${contextId}` : pair;
 }
 
-export function useMarketChat(otherUserId: string | null) {
+export function useMarketChat(otherUserId: string | null, contextId?: string | null) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<MarketMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const threadKey = user && otherUserId ? makeThreadKey(user.id, otherUserId) : null;
+  const threadKey = user && otherUserId ? makeThreadKey(user.id, otherUserId, contextId) : null;
 
   const fetchMessages = useCallback(async () => {
-    if (!threadKey) return;
+    if (!threadKey || !user) return;
     setLoading(true);
     const { data } = await supabase
       .from("market_messages" as any)
       .select("*")
       .eq("thread_key", threadKey)
+      .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
       .order("created_at", { ascending: true });
     setMessages((data as any) || []);
     setLoading(false);
-  }, [threadKey]);
+  }, [threadKey, user?.id]);
 
   useEffect(() => {
     setMessages([]);

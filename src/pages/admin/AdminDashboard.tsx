@@ -77,73 +77,46 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
     setLoading(true);
     const since = rangeStart(range).toISOString();
     const todayStart = rangeStart("today").toISOString();
-    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const last7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [
-      profiles, alerts, alertsRange, alertsToday, activeWindow,
-      contracts, supply, demand, farms, handlers, sos,
-      uaeDelivered, uaeOpened, dauWindow,
-    ] = await Promise.all([
-      supabase.from("profiles").select("id, farmer_type"),
-      supabase.from("disaster_alerts").select("id, alert_type, severity, created_at"),
-      supabase.from("disaster_alerts").select("id, alert_type, severity").gte("created_at", since),
-      supabase.from("disaster_alerts").select("id").gte("created_at", todayStart),
-      supabase.from("market_presence").select("user_id, last_seen").gte("last_seen", last24h),
-      supabase.from("market_contracts").select("id").gte("created_at", since),
-      supabase.from("farmer_inputs").select("id").gte("created_at", since),
-      supabase.from("buyer_orders").select("id").gte("created_at", since),
-      supabase.from("farm_qr_codes").select("id"),
-      supabase.from("handlers").select("id"),
-      supabase.from("disaster_alerts").select("id").eq("alert_type", "sos").gte("created_at", since),
-      supabase.from("user_alert_events").select("id,user_id,alert_type,created_at").eq("event", "delivered").gte("created_at", since),
-      supabase.from("user_alert_events").select("id,user_id").eq("event", "opened").gte("created_at", since),
-      supabase.from("user_alert_events").select("user_id, created_at").eq("event", "delivered").gte("created_at", last7d),
-    ]);
+    // Aggregates come from a server-side stats function so the numbers are the
+    // real platform totals (row-level rules would otherwise hide other users).
+    const { data } = await supabase.rpc("admin_overview_stats" as any, {
+      p_since: since,
+      p_today: todayStart,
+    } as any);
+    const s: any = data || {};
 
-    const fType: Record<string, number> = {};
-    (profiles.data || []).forEach((p: any) => { fType[p.farmer_type || "smallholder"] = (fType[p.farmer_type || "smallholder"] || 0) + 1; });
-
-    const at: Record<string, number> = {}; const sv: Record<string, number> = {};
-    (alertsRange.data || []).forEach((a: any) => {
-      at[a.alert_type || "other"] = (at[a.alert_type || "other"] || 0) + 1;
-      sv[a.severity || "info"] = (sv[a.severity || "info"] || 0) + 1;
-    });
-
-    const delivered = ((uaeDelivered.data as any[]) || []).length;
-    const opened = ((uaeOpened.data as any[]) || []).length;
-    const views = opened; // treat opened as views
-
-    // Build 7-day per-day unique users reached by alerts
-    const buckets: Record<string, Set<string>> = {};
+    const buckets: Record<string, number> = {};
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
-      buckets[d.toISOString().slice(0, 10)] = new Set<string>();
+      buckets[d.toISOString().slice(0, 10)] = 0;
     }
-    ((dauWindow.data as any[]) || []).forEach((row: any) => {
-      const day = new Date(row.created_at).toISOString().slice(0, 10);
-      if (buckets[day] && row.user_id) buckets[day].add(row.user_id);
+    ((s.dau as any[]) || []).forEach((row: any) => {
+      if (row.day in buckets) buckets[row.day] = Number(row.count) || 0;
     });
-    const dau = Object.entries(buckets).map(([day, s]) => ({ day: day.slice(5), count: s.size }));
+    const dau = Object.entries(buckets).map(([day, count]) => ({ day: day.slice(5), count }));
 
-    setByFarmerType(fType);
-    setByType(at);
-    setBySeverity(sv);
+    const delivered = Number(s.alerts_delivered) || 0;
+    const opened = Number(s.alerts_opened) || 0;
+
+    setByFarmerType((s.by_farmer_type as Record<string, number>) || {});
+    setByType((s.alerts_by_type as Record<string, number>) || {});
+    setBySeverity((s.alerts_by_severity as Record<string, number>) || {});
     setDailyActive(dau);
     setCounts({
-      totalUsers: (profiles.data || []).length,
-      activeUsers: (activeWindow.data || []).length,
-      alertsTotal: (alerts.data || []).length,
-      alertsToday: (alertsToday.data || []).length,
-      contracts: (contracts.data || []).length,
-      supply: (supply.data || []).length,
-      demand: (demand.data || []).length,
-      farms: (farms.data || []).length,
-      handlers: (handlers.data || []).length,
-      sos: (sos.data || []).length,
+      totalUsers: Number(s.total_users) || 0,
+      activeUsers: Number(s.active_users) || 0,
+      alertsTotal: Number(s.alerts_total) || 0,
+      alertsToday: Number(s.alerts_today) || 0,
+      contracts: Number(s.contracts) || 0,
+      supply: Number(s.supply) || 0,
+      demand: Number(s.demand) || 0,
+      farms: Number(s.farms) || 0,
+      handlers: Number(s.handlers) || 0,
+      sos: Number(s.sos) || 0,
       alertsDelivered: delivered,
       alertsOpened: opened,
-      alertViews: views,
+      alertViews: opened,
     });
     setLoading(false);
   };
@@ -159,7 +132,16 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
       .on("postgres_changes", { event: "*", schema: "public", table: "user_alert_events" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "activity" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    // Realtime row events are filtered by access rules, so keep a short refresh
+    // tick to guarantee the overview stays live.
+    const tick = setInterval(load, 15_000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(tick);
+      window.removeEventListener("focus", onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 

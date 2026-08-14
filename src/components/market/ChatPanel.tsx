@@ -38,7 +38,8 @@ export function ChatPanel({
 }: Props) {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { messages, loading, send, markAllRead } = useMarketChat(otherUserId);
+  const contextId = relatedSupplyId || relatedOrderId || null;
+  const { messages, loading, send, markAllRead } = useMarketChat(otherUserId, contextId);
   const { online, refresh } = usePresence();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

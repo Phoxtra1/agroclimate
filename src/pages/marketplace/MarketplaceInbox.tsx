@@ -7,12 +7,12 @@ import { ChatPanel } from "@/components/market/ChatPanel";
 import { Navigate } from "react-router-dom";
 import { makeThreadKey } from "@/hooks/useMarketChat";
 
-interface ThreadSummary { other: string; lastBody: string; lastAt: string; unread: number; }
+interface ThreadSummary { key: string; other: string; supplyId: string | null; orderId: string | null; lastBody: string; lastAt: string; unread: number; }
 
 export default function MarketplaceInbox() {
   const { user, loading } = useAuth();
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [active, setActive] = useState<string | null>(null);
+  const [active, setActive] = useState<ThreadSummary | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -26,9 +26,14 @@ export default function MarketplaceInbox() {
       const map = new Map<string, ThreadSummary>();
       (data as any[] | null)?.forEach((m) => {
         const other = m.sender_id === user.id ? m.recipient_id : m.sender_id;
-        const key = makeThreadKey(user.id, other);
+        const key = m.thread_key as string;
         if (!map.has(key)) {
-          map.set(key, { other, lastBody: m.body, lastAt: m.created_at, unread: 0 });
+          map.set(key, {
+            key, other,
+            supplyId: m.related_supply_id ?? null,
+            orderId: m.related_order_id ?? null,
+            lastBody: m.body, lastAt: m.created_at, unread: 0,
+          });
         }
         const t = map.get(key)!;
         if (m.recipient_id === user.id && !m.read_at) t.unread += 1;
@@ -36,7 +41,10 @@ export default function MarketplaceInbox() {
       setThreads(Array.from(map.values()));
     };
     load();
-    const ch = supabase.channel("market-inbox").on("postgres_changes", { event: "*", schema: "public", table: "market_messages" }, load).subscribe();
+    const ch = supabase
+      .channel("market-inbox")
+      .on("postgres_changes", { event: "*", schema: "public", table: "market_messages" }, load)
+      .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user]);
 
@@ -50,8 +58,8 @@ export default function MarketplaceInbox() {
         <Card className="md:col-span-1"><CardContent className="p-2 space-y-1">
           {threads.length === 0 && <p className="text-xs text-muted-foreground p-3">No conversations yet.</p>}
           {threads.map((t) => (
-            <button key={t.other} onClick={() => setActive(t.other)}
-              className={`w-full text-left p-2 rounded-md hover:bg-accent ${active === t.other ? "bg-accent" : ""}`}>
+            <button key={t.key} onClick={() => setActive(t)}
+              className={`w-full text-left p-2 rounded-md hover:bg-accent ${active?.key === t.key ? "bg-accent" : ""}`}>
               <div className="flex items-center justify-between text-sm font-medium">
                 <span className="truncate">User · {t.other.slice(0, 8)}</span>
                 {t.unread > 0 && <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5">{t.unread}</span>}
@@ -61,8 +69,15 @@ export default function MarketplaceInbox() {
           ))}
         </CardContent></Card>
         <div className="md:col-span-2">
-          {active ? <ChatPanel key={`${user?.id}-${active}`} otherUserId={active} otherName={`User · ${active.slice(0, 8)}`} />
-            : <p className="text-sm text-muted-foreground p-6 text-center">Select a conversation to start chatting.</p>}
+          {active ? (
+            <ChatPanel
+              key={active.key}
+              otherUserId={active.other}
+              otherName={`User · ${active.other.slice(0, 8)}`}
+              relatedSupplyId={active.supplyId || undefined}
+              relatedOrderId={active.orderId || undefined}
+            />
+          ) : <p className="text-sm text-muted-foreground p-6 text-center">Select a conversation to start chatting.</p>}
         </div>
       </div>
     </MarketplaceLayout>
