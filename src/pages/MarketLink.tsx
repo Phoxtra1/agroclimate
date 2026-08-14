@@ -218,8 +218,15 @@ function useMarketInboxThreads() {
       const map = new Map<string, ThreadSummary>();
       (data as any[] | null)?.forEach((m) => {
         const other = m.sender_id === user.id ? m.recipient_id : m.sender_id;
-        const key = makeThreadKey(user.id, other);
-        if (!map.has(key)) map.set(key, { other, lastBody: m.body, unread: 0, lastAt: m.created_at });
+        const key = (m.thread_key as string) || makeThreadKey(user.id, other);
+        if (!map.has(key)) {
+          map.set(key, {
+            key, other,
+            supplyId: m.related_supply_id ?? null,
+            orderId: m.related_order_id ?? null,
+            lastBody: m.body, unread: 0, lastAt: m.created_at,
+          });
+        }
         if (m.recipient_id === user.id && !m.read_at) map.get(key)!.unread += 1;
       });
       setThreads(Array.from(map.values()));
