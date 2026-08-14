@@ -30,18 +30,27 @@ export function useDriverApprovals() {
 
   useEffect(() => {
     load();
-    // Real-time: any driver row change re-pulls the approval queue immediately.
+    // Live Supabase realtime — new/updated registrations appear instantly, no polling.
     const channel = supabase
       .channel("admin-driver-approvals")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "agtrans_drivers" }, (payload) => {
+        const row = payload.new as DriverProfile;
+        setDrivers((prev) => (prev.some((d) => d.id === row.id) ? prev : [row, ...prev]));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "agtrans_drivers" }, (payload) => {
+        const row = payload.new as DriverProfile;
+        setDrivers((prev) => prev.map((d) => (d.id === row.id ? { ...d, ...row } : d)));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "agtrans_drivers" }, (payload) => {
+        const old = payload.old as { id?: string };
+        setDrivers((prev) => prev.filter((d) => d.id !== old?.id));
+      })
       .subscribe();
-    // Safety net for environments where realtime is unavailable.
-    const poll = window.setInterval(load, 20000);
     return () => {
       supabase.removeChannel(channel);
-      window.clearInterval(poll);
     };
   }, [load]);
+
 
   const act = useCallback(async (driverId: string, action: DriverAction, reason?: string) => {
     const { data, error: fnError } = await supabase.functions.invoke("admin-agtrans-drivers", {
@@ -119,12 +128,18 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                 </div>
                 <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number}</p>
               </div>
-              <div className="flex gap-2">
-                {onViewDocs && <Button size="sm" variant="outline" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
-                {d.admin_suspended
-                  ? <Button size="sm" onClick={() => act(d.id, "reactivate")}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
-                  : <Button size="sm" variant="destructive" onClick={() => act(d.id, "suspend")}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>}
+              <div className="flex flex-col gap-2 w-full sm:w-auto">
+                <Input className="text-xs" placeholder="Optional message to driver"
+                  value={reasons[d.id] || ""}
+                  onChange={(e) => setReasons({ ...reasons, [d.id]: e.target.value })} />
+                <div className="flex gap-2 justify-end">
+                  {onViewDocs && <Button size="sm" variant="outline" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
+                  {d.admin_suspended
+                    ? <Button size="sm" onClick={() => act(d.id, "reactivate", reasons[d.id])}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
+                    : <Button size="sm" variant="destructive" onClick={() => act(d.id, "suspend", reasons[d.id])}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>}
+                </div>
               </div>
+
             </div>
           ))}
         </CardContent>
