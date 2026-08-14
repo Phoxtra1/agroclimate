@@ -30,18 +30,27 @@ export function useDriverApprovals() {
 
   useEffect(() => {
     load();
-    // Real-time: any driver row change re-pulls the approval queue immediately.
+    // Live Supabase realtime — new/updated registrations appear instantly, no polling.
     const channel = supabase
       .channel("admin-driver-approvals")
-      .on("postgres_changes", { event: "*", schema: "public", table: "agtrans_drivers" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "agtrans_drivers" }, (payload) => {
+        const row = payload.new as DriverProfile;
+        setDrivers((prev) => (prev.some((d) => d.id === row.id) ? prev : [row, ...prev]));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "agtrans_drivers" }, (payload) => {
+        const row = payload.new as DriverProfile;
+        setDrivers((prev) => prev.map((d) => (d.id === row.id ? { ...d, ...row } : d)));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "agtrans_drivers" }, (payload) => {
+        const old = payload.old as { id?: string };
+        setDrivers((prev) => prev.filter((d) => d.id !== old?.id));
+      })
       .subscribe();
-    // Safety net for environments where realtime is unavailable.
-    const poll = window.setInterval(load, 20000);
     return () => {
       supabase.removeChannel(channel);
-      window.clearInterval(poll);
     };
   }, [load]);
+
 
   const act = useCallback(async (driverId: string, action: DriverAction, reason?: string) => {
     const { data, error: fnError } = await supabase.functions.invoke("admin-agtrans-drivers", {
