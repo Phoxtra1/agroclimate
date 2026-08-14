@@ -128,12 +128,18 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                 </div>
                 <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number}</p>
               </div>
-              <div className="flex gap-2">
-                {onViewDocs && <Button size="sm" variant="outline" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
-                {d.admin_suspended
-                  ? <Button size="sm" onClick={() => act(d.id, "reactivate")}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
-                  : <Button size="sm" variant="destructive" onClick={() => act(d.id, "suspend")}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>}
+              <div className="flex flex-col gap-2 w-full sm:w-auto">
+                <Input className="text-xs" placeholder="Optional message to driver"
+                  value={reasons[d.id] || ""}
+                  onChange={(e) => setReasons({ ...reasons, [d.id]: e.target.value })} />
+                <div className="flex gap-2 justify-end">
+                  {onViewDocs && <Button size="sm" variant="outline" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
+                  {d.admin_suspended
+                    ? <Button size="sm" onClick={() => act(d.id, "reactivate", reasons[d.id])}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
+                    : <Button size="sm" variant="destructive" onClick={() => act(d.id, "suspend", reasons[d.id])}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>}
+                </div>
               </div>
+
             </div>
           ))}
         </CardContent>
