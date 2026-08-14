@@ -175,7 +175,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-interface ThreadSummary { other: string; lastBody: string; unread: number; lastAt: string; }
+interface ThreadSummary { key: string; other: string; supplyId: string | null; orderId: string | null; lastBody: string; unread: number; lastAt: string; }
 
 function useDisplayNames(userIds: string[]) {
   const [names, setNames] = useState<Record<string, string>>({});
