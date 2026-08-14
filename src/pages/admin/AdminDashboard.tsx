@@ -132,7 +132,16 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
       .on("postgres_changes", { event: "*", schema: "public", table: "user_alert_events" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "activity" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    // Realtime row events are filtered by access rules, so keep a short refresh
+    // tick to guarantee the overview stays live.
+    const tick = setInterval(load, 15_000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(tick);
+      window.removeEventListener("focus", onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
