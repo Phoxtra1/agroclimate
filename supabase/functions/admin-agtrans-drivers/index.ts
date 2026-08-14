@@ -95,20 +95,66 @@ Deno.serve(async (req) => {
       .from("agtrans_drivers")
       .update(patch)
       .eq("id", driverId)
-      .select("id, user_id, approval_status")
+      .select("id, user_id, approval_status, full_name, phone, admin_suspended")
       .maybeSingle();
     if (error) return json({ error: error.message }, 400);
 
-    if (data?.user_id && action !== "suspend" && action !== "reactivate") {
+    if (data?.user_id) {
+      const labels: Record<string, { title: string; message: string }> = {
+        approve: {
+          title: "Driver application approved",
+          message: "Your Agyenkwa AGTrans driver account is approved. You can now accept transport requests.",
+        },
+        reject: {
+          title: "Driver application rejected",
+          message: "Your Agyenkwa AGTrans driver application was rejected.",
+        },
+        more_info: {
+          title: "More information required",
+          message: "Additional information is required for your Agyenkwa AGTrans driver application.",
+        },
+        suspend: {
+          title: "Driver account suspended",
+          message: "Your Agyenkwa AGTrans driver account has been suspended.",
+        },
+        reactivate: {
+          title: "Driver account reactivated",
+          message: "Your Agyenkwa AGTrans driver account is active again.",
+        },
+      };
+      const label = labels[action];
+      const detail = reason?.trim() ? ` Reason: ${reason.trim()}` : "";
+
+      // In-app notification
       await admin.from("transport_notifications").insert({
         user_id: data.user_id,
         type: `driver_${action}`,
-        title: `Driver application ${action.replace("_", " ")}`,
-        message: reason || `Your driver application status is now ${data.approval_status}.`,
+        title: label.title,
+        message: `${label.message}${detail}`,
+        data: { driver_id: data.id, approval_status: data.approval_status, admin_suspended: data.admin_suspended },
       });
+
+      // SMS notification (best-effort, kept under 160 chars)
+      if (data.phone) {
+        const sms = `Agyenkwa AGTrans: ${label.message}${detail}`.slice(0, 160);
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_ROLE}`,
+            },
+            body: JSON.stringify({ to: data.phone, message: sms }),
+          });
+          if (!res.ok) console.error(`SMS send failed [${res.status}]: ${await res.text()}`);
+        } catch (smsErr) {
+          console.error("SMS dispatch error:", smsErr);
+        }
+      }
     }
 
     return json({ driver: data });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "Unexpected error" }, 500);
   }
