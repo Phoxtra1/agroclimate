@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ShieldCheck, CheckCircle2, XCircle, HelpCircle, PauseCircle, PlayCircle, RefreshCw, Eye } from "lucide-react";
 import type { DriverProfile } from "@/hooks/useAGTrans";
 
-type DriverAction = "approve" | "reject" | "more_info" | "suspend" | "reactivate";
+type DriverAction = "approve" | "reject" | "more_info" | "suspend" | "reactivate" | "message";
 
 export function useDriverApprovals() {
   const [drivers, setDrivers] = useState<DriverProfile[]>([]);
