@@ -8,7 +8,16 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-type Action = "list" | "approve" | "reject" | "more_info" | "suspend" | "reactivate";
+type Action =
+  | "list"
+  | "approve"
+  | "reject"
+  | "more_info"
+  | "suspend"
+  | "reactivate"
+  | "message"
+  | "license_url";
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
