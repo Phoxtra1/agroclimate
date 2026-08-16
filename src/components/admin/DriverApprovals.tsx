@@ -60,13 +60,26 @@ export function useDriverApprovals() {
       toast.error(data?.error || "Action failed");
       return false;
     }
-    toast.success(`Driver ${action.replace("_", " ")}`);
+    toast.success(action === "message" ? "Message sent to driver" : `Driver ${action.replace("_", " ")}`);
     await load();
     return true;
   }, [load]);
 
-  return { drivers, loading, error, reload: load, act };
+  // Private bucket → always open the licence through a short-lived signed link.
+  const openLicense = useCallback(async (driverId: string) => {
+    const { data, error: fnError } = await supabase.functions.invoke("admin-agtrans-drivers", {
+      body: { action: "license_url", driver_id: driverId },
+    });
+    if (fnError || data?.error || !data?.url) {
+      toast.error(data?.error || "Document could not be opened.");
+      return;
+    }
+    window.open(data.url as string, "_blank", "noopener,noreferrer");
+  }, []);
+
+  return { drivers, loading, error, reload: load, act, openLicense };
 }
+
 
 export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: DriverProfile) => void }) {
   const { drivers, loading, error, reload, act } = useDriverApprovals();
