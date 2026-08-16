@@ -148,7 +148,17 @@ export default function AdminAGTransPanel() {
               <p><strong>License Class:</strong> {selectedDriver.license_class}</p>
               <p><strong>Insurance:</strong> {selectedDriver.insurance_status || "—"}</p>
               <p><strong>Roadworthiness:</strong> {selectedDriver.roadworthiness_status || "—"}</p>
-              {selectedDriver.license_url && <p><a href={selectedDriver.license_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">License / Document</a></p>}
+              {selectedDriver.license_url && (
+                <p>
+                  <button type="button" className="text-primary hover:underline" onClick={async () => {
+                    const { data, error } = await supabase.functions.invoke("admin-agtrans-drivers", {
+                      body: { action: "license_url", driver_id: selectedDriver.id },
+                    });
+                    if (error || data?.error || !data?.url) { toast.error(data?.error || "Document could not be opened."); return; }
+                    window.open(data.url as string, "_blank", "noopener,noreferrer");
+                  }}>License / Document</button>
+                </p>
+              )}
               {selectedDriver.vehicle_images?.length ? (
                 <div className="grid grid-cols-2 gap-2">
                   {selectedDriver.vehicle_images.map((url, i) => <img key={i} src={url} alt="Vehicle" className="rounded-lg border" />)}
