@@ -110,18 +110,26 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                   </div>
                   <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · {d.phone}</p>
                   {d.created_at && <p className="text-xs text-muted-foreground">Registered {new Date(d.created_at).toLocaleString()}</p>}
-                  {d.license_url && <a href={d.license_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View License Document</a>}
+                  {d.license_url && (
+                    <button type="button" onClick={() => openLicense(d.id)} className="text-xs text-primary hover:underline">
+                      View License Document
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
-                  <Input className="text-xs" placeholder="Reason / info request"
+                  <Input className="text-xs" placeholder="Message to driver"
                     value={reasons[d.id] || ""}
                     onChange={(e) => setReasons({ ...reasons, [d.id]: e.target.value })} />
                   <div className="flex gap-2 justify-end flex-wrap">
                     {onViewDocs && <Button size="sm" variant="ghost" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
                     <Button size="sm" variant="outline" onClick={() => act(d.id, "reject", reasons[d.id])}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
-                    <Button size="sm" variant="outline" onClick={() => act(d.id, "more_info", reasons[d.id])}><HelpCircle className="h-3.5 w-3.5 mr-1" /> More Info</Button>
+                    <Button size="sm" variant="outline" disabled={!(reasons[d.id] || "").trim()}
+                      onClick={async () => { if (await act(d.id, "message", reasons[d.id])) setReasons((r) => ({ ...r, [d.id]: "" })); }}>
+                      <Send className="h-3.5 w-3.5 mr-1" /> Send
+                    </Button>
                     <Button size="sm" onClick={() => act(d.id, "approve")}><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve</Button>
                   </div>
+
                 </div>
               </div>
             ))}
