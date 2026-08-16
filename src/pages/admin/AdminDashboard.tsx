@@ -124,26 +124,22 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
   useEffect(() => { load(); }, [range]);
 
   useEffect(() => {
-    const ch = supabase.channel("admin-overview-stream")
-      .on("postgres_changes", { event: "*", schema: "public", table: "disaster_alerts" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "market_contracts" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "market_presence" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_alert_events" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "activity" }, load)
-      .subscribe();
-    // Realtime row events are filtered by access rules, so keep a short refresh
-    // tick to guarantee the overview stays live.
-    const tick = setInterval(load, 15_000);
-    const onFocus = () => load();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      supabase.removeChannel(ch);
-      clearInterval(tick);
-      window.removeEventListener("focus", onFocus);
-    };
+    // Every metric source streams live — cards update the moment a row is
+    // inserted or updated anywhere on the platform. No polling, no focus tick.
+    const tables = [
+      "disaster_alerts", "profiles", "market_contracts", "market_presence",
+      "user_alert_events", "activity", "agtrans_drivers", "farmer_inputs",
+      "buyer_orders", "handlers", "farm_qr_codes", "transport_notifications",
+    ];
+    let ch = supabase.channel("admin-overview-stream");
+    tables.forEach((table) => {
+      ch = ch.on("postgres_changes", { event: "*", schema: "public", table }, () => load());
+    });
+    ch.subscribe();
+    return () => { supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
+
 
   const exportCsv = () => {
     const rows: (string | number)[][] = [
