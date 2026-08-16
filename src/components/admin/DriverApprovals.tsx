@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ShieldCheck, CheckCircle2, XCircle, HelpCircle, PauseCircle, PlayCircle, RefreshCw, Eye } from "lucide-react";
+import { ShieldCheck, CheckCircle2, XCircle, Send, PauseCircle, PlayCircle, RefreshCw, Eye } from "lucide-react";
 import type { DriverProfile } from "@/hooks/useAGTrans";
 
 type DriverAction = "approve" | "reject" | "more_info" | "suspend" | "reactivate" | "message";
@@ -82,7 +82,7 @@ export function useDriverApprovals() {
 
 
 export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: DriverProfile) => void }) {
-  const { drivers, loading, error, reload, act } = useDriverApprovals();
+  const { drivers, loading, error, reload, act, openLicense } = useDriverApprovals();
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
   const pending = drivers.filter((d) => d.approval_status === "pending" || d.approval_status === "more_info");
@@ -153,8 +153,12 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                 <Input className="text-xs" placeholder="Optional message to driver"
                   value={reasons[d.id] || ""}
                   onChange={(e) => setReasons({ ...reasons, [d.id]: e.target.value })} />
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-2 justify-end flex-wrap">
                   {onViewDocs && <Button size="sm" variant="outline" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
+                  <Button size="sm" variant="outline" disabled={!(reasons[d.id] || "").trim()}
+                    onClick={async () => { if (await act(d.id, "message", reasons[d.id])) setReasons((r) => ({ ...r, [d.id]: "" })); }}>
+                    <Send className="h-3.5 w-3.5 mr-1" /> Send
+                  </Button>
                   {d.admin_suspended
                     ? <Button size="sm" onClick={() => act(d.id, "reactivate", reasons[d.id])}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
                     : <Button size="sm" variant="destructive" onClick={() => act(d.id, "suspend", reasons[d.id])}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>}
