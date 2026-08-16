@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { auditThread, isParticipant, reportAudit } from "@/lib/chatDebug";
+
 
 export interface MarketMessage {
   id: string;
@@ -40,9 +42,18 @@ export function useMarketChat(otherUserId: string | null, contextId?: string | n
       .eq("thread_key", threadKey)
       .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
       .order("created_at", { ascending: true });
-    setMessages((data as any) || []);
+    const rows = ((data as any) || []) as MarketMessage[];
+    // Isolation guard: only messages this signed-in user takes part in are ever
+    // rendered, even if a wider row set were ever returned.
+    const safe = rows.filter((m) => isParticipant(m as any, user.id) && m.thread_key === threadKey);
+    reportAudit(
+      "thread",
+      auditThread(rows as any, user.id, threadKey, makeThreadKey(user.id, otherUserId!, contextId)),
+    );
+    setMessages(safe);
     setLoading(false);
-  }, [threadKey, user?.id]);
+  }, [threadKey, user?.id, otherUserId, contextId]);
+
 
   useEffect(() => {
     setMessages([]);

@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ShieldCheck, CheckCircle2, XCircle, HelpCircle, PauseCircle, PlayCircle, RefreshCw, Eye } from "lucide-react";
+import { ShieldCheck, CheckCircle2, XCircle, Send, PauseCircle, PlayCircle, RefreshCw, Eye } from "lucide-react";
 import type { DriverProfile } from "@/hooks/useAGTrans";
 
-type DriverAction = "approve" | "reject" | "more_info" | "suspend" | "reactivate";
+type DriverAction = "approve" | "reject" | "more_info" | "suspend" | "reactivate" | "message";
 
 export function useDriverApprovals() {
   const [drivers, setDrivers] = useState<DriverProfile[]>([]);
@@ -60,16 +60,29 @@ export function useDriverApprovals() {
       toast.error(data?.error || "Action failed");
       return false;
     }
-    toast.success(`Driver ${action.replace("_", " ")}`);
+    toast.success(action === "message" ? "Message sent to driver" : `Driver ${action.replace("_", " ")}`);
     await load();
     return true;
   }, [load]);
 
-  return { drivers, loading, error, reload: load, act };
+  // Private bucket → always open the licence through a short-lived signed link.
+  const openLicense = useCallback(async (driverId: string) => {
+    const { data, error: fnError } = await supabase.functions.invoke("admin-agtrans-drivers", {
+      body: { action: "license_url", driver_id: driverId },
+    });
+    if (fnError || data?.error || !data?.url) {
+      toast.error(data?.error || "Document could not be opened.");
+      return;
+    }
+    window.open(data.url as string, "_blank", "noopener,noreferrer");
+  }, []);
+
+  return { drivers, loading, error, reload: load, act, openLicense };
 }
 
+
 export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: DriverProfile) => void }) {
-  const { drivers, loading, error, reload, act } = useDriverApprovals();
+  const { drivers, loading, error, reload, act, openLicense } = useDriverApprovals();
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
   const pending = drivers.filter((d) => d.approval_status === "pending" || d.approval_status === "more_info");
@@ -97,18 +110,26 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                   </div>
                   <p className="text-xs text-muted-foreground">{d.vehicle_type} · {d.plate_number} · {d.phone}</p>
                   {d.created_at && <p className="text-xs text-muted-foreground">Registered {new Date(d.created_at).toLocaleString()}</p>}
-                  {d.license_url && <a href={d.license_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View License Document</a>}
+                  {d.license_url && (
+                    <button type="button" onClick={() => openLicense(d.id)} className="text-xs text-primary hover:underline">
+                      View License Document
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 w-full sm:w-auto">
-                  <Input className="text-xs" placeholder="Reason / info request"
+                  <Input className="text-xs" placeholder="Message to driver"
                     value={reasons[d.id] || ""}
                     onChange={(e) => setReasons({ ...reasons, [d.id]: e.target.value })} />
                   <div className="flex gap-2 justify-end flex-wrap">
                     {onViewDocs && <Button size="sm" variant="ghost" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
                     <Button size="sm" variant="outline" onClick={() => act(d.id, "reject", reasons[d.id])}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
-                    <Button size="sm" variant="outline" onClick={() => act(d.id, "more_info", reasons[d.id])}><HelpCircle className="h-3.5 w-3.5 mr-1" /> More Info</Button>
+                    <Button size="sm" variant="outline" disabled={!(reasons[d.id] || "").trim()}
+                      onClick={async () => { if (await act(d.id, "message", reasons[d.id])) setReasons((r) => ({ ...r, [d.id]: "" })); }}>
+                      <Send className="h-3.5 w-3.5 mr-1" /> Send
+                    </Button>
                     <Button size="sm" onClick={() => act(d.id, "approve")}><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve</Button>
                   </div>
+
                 </div>
               </div>
             ))}
@@ -132,8 +153,12 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
                 <Input className="text-xs" placeholder="Optional message to driver"
                   value={reasons[d.id] || ""}
                   onChange={(e) => setReasons({ ...reasons, [d.id]: e.target.value })} />
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-2 justify-end flex-wrap">
                   {onViewDocs && <Button size="sm" variant="outline" onClick={() => onViewDocs(d)}><Eye className="h-3.5 w-3.5 mr-1" /> Docs</Button>}
+                  <Button size="sm" variant="outline" disabled={!(reasons[d.id] || "").trim()}
+                    onClick={async () => { if (await act(d.id, "message", reasons[d.id])) setReasons((r) => ({ ...r, [d.id]: "" })); }}>
+                    <Send className="h-3.5 w-3.5 mr-1" /> Send
+                  </Button>
                   {d.admin_suspended
                     ? <Button size="sm" onClick={() => act(d.id, "reactivate", reasons[d.id])}><PlayCircle className="h-3.5 w-3.5 mr-1" /> Reactivate</Button>
                     : <Button size="sm" variant="destructive" onClick={() => act(d.id, "suspend", reasons[d.id])}><PauseCircle className="h-3.5 w-3.5 mr-1" /> Suspend</Button>}

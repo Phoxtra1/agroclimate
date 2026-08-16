@@ -8,7 +8,16 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-type Action = "list" | "approve" | "reject" | "more_info" | "suspend" | "reactivate";
+type Action =
+  | "list"
+  | "approve"
+  | "reject"
+  | "more_info"
+  | "suspend"
+  | "reactivate"
+  | "message"
+  | "license_url";
+
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,6 +79,64 @@ Deno.serve(async (req) => {
     if (!driverId || typeof driverId !== "string") {
       return json({ error: "driver_id is required" }, 400);
     }
+
+    // Signed, short-lived link to the private licence document. The bucket is
+    // private, so a raw public URL always 404s — this is the only correct way.
+    if (action === "license_url") {
+      const { data: driver, error: dErr } = await admin
+        .from("agtrans_drivers")
+        .select("license_url")
+        .eq("id", driverId)
+        .maybeSingle();
+      if (dErr) return json({ error: dErr.message }, 400);
+      const raw = driver?.license_url;
+      if (!raw) return json({ error: "No licence document was uploaded by this driver." }, 404);
+      // Accept either a stored object path or a legacy full public URL.
+      const marker = "/agtrans-licenses/";
+      const path = raw.includes(marker) ? raw.slice(raw.indexOf(marker) + marker.length) : raw;
+      const { data: signed, error: sErr } = await admin.storage
+        .from("agtrans-licenses")
+        .createSignedUrl(decodeURIComponent(path), 300);
+      if (sErr || !signed?.signedUrl) {
+        return json({ error: sErr?.message || "Document could not be opened." }, 404);
+      }
+      return json({ url: signed.signedUrl });
+    }
+
+    // Free-form admin message forwarded to the driver's AGTrans Partner UI.
+    if (action === "message") {
+      const text = (reason || "").trim();
+      if (!text) return json({ error: "Message text is required." }, 400);
+      const { data: driver, error: dErr } = await admin
+        .from("agtrans_drivers")
+        .select("id, user_id, phone")
+        .eq("id", driverId)
+        .maybeSingle();
+      if (dErr) return json({ error: dErr.message }, 400);
+      if (!driver?.user_id) return json({ error: "Driver account not found." }, 404);
+
+      await admin.from("transport_notifications").insert({
+        user_id: driver.user_id,
+        type: "driver_message",
+        title: "Message from Agyenkwa AGTrans admin",
+        message: text,
+        data: { driver_id: driver.id },
+      });
+
+      if (driver.phone) {
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
+            body: JSON.stringify({ to: driver.phone, message: `Agyenkwa AGTrans: ${text}`.slice(0, 160) }),
+          });
+        } catch (smsErr) {
+          console.error("SMS dispatch error:", smsErr);
+        }
+      }
+      return json({ sent: true });
+    }
+
 
     const patch: Record<string, unknown> = {};
     if (action === "approve") {

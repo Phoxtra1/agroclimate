@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.admin_overview_stats(timestamptz, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_overview_stats(timestamptz, timestamptz) TO authenticated, service_role;

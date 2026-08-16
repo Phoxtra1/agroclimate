@@ -425,11 +425,10 @@ export function useAGTrans() {
 
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage
-        .from("agtrans-licenses")
-        .getPublicUrl(filePath);
+      // The bucket is private: store the object path, admins open it through a
+      // signed URL. A public URL would always 404.
+      license_url = filePath;
 
-      license_url = urlData.publicUrl;
     }
 
     const { data, error } = await supabase
