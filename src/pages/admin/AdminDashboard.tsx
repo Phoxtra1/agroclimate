@@ -62,6 +62,8 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
     totalUsers: 0, activeUsers: 0, alertsTotal: 0, alertsToday: 0,
     contracts: 0, supply: 0, demand: 0, farms: 0, handlers: 0, sos: 0,
     alertsDelivered: 0, alertsOpened: 0, alertViews: 0,
+    driversTotal: 0, driversPending: 0, driversApproved: 0,
+    requestsTotal: 0, agreementsTotal: 0, activeTrips: 0, completedTrips: 0,
   });
   const [byType, setByType] = useState<Record<string, number>>({});
   const [bySeverity, setBySeverity] = useState<Record<string, number>>({});
@@ -158,6 +160,13 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
       ["sos_broadcasts", counts.sos, range],
       ["registered_farms", counts.farms, "all"],
       ["handlers", counts.handlers, "all"],
+      ["drivers_total", counts.driversTotal, "all"],
+      ["drivers_pending", counts.driversPending, "all"],
+      ["drivers_approved", counts.driversApproved, "all"],
+      ["transport_requests", counts.requestsTotal, range],
+      ["transport_agreements", counts.agreementsTotal, range],
+      ["active_trips", counts.activeTrips, range],
+      ["completed_trips", counts.completedTrips, range],
     ];
     Object.entries(byFarmerType).forEach(([k, v]) => rows.push([`user_type_${k}`, v, "all"]));
     Object.entries(byType).forEach(([k, v]) => rows.push([`alerts_type_${k}`, v, range]));
@@ -300,6 +309,21 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
             <Metric label="SOS broadcasts" value={counts.sos} small />
             <Metric label="Registered farms" value={counts.farms} small />
             <Metric label="Handlers" value={counts.handlers} small />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-4">
+          <p className="text-sm font-semibold mb-2">AGTrans Drivers & Logistics ({range})</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+            <Metric label="Total drivers" value={counts.driversTotal} small />
+            <Metric label="Pending approvals" value={counts.driversPending} small />
+            <Metric label="Approved drivers" value={counts.driversApproved} small />
+            <Metric label="Transport requests" value={counts.requestsTotal} small />
+            <Metric label="Transport agreements" value={counts.agreementsTotal} small />
+            <Metric label="Active trips" value={counts.activeTrips} small />
+            <Metric label="Completed trips" value={counts.completedTrips} small />
           </div>
         </CardContent>
       </Card>

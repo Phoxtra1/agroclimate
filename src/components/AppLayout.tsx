@@ -13,6 +13,7 @@ import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 import { APP_NAME, APP_VERSION_LABEL } from "@/config/version";
 import AppFooter from "@/components/AppFooter";
 import { NotificationsButton } from "./NotificationsButton";
+import { usePresence } from "@/hooks/useMarketChat";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
@@ -87,6 +88,7 @@ function NavItems({ onClick, isAdmin }: { onClick?: () => void; isAdmin?: boolea
 
 export function AppLayout({ children, hideSidebar }: { children: ReactNode; hideSidebar?: boolean }) {
   const { signOut, user } = useAuth();
+  usePresence();
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
