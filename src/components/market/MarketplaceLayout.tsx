@@ -28,7 +28,7 @@ export function MarketplaceLayout({
         <div className="container mx-auto px-3 py-2 flex items-center gap-3">
           {/* Logo links to Market Link home — never to the Agyenkwa user dashboard */}
           <Link to="/marketplace" className="flex items-center gap-2 mr-2">
-            <img src={agyenkwaIcon} alt="Agyenkwa" className="h-8 w-8 rounded-lg" />
+            <img src={agyenkwaIcon} alt="AgroClimate" className="h-8 w-8 rounded-lg" />
             <div className="leading-tight">
               <div className="font-bold text-sm flex items-center gap-1">
                 <Store className="h-3.5 w-3.5 text-primary" /> Market Link
@@ -68,7 +68,7 @@ export function MarketplaceLayout({
       </header>
       <main className="flex-1 container mx-auto px-3 py-4">{children}</main>
       <footer className="border-t py-3 text-center text-[11px] text-muted-foreground">
-        Market Link · A public agricultural trade access point of Agyenkwa by Amineva Global.
+        Market Link · A public agricultural trade access point of AgroClimate by Amineva Global.
       </footer>
     </div>
   );

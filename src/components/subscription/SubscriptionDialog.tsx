@@ -28,7 +28,7 @@ export function SubscriptionDialog({ open, onCancel, redirectPath, componentLabe
           </div>
           <DialogTitle className="text-center">Subscription Required</DialogTitle>
           <DialogDescription className="text-center">
-            Subscribe to access {componentLabel ? <span className="font-medium text-foreground">{componentLabel}</span> : "this component"} and continue using Agyenkwa.
+            Subscribe to access {componentLabel ? <span className="font-medium text-foreground">{componentLabel}</span> : "this component"} and continue using AgroClimate.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="sm:justify-center gap-2">

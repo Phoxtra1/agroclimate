@@ -77,7 +77,7 @@ export const PLANS: Plan[] = [
     name: "Institutional",
     priceUsd: 250,
     tagline: "Full API access for integrators and organisations.",
-    features: ["Agyenkwa API", "API Integration", "API Management", "API Usage"],
+    features: ["AgroClimate API", "API Integration", "API Management", "API Usage"],
     components: ["agyenkwa_api"],
   },
 ];
@@ -93,7 +93,7 @@ export const COMPONENT_LABELS: Record<PremiumComponent, string> = {
   flight_advisory: "Flight Advisory",
   handler: "Handler",
   agtrans: "AGTrans",
-  agyenkwa_api: "Agyenkwa API",
+  agyenkwa_api: "AgroClimate API",
 };
 
 export function planAllows(planId: PlanId | null | undefined, comp: PremiumComponent) {

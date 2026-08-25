@@ -50,7 +50,7 @@ export default function Subscription() {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-bold">Choose your Agyenkwa plan</h1>
+        <h1 className="text-2xl font-bold">Choose your AgroClimate plan</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Prices in USD. Paystack will charge in your local currency automatically.
         </p>

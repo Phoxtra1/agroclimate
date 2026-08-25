@@ -177,7 +177,7 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `agyenkwa-admin-overview-${range}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `agroclimate-admin-overview-${range}-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   };
@@ -399,7 +399,7 @@ export default function AdminDashboard() {
       {/* Desktop sidebar */}
       <aside className="w-60 bg-card border-r border-border flex-col fixed h-full z-30 hidden md:flex">
         <div className="flex items-center gap-2 px-5 h-16 border-b border-border">
-          <img src={agyenkwaIcon} alt="Agyenkwa" className="h-8 w-8 rounded-lg" />
+          <img src={agyenkwaIcon} alt="AgroClimate" className="h-8 w-8 rounded-lg" />
           <span className="font-bold text-lg text-foreground">Admin Workspace</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -421,7 +421,7 @@ export default function AdminDashboard() {
       {/* Mobile header + sheet */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src={agyenkwaIcon} alt="Agyenkwa" className="h-7 w-7 rounded-lg" />
+          <img src={agyenkwaIcon} alt="AgroClimate" className="h-7 w-7 rounded-lg" />
           <span className="font-bold text-sm">Admin Workspace</span>
         </div>
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -430,7 +430,7 @@ export default function AdminDashboard() {
           </SheetTrigger>
           <SheetContent side="left" className="bg-card w-64 p-4">
             <div className="flex items-center gap-2 mb-6">
-              <img src={agyenkwaIcon} alt="Agyenkwa" className="h-7 w-7 rounded-lg" />
+              <img src={agyenkwaIcon} alt="AgroClimate" className="h-7 w-7 rounded-lg" />
               <span className="font-bold">Admin Workspace</span>
             </div>
             <nav className="space-y-1">

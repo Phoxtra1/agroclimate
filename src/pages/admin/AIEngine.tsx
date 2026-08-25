@@ -82,7 +82,7 @@ export default function AIEngine() {
     const m = models.find((x) => x.id === id);
     if (!m) return;
     await setActiveModel(m);
-    toast({ title: `Active AI model: ${m.label}`, description: "Every Agyenkwa component will use this engine on the next request." });
+    toast({ title: `Active AI model: ${m.label}`, description: "Every AgroClimate component will use this engine on the next request." });
   };
 
   const totalCalls = logs.length;
@@ -104,7 +104,7 @@ export default function AIEngine() {
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="h-4 w-4" /> Active AI Model</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
-            <Label>Model powering all Agyenkwa AI components</Label>
+            <Label>Model powering all AgroClimate AI components</Label>
             <Select value={model.id} onValueChange={chooseModel} disabled={loading}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -127,7 +127,7 @@ export default function AIEngine() {
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><ScrollText className="h-4 w-4" /> Global System Prompt</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <Textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Guidance appended to every AI call across Agyenkwa modules." />
+          <Textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Guidance appended to every AI call across AgroClimate modules." />
           <Button onClick={savePrompt} disabled={savingPrompt}><Save className="mr-2 h-4 w-4" />{savingPrompt ? "Saving…" : "Save Prompt"}</Button>
         </CardContent>
       </Card>
@@ -189,7 +189,7 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `agyenkwa-ai-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `agroclimate-ai-logs-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   };

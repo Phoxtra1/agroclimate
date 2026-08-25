@@ -1,5 +1,5 @@
-// Central catalog of AI models available to Agyenkwa. All are proxied through
-// the Lovable AI Gateway via the `dipa-intelligence` edge function.
+// Central catalog of AI models available to AgroClimate. All are proxied through
+// the Lovable AI Gateway via the `odeneho-intelligence` edge function.
 export interface AiModelOption {
   id: string;           // stable id used in system_settings
   label: string;        // human-readable name shown in admin dropdown
@@ -8,7 +8,7 @@ export interface AiModelOption {
 }
 
 export const AI_MODELS: AiModelOption[] = [
-  { id: "dipa-1.0",       label: "Dipa 1.0 (default)",   gatewayModel: "google/gemini-3-flash-preview", description: "Agyenkwa's tuned default — fast, multilingual, agriculture-aware." },
+  { id: "odeai-1.0",       label: "OdeAI 1.0 (default)",   gatewayModel: "google/gemini-3-flash-preview", description: "AgroClimate's tuned default — fast, multilingual, agriculture-aware." },
   { id: "gemini-2.5-pro",  label: "Gemini 2.5 Pro",         gatewayModel: "google/gemini-2.5-pro",         description: "Deepest reasoning for cross-module correlation & risk analysis." },
   { id: "gemini-3.5-flash",label: "Gemini 3.5 Flash",       gatewayModel: "google/gemini-3.5-flash",       description: "Balanced speed/quality for high-volume advisories." },
   { id: "gpt-5.5",         label: "OpenAI GPT-5.5",         gatewayModel: "openai/gpt-5.5",                description: "State-of-the-art reasoning for complex operations." },

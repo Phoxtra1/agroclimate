@@ -6,7 +6,7 @@ import { getActiveModelSync } from "@/hooks/useAiModel";
 
 // Calls the `dipa-intelligence` edge function which proxies Lovable AI.
 // The active model is chosen in the admin AI Layer and forwarded per call so
-// every Agyenkwa component uses the currently selected engine.
+// every AgroClimate component uses the currently selected engine.
 async function call(action: string, payload: unknown): Promise<any> {
   const model = getActiveModelSync().gatewayModel;
   const started = performance.now();
