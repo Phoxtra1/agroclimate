@@ -11,23 +11,25 @@ import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
 import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
 import AGNavEngine from "./AGNavEngine";
 import AdminAGTransPanel from "./AdminAGTransPanel";
+import DataExporterPanel from "./DataExporterPanel";
 import DriverApprovals, { useDriverApprovals } from "@/components/admin/DriverApprovals";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Layers, Plane, Settings, Users,
-  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download
+  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database
 } from "lucide-react";
 
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type EngineKey =
-  | "overview" | "alert" | "ai" | "flight" | "system"
+  | "overview" | "data-export" | "alert" | "ai" | "flight" | "system"
   | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans" | "approvals";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
+  { key: "data-export", label: "Data Export Hub", icon: Database },
   { key: "approvals", label: "Driver Approvals", icon: ShieldAlert },
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "AI Layer", icon: Layers },
@@ -323,12 +325,31 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
             <Metric label="Transport requests" value={counts.requestsTotal} small />
             <Metric label="Transport agreements" value={counts.agreementsTotal} small />
             <Metric label="Active trips" value={counts.activeTrips} small />
-            <Metric label="Completed trips" value={counts.completedTrips} small />
           </div>
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">Use the sidebar to manage individual engines (Alerts, AI, Flight, Market Link, Post-Harvest, Subscriptions, Security, System).</p>
+      <Card className="border-emerald-500/20 bg-emerald-950/10">
+        <CardContent className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <Database className="h-4 w-4 text-emerald-500" /> Agro-Climate Centralized Data Export Hub
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Extract anonymized operational CSV & JSON datasets across all 8 modules or download complete Linked Lifecycle Chains (Weather → Farm → Harvest → Market → Transport → Outcome).
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => onNavigate?.("data-export")}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs shrink-0"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" /> Open Data Export Hub
+          </Button>
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">Use the sidebar to manage individual engines (Data Export, Alerts, AI, Flight, Market Link, Post-Harvest, Subscriptions, Security, System).</p>
     </div>
   );
 }
@@ -358,6 +379,7 @@ export default function AdminDashboard() {
 
   const renderEngine = () => {
     switch (activeEngine) {
+      case "data-export": return <DataExporterPanel />;
       case "alert": return <AlertEngine />;
       case "ai": return <AIEngine />;
       case "flight": return <FlightEngine />;
