@@ -309,7 +309,7 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 space-y-2 text-xs">
+            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 space-y-3 text-xs">
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-primary shrink-0" />
                 <span className="font-bold text-foreground">Dipa Decision Intelligence</span>
@@ -317,19 +317,16 @@ export default function Landing() {
               <p className="text-muted-foreground leading-relaxed text-[11px]">
                 Backing dynamic climate risk evaluation, crop suitability rankings, flight advisories &amp; market matches globally.
               </p>
+              <Button size="sm" variant="default" className="w-full text-xs h-8 mt-1" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+                Sign Up for Intelligence <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
             </div>
           </div>
-        </div>
-
-        <div className="text-center mt-8">
-          <Button size="lg" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            Sign up for personalized intelligence <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
         </div>
       </section>
 
       {/* What's New Section */}
-      <section className="container mx-auto px-4 py-10">
+      <section className="container mx-auto px-4 py-4 -mt-4">
         <div className="max-w-3xl mx-auto bg-card border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold">{WHATS_NEW.title}</h3>
