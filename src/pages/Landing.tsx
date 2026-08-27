@@ -254,11 +254,6 @@ export default function Landing() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <TodayWeather weather={weeklyForecast[0]} />
-            <div className="bg-card rounded-xl p-4 shadow-sm mt-4">
-              {weeklyForecast.map((day) => (
-                <ForecastRow key={day.day} day={day} />
-              ))}
-            </div>
           </div>
 
           <div className="space-y-4">
