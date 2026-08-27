@@ -21,6 +21,7 @@ import {
   ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database
 } from "lucide-react";
 
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type EngineKey =
@@ -55,9 +56,9 @@ function rangeStart(r: Range) {
 }
 
 function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }) {
-  const { drivers: approvalDrivers } = useDriverApprovals();
-  const pendingApprovals = approvalDrivers.filter(
-    (d) => d.approval_status === "pending" || d.approval_status === "more_info"
+  const { drivers: approvalDrivers = [] } = useDriverApprovals() || {};
+  const pendingApprovals = (Array.isArray(approvalDrivers) ? approvalDrivers : []).filter(
+    (d) => d && (d.approval_status === "pending" || d.approval_status === "more_info")
   ).length;
   const [range, setRange] = useState<Range>("today");
   const [counts, setCounts] = useState({
@@ -79,50 +80,71 @@ function OverviewPanel({ onNavigate }: { onNavigate?: (key: EngineKey) => void }
 
   const load = async () => {
     setLoading(true);
-    const since = rangeStart(range).toISOString();
-    const todayStart = rangeStart("today").toISOString();
+    try {
+      const since = rangeStart(range).toISOString();
+      const todayStart = rangeStart("today").toISOString();
 
-    // Aggregates come from a server-side stats function so the numbers are the
-    // real platform totals (row-level rules would otherwise hide other users).
-    const { data } = await supabase.rpc("admin_overview_stats" as any, {
-      p_since: since,
-      p_today: todayStart,
-    } as any);
-    const s: any = data || {};
+      // Aggregates come from a server-side stats function so the numbers are the
+      // real platform totals (row-level rules would otherwise hide other users).
+      const { data, error: rpcErr } = await supabase.rpc("admin_overview_stats" as any, {
+        p_since: since,
+        p_today: todayStart,
+      } as any);
 
-    const buckets: Record<string, number> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
-      buckets[d.toISOString().slice(0, 10)] = 0;
+      if (rpcErr) {
+        console.warn("RPC admin_overview_stats notice:", rpcErr.message);
+      }
+
+      const s: any = data || {};
+
+      const buckets: Record<string, number> = {};
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
+        buckets[d.toISOString().slice(0, 10)] = 0;
+      }
+
+      if (Array.isArray(s.dau)) {
+        s.dau.forEach((row: any) => {
+          if (row && row.day && row.day in buckets) buckets[row.day] = Number(row.count) || 0;
+        });
+      }
+
+      const dau = Object.entries(buckets).map(([day, count]) => ({ day: day.slice(5), count }));
+
+      const delivered = Number(s.alerts_delivered) || 0;
+      const opened = Number(s.alerts_opened) || 0;
+
+      setByFarmerType(s.by_farmer_type && typeof s.by_farmer_type === "object" ? s.by_farmer_type : {});
+      setByType(s.alerts_by_type && typeof s.alerts_by_type === "object" ? s.alerts_by_type : {});
+      setBySeverity(s.alerts_by_severity && typeof s.alerts_by_severity === "object" ? s.alerts_by_severity : {});
+      setDailyActive(dau);
+      setCounts({
+        totalUsers: Number(s.total_users) || 0,
+        activeUsers: Number(s.active_users) || 0,
+        alertsTotal: Number(s.alerts_total) || 0,
+        alertsToday: Number(s.alerts_today) || 0,
+        contracts: Number(s.contracts) || 0,
+        supply: Number(s.supply) || 0,
+        demand: Number(s.demand) || 0,
+        farms: Number(s.farms) || 0,
+        handlers: Number(s.handlers) || 0,
+        sos: Number(s.sos) || 0,
+        alertsDelivered: delivered,
+        alertsOpened: opened,
+        alertViews: opened,
+        driversTotal: Number(s.drivers_total) || 0,
+        driversPending: Number(s.drivers_pending) || 0,
+        driversApproved: Number(s.drivers_approved) || 0,
+        requestsTotal: Number(s.requests_total) || 0,
+        agreementsTotal: Number(s.agreements_total) || 0,
+        activeTrips: Number(s.active_trips) || 0,
+        completedTrips: Number(s.completed_trips) || 0,
+      });
+    } catch (err) {
+      console.error("Error loading OverviewPanel stats:", err);
+    } finally {
+      setLoading(false);
     }
-    ((s.dau as any[]) || []).forEach((row: any) => {
-      if (row.day in buckets) buckets[row.day] = Number(row.count) || 0;
-    });
-    const dau = Object.entries(buckets).map(([day, count]) => ({ day: day.slice(5), count }));
-
-    const delivered = Number(s.alerts_delivered) || 0;
-    const opened = Number(s.alerts_opened) || 0;
-
-    setByFarmerType((s.by_farmer_type as Record<string, number>) || {});
-    setByType((s.alerts_by_type as Record<string, number>) || {});
-    setBySeverity((s.alerts_by_severity as Record<string, number>) || {});
-    setDailyActive(dau);
-    setCounts({
-      totalUsers: Number(s.total_users) || 0,
-      activeUsers: Number(s.active_users) || 0,
-      alertsTotal: Number(s.alerts_total) || 0,
-      alertsToday: Number(s.alerts_today) || 0,
-      contracts: Number(s.contracts) || 0,
-      supply: Number(s.supply) || 0,
-      demand: Number(s.demand) || 0,
-      farms: Number(s.farms) || 0,
-      handlers: Number(s.handlers) || 0,
-      sos: Number(s.sos) || 0,
-      alertsDelivered: delivered,
-      alertsOpened: opened,
-      alertViews: opened,
-    });
-    setLoading(false);
   };
 
   useEffect(() => { load(); }, [range]);
@@ -417,60 +439,62 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Desktop sidebar */}
-      <aside className="w-60 bg-card border-r border-border flex-col fixed h-full z-30 hidden md:flex">
-        <div className="flex items-center gap-2 px-5 h-16 border-b border-border">
-          <img src={agyenkwaIcon} alt="AgroClimate" className="h-8 w-8 rounded-lg" />
-          <span className="font-bold text-lg text-foreground">Admin Workspace</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          <NavButtons />
-        </nav>
-        <div className="px-3 py-4 border-t border-border">
-          <p className="text-[11px] text-muted-foreground px-3">
-            Authenticated via Amineva central identity
-          </p>
-          <a
-            href="https://amineva.com/account"
-            className="block mt-2 px-3 text-xs text-primary hover:underline"
-          >
-            Manage central account ↗
-          </a>
-        </div>
-      </aside>
+    <ErrorBoundary fallbackTitle="Admin Workspace Recovery">
+      <div className="flex min-h-screen bg-background">
+        {/* Desktop sidebar */}
+        <aside className="w-60 bg-card border-r border-border flex-col fixed h-full z-30 hidden md:flex">
+          <div className="flex items-center gap-2 px-5 h-16 border-b border-border">
+            <img src={agyenkwaIcon} alt="AgroClimate" className="h-8 w-8 rounded-lg" />
+            <span className="font-bold text-lg text-foreground">Admin Workspace</span>
+          </div>
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <NavButtons />
+          </nav>
+          <div className="px-3 py-4 border-t border-border">
+            <p className="text-[11px] text-muted-foreground px-3">
+              Authenticated via Amineva central identity
+            </p>
+            <a
+              href="https://amineva.com/account"
+              className="block mt-2 px-3 text-xs text-primary hover:underline"
+            >
+              Manage central account ↗
+            </a>
+          </div>
+        </aside>
 
-      {/* Mobile header + sheet */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <img src={agyenkwaIcon} alt="AgroClimate" className="h-7 w-7 rounded-lg" />
-          <span className="font-bold text-sm">Admin Workspace</span>
+        {/* Mobile header + sheet */}
+        <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img src={agyenkwaIcon} alt="AgroClimate" className="h-7 w-7 rounded-lg" />
+            <span className="font-bold text-sm">Admin Workspace</span>
+          </div>
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="bg-card w-64 p-4">
+              <div className="flex items-center gap-2 mb-6">
+                <img src={agyenkwaIcon} alt="AgroClimate" className="h-7 w-7 rounded-lg" />
+                <span className="font-bold">Admin Workspace</span>
+              </div>
+              <nav className="space-y-1">
+                <NavButtons onClick={() => setSheetOpen(false)} />
+              </nav>
+              <div className="mt-6 pt-4 border-t border-border">
+                <p className="text-[11px] text-muted-foreground">
+                  Authenticated via Amineva central identity
+                </p>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
-        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="bg-card w-64 p-4">
-            <div className="flex items-center gap-2 mb-6">
-              <img src={agyenkwaIcon} alt="AgroClimate" className="h-7 w-7 rounded-lg" />
-              <span className="font-bold">Admin Workspace</span>
-            </div>
-            <nav className="space-y-1">
-              <NavButtons onClick={() => setSheetOpen(false)} />
-            </nav>
-            <div className="mt-6 pt-4 border-t border-border">
-              <p className="text-[11px] text-muted-foreground">
-                Authenticated via Amineva central identity
-              </p>
-            </div>
-          </SheetContent>
-        </Sheet>
+
+        {/* Content */}
+        <main className="flex-1 md:ml-60 p-4 lg:p-6 pt-16 md:pt-6 overflow-y-auto">
+          {renderEngine()}
+        </main>
       </div>
-
-      {/* Content */}
-      <main className="flex-1 md:ml-60 p-4 lg:p-6 pt-16 md:pt-6 overflow-y-auto">
-        {renderEngine()}
-      </main>
-    </div>
+    </ErrorBoundary>
   );
 }

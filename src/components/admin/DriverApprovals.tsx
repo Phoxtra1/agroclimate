@@ -16,16 +16,23 @@ export function useDriverApprovals() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data, error: fnError } = await supabase.functions.invoke("admin-agtrans-drivers", {
-      body: { action: "list" },
-    });
-    if (fnError || data?.error) {
-      setError(data?.error || "Driver registrations could not be loaded.");
-    } else {
-      setError(null);
-      setDrivers((data?.drivers as DriverProfile[]) || []);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("admin-agtrans-drivers", {
+        body: { action: "list" },
+      });
+      if (fnError || data?.error) {
+        setError(data?.error || fnError?.message || "Driver registrations could not be loaded.");
+        setDrivers([]);
+      } else {
+        setError(null);
+        setDrivers(Array.isArray(data?.drivers) ? data.drivers : []);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Driver registrations could not be loaded.");
+      setDrivers([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -35,15 +42,15 @@ export function useDriverApprovals() {
       .channel("admin-driver-approvals")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "agtrans_drivers" }, (payload) => {
         const row = payload.new as DriverProfile;
-        setDrivers((prev) => (prev.some((d) => d.id === row.id) ? prev : [row, ...prev]));
+        setDrivers((prev) => (Array.isArray(prev) && prev.some((d) => d.id === row.id) ? prev : [row, ...(Array.isArray(prev) ? prev : [])]));
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "agtrans_drivers" }, (payload) => {
         const row = payload.new as DriverProfile;
-        setDrivers((prev) => prev.map((d) => (d.id === row.id ? { ...d, ...row } : d)));
+        setDrivers((prev) => (Array.isArray(prev) ? prev.map((d) => (d.id === row.id ? { ...d, ...row } : d)) : []));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "agtrans_drivers" }, (payload) => {
         const old = payload.old as { id?: string };
-        setDrivers((prev) => prev.filter((d) => d.id !== old?.id));
+        setDrivers((prev) => (Array.isArray(prev) ? prev.filter((d) => d.id !== old?.id) : []));
       })
       .subscribe();
     return () => {
@@ -85,8 +92,9 @@ export default function DriverApprovals({ onViewDocs }: { onViewDocs?: (d: Drive
   const { drivers, loading, error, reload, act, openLicense } = useDriverApprovals();
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
-  const pending = drivers.filter((d) => d.approval_status === "pending" || d.approval_status === "more_info");
-  const decided = drivers.filter((d) => !pending.includes(d));
+  const safeDrivers = Array.isArray(drivers) ? drivers : [];
+  const pending = safeDrivers.filter((d) => d && (d.approval_status === "pending" || d.approval_status === "more_info"));
+  const decided = safeDrivers.filter((d) => d && !pending.includes(d));
 
   return (
     <div className="space-y-4">
