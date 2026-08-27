@@ -252,52 +252,71 @@ export default function Landing() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+          {/* Main Column: Live Weather Overview + Agro Learning & Market Link Hub Cards */}
+          <div className="lg:col-span-2 space-y-4">
             <TodayWeather weather={weeklyForecast[0]} />
-          </div>
 
-          <div className="space-y-4">
-            <div className="bg-card rounded-xl p-4 shadow-sm">
-              <h4 className="font-bold text-sm mb-3">📅 {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</h4>
-              <div className="space-y-2 text-xs text-muted-foreground">
-                <p>🌡️ High: {weeklyForecast[0].tempHigh}°C / Low: {weeklyForecast[0].tempLow}°C</p>
-                <p>💧 Humidity: {weeklyForecast[0].humidity}%</p>
-                <p>🌧️ Rain probability: {weeklyForecast[0].rainProb}%</p>
-                <p>💨 Wind: {weeklyForecast[0].wind} km/h</p>
-                <p>☁️ Conditions: {weeklyForecast[0].description}</p>
-              </div>
-            </div>
-
-            {/* Agro Learning and Market Link cards side-by-side */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-primary/10 rounded-xl p-4 text-center flex flex-col justify-between">
+            {/* Agro Learning & Market Link Hub Cards side-by-side filling the former forecast list area */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-card border border-border/70 rounded-xl p-5 shadow-sm hover:border-primary/50 transition-all flex flex-col justify-between group">
                 <div>
-                  <BookOpen className="h-6 w-6 mx-auto text-primary mb-2" />
-                  <h4 className="font-bold text-sm mb-1">Agro Learning</h4>
-                  <p className="text-[11px] text-muted-foreground mb-3">
-                    Educational guides on climate adaptation &amp; crop management.
+                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                    <BookOpen className="h-5 w-5 text-primary" />
+                  </div>
+                  <h4 className="font-bold text-base mb-1">Agro Learning</h4>
+                  <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                    Interactive educational guides, climate adaptation strategies &amp; crop management best practices.
                   </p>
                 </div>
                 <Link to="/learning">
-                  <Button size="sm" variant="default" className="w-full text-xs h-8">
-                    Start Learning <ArrowRight className="h-3 w-3 ml-1" />
+                  <Button size="sm" variant="default" className="w-full text-xs h-9">
+                    Start Learning <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
                   </Button>
                 </Link>
               </div>
 
-              <div className="bg-gradient-to-br from-primary/15 to-accent/10 rounded-xl p-4 text-center border border-primary/20 flex flex-col justify-between">
+              <div className="bg-card border border-primary/20 rounded-xl p-5 shadow-sm hover:border-primary/60 transition-all flex flex-col justify-between bg-gradient-to-br from-primary/5 to-accent/5 group">
                 <div>
-                  <h4 className="font-bold text-sm mb-1">🛒 Market Link</h4>
-                  <p className="text-[11px] text-muted-foreground mb-3">
-                    Global marketplace for agricultural supply, demand &amp; logistics.
+                  <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                    <span className="text-lg">🛒</span>
+                  </div>
+                  <h4 className="font-bold text-base mb-1">Market Link</h4>
+                  <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                    Global marketplace for agricultural supply, demand orders, price trends &amp; registered transport logistics.
                   </p>
                 </div>
                 <Link to="/marketplace/auth">
-                  <Button size="sm" variant="default" className="w-full text-xs h-8">
-                    Open Marketplace <ArrowRight className="h-3 w-3 ml-1" />
+                  <Button size="sm" variant="default" className="w-full text-xs h-9">
+                    Open Marketplace <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
                   </Button>
                 </Link>
               </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar: Today's Location Metrics & Dipa Intelligence Banner */}
+          <div className="space-y-4">
+            <div className="bg-card rounded-xl p-4 shadow-sm border border-border/70">
+              <h4 className="font-bold text-sm mb-3 flex items-center gap-1.5">
+                <span>📅</span> {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              </h4>
+              <div className="space-y-2 text-xs text-muted-foreground font-medium">
+                <p className="flex justify-between border-b pb-1.5"><span>🌡️ High / Low:</span><strong className="text-foreground">{weeklyForecast[0].tempHigh}°C / {weeklyForecast[0].tempLow}°C</strong></p>
+                <p className="flex justify-between border-b pb-1.5"><span>💧 Humidity:</span><strong className="text-foreground">{weeklyForecast[0].humidity}%</strong></p>
+                <p className="flex justify-between border-b pb-1.5"><span>🌧️ Rain probability:</span><strong className="text-foreground">{weeklyForecast[0].rainProb}%</strong></p>
+                <p className="flex justify-between border-b pb-1.5"><span>💨 Wind speed:</span><strong className="text-foreground">{weeklyForecast[0].wind} km/h</strong></p>
+                <p className="flex justify-between pt-0.5"><span>☁️ Conditions:</span><strong className="text-foreground">{weeklyForecast[0].description}</strong></p>
+              </div>
+            </div>
+
+            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-primary shrink-0" />
+                <span className="font-bold text-foreground">Dipa Decision Intelligence</span>
+              </div>
+              <p className="text-muted-foreground leading-relaxed text-[11px]">
+                Backing dynamic climate risk evaluation, crop suitability rankings, flight advisories &amp; market matches globally.
+              </p>
             </div>
           </div>
         </div>
