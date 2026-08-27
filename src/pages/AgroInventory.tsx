@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
+import { AgriCostCalculator } from "@/components/inventory/AgriCostCalculator";
 
 // ─── Comprehensive timezone → currency map ───
 const USER_TZ = typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
@@ -440,15 +441,21 @@ export default function AgroInventory() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
-      <Tabs defaultValue="inputs" className="space-y-4">
-        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
-          <TabsTrigger value="inputs" className="text-xs px-4">Inputs</TabsTrigger>
-          <TabsTrigger value="labor" className="text-xs px-4">Labor</TabsTrigger>
-          <TabsTrigger value="harvest" className="text-xs px-4">Harvest</TabsTrigger>
-          <TabsTrigger value="loss" className="text-xs px-4">Losses</TabsTrigger>
-          <TabsTrigger value="sales" className="text-xs px-4">Sales</TabsTrigger>
-        </TabsList>
+        {/* Tabs */}
+        <Tabs defaultValue="inputs" className="space-y-4">
+          <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
+            <TabsTrigger value="inputs" className="text-xs px-4">Inputs</TabsTrigger>
+            <TabsTrigger value="labor" className="text-xs px-4">Labor</TabsTrigger>
+            <TabsTrigger value="harvest" className="text-xs px-4">Harvest</TabsTrigger>
+            <TabsTrigger value="loss" className="text-xs px-4">Losses</TabsTrigger>
+            <TabsTrigger value="sales" className="text-xs px-4">Sales</TabsTrigger>
+            <TabsTrigger value="cost-scenarios" className="text-xs px-4">Cost Scenarios</TabsTrigger>
+          </TabsList>
+
+          {/* ===== COST SCENARIOS TAB ===== */}
+          <TabsContent value="cost-scenarios" className="space-y-4">
+            <AgriCostCalculator currencyCode={selectedCurrency.code} />
+          </TabsContent>
 
         {/* ===== INPUTS TAB (unchanged logic) ===== */}
         <TabsContent value="inputs" className="space-y-4">

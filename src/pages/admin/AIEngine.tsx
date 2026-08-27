@@ -11,6 +11,7 @@ import { Layers, Activity, Zap, ScrollText, Bell, Save, Download, Filter } from 
 import { useToast } from "@/hooks/use-toast";
 import { useAiModel } from "@/hooks/useAiModel";
 import { supabase } from "@/integrations/supabase/client";
+import { DipaMonitoringConsole } from "@/components/admin/DipaMonitoringConsole";
 
 interface UsageRow { id: string; model: string; action: string; latency_ms: number | null; ok: boolean; error: string | null; created_at: string; }
 
@@ -118,6 +119,9 @@ export default function AIEngine() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Dipa Health & Feedback Monitoring Console */}
+      <DipaMonitoringConsole />
 
       {/* Usage snapshot with filters + CSV export */}
       <AiLogsPanel logs={logs} models={models} totalCalls={totalCalls} ok={ok} avgMs={avgMs} />

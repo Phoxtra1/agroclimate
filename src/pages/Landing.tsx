@@ -33,26 +33,21 @@ export default function Landing() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
     try {
-      // 1. Clean the input
       const email = loginEmail.trim();
-
-      // 2. Attempt Sign In
       const { error } = await signIn(email, loginPassword);
-
       if (error) {
-        toast({ 
-          title: "Login failed", 
-          description: error.message || "Invalid credentials. Please try again or use 'Forgot Password'.", 
-          variant: "destructive" 
+        toast({
+          title: "Login failed",
+          description: error.message || "Invalid credentials. Please try again.",
+          variant: "destructive",
         });
       }
     } catch (err: any) {
       toast({
         title: "Login Error",
         description: err.message || "An unexpected error occurred during login.",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -67,8 +62,7 @@ export default function Landing() {
     }
 
     setLoading(true);
-    // Force a clean state before requesting reset
-    localStorage.removeItem('supabase.auth.token');
+    localStorage.removeItem("supabase.auth.token");
 
     const { error } = await supabase.auth.resetPasswordForEmail(loginEmail.trim().toLowerCase(), {
       redirectTo: `${window.location.origin}/reset-password`,
@@ -81,7 +75,7 @@ export default function Landing() {
     }
     setLoading(false);
   };
-  
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -90,8 +84,8 @@ export default function Landing() {
       account_type: accountType,
       drone_ownership: accountType === "farmer" ? droneOwnership : false,
       water_transport: accountType === "farmer" ? waterTransport : false,
-      drone_type: (accountType === "farmer" && droneOwnership) ? droneType : null,
-      phone: regPhone
+      drone_type: accountType === "farmer" && droneOwnership ? droneType : null,
+      phone: regPhone,
     };
     const { error } = await signUp(regEmail.trim(), regPassword, regName, extraData);
     if (error) {
@@ -103,14 +97,14 @@ export default function Landing() {
   };
 
   const features = [
-    { icon: Bot, title: "Dipa", desc: "Voice-first AI farming assistant powered by Amineva" },
-    { icon: Cloud, title: "Climate Intelligence", desc: "Hyperlocal weather, rainfall prediction, disaster alerts" },
-    { icon: Sprout, title: "Crop Advisory", desc: "AI-powered planting windows, irrigation, pest risk" },
-    { icon: Fish, title: "Aquaculture", desc: "Fish pond monitoring with water quality tracking" },
-    { icon: Plane, title: "Flight Advisory", desc: "Flight safety evaluation and mission planning" },
-    { icon: Leaf, title: "Environmental Monitor", desc: "Air quality, heat stress, turbulence modeling" },
-    { icon: Bell, title: "Smart Alerts", desc: "Real-time disaster warnings and crop risk alerts" },
-    { icon: Shield, title: "Multi-Sector", desc: "Agriculture, forestry, surveying, and agribusiness" },
+    { icon: Bot, title: "Dipa Intelligence", desc: "Decision-support engine backing all AgroClimate modules" },
+    { icon: Cloud, title: "Climate Risk Engine", desc: "Dynamic global hazard evaluation & rainfall forecasts" },
+    { icon: Sprout, title: "Crop Suitability", desc: "Multi-factor agricultural ranking & planting guidance" },
+    { icon: Fish, title: "Aquaculture", desc: "Water quality monitoring & dissolved oxygen tracking" },
+    { icon: Plane, title: "Flight Advisory", desc: "Mission safety evaluation & aerial survey control" },
+    { icon: Leaf, title: "Environmental Monitor", desc: "Ecological health scoring & turbulence modeling" },
+    { icon: Bell, title: "Proactive Alerts", desc: "Location-aware disaster warnings & risk mitigation" },
+    { icon: Shield, title: "Global & Regional", desc: "Worldwide climate intelligence with Ghana & Africa logistics" },
   ];
 
   return (
@@ -132,10 +126,10 @@ export default function Landing() {
               </div>
               <p className="text-xs font-semibold text-primary mb-2">{APP_VERSION_LABEL} · by Amineva Global</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
-                Smart Insights for <span className="text-gradient-primary">Agriculture and Climate</span>
+                Global Agricultural &amp; <span className="text-gradient-primary">Climate Intelligence</span>
               </h2>
               <p className="text-muted-foreground text-lg mb-8 max-w-lg">
-                Climate-first, prediction-driven, AI-powered platform for farmers, extension officers, surveyors, and forestry agents across Africa.
+                Location-aware, prediction-driven decision platform backing farmers, buyers, logistics providers, and agricultural investors worldwide.
               </p>
 
               <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 mb-8">
@@ -157,7 +151,7 @@ export default function Landing() {
               <Card className="shadow-xl border-border/50">
                 <CardHeader className="text-center pb-2">
                   <CardTitle className="text-xl">Get Started</CardTitle>
-                  <CardDescription>Join the {APP_NAME} community</CardDescription>
+                  <CardDescription>Join the {APP_NAME} platform</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="login">
@@ -253,8 +247,8 @@ export default function Landing() {
 
       <section className="container mx-auto px-4 py-12">
         <div className="text-center mb-8">
-          <h3 className="text-2xl font-bold mb-2">Live Weather Updates</h3>
-          <p className="text-muted-foreground">Real-time 24-hour weather data for your region</p>
+          <h3 className="text-2xl font-bold mb-2">Live Environmental &amp; Weather Data</h3>
+          <p className="text-muted-foreground">Real-time forecast and risk insights for your selected location</p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -279,41 +273,48 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="bg-primary/10 rounded-xl p-5 text-center">
-              <BookOpen className="h-8 w-8 mx-auto text-primary mb-3" />
-              <h4 className="font-bold text-sm mb-1">Agro Learning</h4>
-              <p className="text-xs text-muted-foreground mb-3">
-                Free educational guides on smart farming, pest management, climate adaptation, and post-harvest handling.
-              </p>
-              <Link to="/learning">
-                <Button size="sm" variant="default">
-                  Start Learning <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
-              </Link>
-            </div>
+            {/* Agro Learning and Market Link cards side-by-side */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-primary/10 rounded-xl p-4 text-center flex flex-col justify-between">
+                <div>
+                  <BookOpen className="h-6 w-6 mx-auto text-primary mb-2" />
+                  <h4 className="font-bold text-sm mb-1">Agro Learning</h4>
+                  <p className="text-[11px] text-muted-foreground mb-3">
+                    Educational guides on climate adaptation &amp; crop management.
+                  </p>
+                </div>
+                <Link to="/learning">
+                  <Button size="sm" variant="default" className="w-full text-xs h-8">
+                    Start Learning <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
 
-            <div className="bg-gradient-to-br from-primary/15 to-accent/10 rounded-xl p-5 text-center border border-primary/20">
-              <h4 className="font-bold text-sm mb-1">🛒 Market Link</h4>
-              <p className="text-xs text-muted-foreground mb-3">
-                Buyers must register before browsing supply or contacting farmers. Subscription unlocks live chat & negotiation.
-              </p>
-              <Link to="/marketplace/auth">
-                <Button size="sm" variant="default">
-                  Sign in to Market Link <ArrowRight className="h-4 w-4 ml-1" />
-                </Button>
-              </Link>
+              <div className="bg-gradient-to-br from-primary/15 to-accent/10 rounded-xl p-4 text-center border border-primary/20 flex flex-col justify-between">
+                <div>
+                  <h4 className="font-bold text-sm mb-1">🛒 Market Link</h4>
+                  <p className="text-[11px] text-muted-foreground mb-3">
+                    Global marketplace for agricultural supply, demand &amp; logistics.
+                  </p>
+                </div>
+                <Link to="/marketplace/auth">
+                  <Button size="sm" variant="default" className="w-full text-xs h-8">
+                    Open Marketplace <ArrowRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="text-center mt-8">
           <Button size="lg" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-            Sign up for personalized data <ArrowRight className="ml-2 h-4 w-4" />
+            Sign up for personalized intelligence <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
       </section>
 
-      {/* What's New */}
+      {/* What's New Section */}
       <section className="container mx-auto px-4 py-10">
         <div className="max-w-3xl mx-auto bg-card border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -338,4 +339,3 @@ export default function Landing() {
     </div>
   );
 }
-

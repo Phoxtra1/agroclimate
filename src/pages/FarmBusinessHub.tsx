@@ -9,6 +9,7 @@ import {
   Users, Package, BarChart3, Warehouse, LineChart, Bot, Sprout,
   AlertTriangle, Lightbulb, ArrowRight
 } from "lucide-react";
+import { InvestmentEvaluatorPanel } from "@/components/investment/InvestmentEvaluatorPanel";
 
 interface Solution {
   id: string;
@@ -236,6 +237,11 @@ export default function FarmBusinessHub() {
             </Card>
           );
         })}
+      </div>
+
+      {/* Investment Evaluator Section */}
+      <div className="mt-8 pt-6 border-t">
+        <InvestmentEvaluatorPanel />
       </div>
 
       {/* Dipa CTA */}
