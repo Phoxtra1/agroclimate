@@ -604,6 +604,7 @@ export const DipaEngine = {
 
   /**
    * 13. Logistics Provider Matching Engine
+   * Matches registered platform drivers and logistics carriers.
    */
   async matchLogisticsProviders(
     pickupLocation: string,
@@ -611,30 +612,76 @@ export const DipaEngine = {
     quantityTons: number,
     coldChainRequired: boolean = false
   ): Promise<LogisticsMatchResult> {
+    // 1. Fetch registered logistics providers
     const { data: dbProviders } = await supabase.from("logistics_providers" as any).select("*");
+    
+    // 2. Fetch registered user profiles with driver / transporter role
+    const { data: driverProfiles } = await supabase
+      .from("profiles" as any)
+      .select("*")
+      .or("role.eq.driver,role.eq.transporter,account_type.eq.driver");
 
-    const providers = (dbProviders as any[] || []).map((p) => {
-      let score = 75;
-      const reasons: string[] = [];
+    const allRegistered: any[] = [];
 
-      if (p.capacity_tons >= quantityTons) {
-        score += 15;
-        reasons.push(`Capacity (${p.capacity_tons} tons) satisfies payload requirement (${quantityTons} tons)`);
+    if (dbProviders && dbProviders.length > 0) {
+      dbProviders.forEach((p: any) => {
+        allRegistered.push({
+          id: p.id,
+          name: p.name,
+          country: p.country || "Ghana",
+          vehicleTypes: p.vehicle_types || ["cargo_truck"],
+          capacityTons: Number(p.capacity_tons || 10),
+          coldChain: !!p.cold_chain_capable,
+          contactPhone: p.public_phone || "Contact via Market Link",
+        });
+      });
+    }
+
+    if (driverProfiles && driverProfiles.length > 0) {
+      driverProfiles.forEach((d: any) => {
+        allRegistered.push({
+          id: d.id,
+          name: d.full_name || d.name || "Registered Transport Driver",
+          country: d.country || "Ghana",
+          vehicleTypes: d.vehicle_type ? [d.vehicle_type] : ["heavy_truck"],
+          capacityTons: Number(d.capacity_tons || 15),
+          coldChain: !!d.cold_chain_capable,
+          contactPhone: d.phone || d.email || "Registered Platform Driver",
+        });
+      });
+    }
+
+    const providers = allRegistered.map((p) => {
+      let score = 70;
+      const reasons: string[] = ["Registered transport provider on AgroClimate platform"];
+
+      if (p.capacityTons >= quantityTons) {
+        score += 20;
+        reasons.push(`Capacity (${p.capacityTons} tons) satisfies payload requirement (${quantityTons} tons)`);
+      } else {
+        score -= 15;
+        reasons.push(`Capacity (${p.capacityTons} tons) below requested payload`);
       }
-      if (coldChainRequired && p.cold_chain_capable) {
-        score += 10;
-        reasons.push("Refrigerated cold-chain equipment available");
+
+      if (coldChainRequired) {
+        if (p.coldChain) {
+          score += 10;
+          reasons.push("Refrigerated cold-chain equipment verified");
+        } else {
+          score -= 20;
+          reasons.push("Standard ambient transport only (no cold-chain)");
+        }
       }
 
       return {
         id: p.id,
         name: p.name,
-        country: p.country || "Ghana",
-        vehicleTypes: p.vehicle_types || ["flatbed_truck"],
-        capacityTons: Number(p.capacity_tons || 10),
-        coldChain: !!p.cold_chain_capable,
-        contactPhone: p.public_phone || "Contact via AgroClimate",
-        matchScore: Math.min(99, score),
+        country: p.country,
+        vehicleTypes: p.vehicleTypes,
+        capacityTons: p.capacityTons,
+        coldChain: p.coldChain,
+        contactPhone: p.contactPhone,
+        matchScore: Math.max(30, Math.min(99, score)),
         reasons,
       };
     });
@@ -645,9 +692,9 @@ export const DipaEngine = {
       providers,
       confidenceMeta: {
         confidence: "High",
-        dataQuality: "Good",
+        dataQuality: "Verified Platform Drivers",
         timestamp: new Date().toISOString(),
-        sourceInfo: "Dipa Logistics Matcher Engine",
+        sourceInfo: "Dipa Registered Logistics Matcher Engine",
       },
     };
   },

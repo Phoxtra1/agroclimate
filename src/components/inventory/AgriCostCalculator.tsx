@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, ArrowRightLeft, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Calculator, Plus, Trash2, CheckCircle2, AlertCircle, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useInventory } from "@/hooks/useInventory";
 import { toast } from "sonner";
 
 interface Scenario {
@@ -27,60 +28,18 @@ interface Scenario {
   data_source_type: "verified" | "user_entered" | "estimated" | "ai_derived";
 }
 
-const DEFAULT_SCENARIOS: Scenario[] = [
-  {
-    scenario_title: "Plant Maize Now (Optimal Window)",
-    crop_name: "Maize",
-    land_prep_cost: 450,
-    seed_cost: 300,
-    fertilizer_cost: 650,
-    labor_cost: 800,
-    irrigation_cost: 200,
-    transport_cost: 350,
-    harvest_cost: 400,
-    storage_cost: 150,
-    estimated_yield_units: 3500,
-    unit: "kg",
-    market_price_per_unit: 1.8,
-    data_source_type: "ai_derived",
-  },
-  {
-    scenario_title: "Plant Soybean (Higher Margin)",
-    crop_name: "Soybean",
-    land_prep_cost: 450,
-    seed_cost: 400,
-    fertilizer_cost: 400,
-    labor_cost: 700,
-    irrigation_cost: 150,
-    transport_cost: 300,
-    harvest_cost: 350,
-    storage_cost: 150,
-    estimated_yield_units: 2800,
-    unit: "kg",
-    market_price_per_unit: 2.6,
-    data_source_type: "ai_derived",
-  },
-  {
-    scenario_title: "Delay Planting by 2 Weeks",
-    crop_name: "Maize",
-    land_prep_cost: 450,
-    seed_cost: 300,
-    fertilizer_cost: 650,
-    labor_cost: 850,
-    irrigation_cost: 450,
-    transport_cost: 380,
-    harvest_cost: 400,
-    storage_cost: 150,
-    estimated_yield_units: 3000,
-    unit: "kg",
-    market_price_per_unit: 1.85,
-    data_source_type: "estimated",
-  },
-];
-
 export function AgriCostCalculator({ currencyCode = "USD" }: { currencyCode?: string }) {
-  const [scenarios, setScenarios] = useState<Scenario[]>(DEFAULT_SCENARIOS);
+  const { inventoryItems, laborRecords, landCosts, harvestRecords, salesRecords, crops, loading: invLoading } = useInventory();
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [selectedCrop, setSelectedCrop] = useState<string>("");
   const [loading, setLoading] = useState(false);
+
+  // Auto-calculate real scenario based on user's entered inventory items
+  useEffect(() => {
+    if (crops.length > 0 && !selectedCrop) {
+      setSelectedCrop(crops[0]);
+    }
+  }, [crops, selectedCrop]);
 
   useEffect(() => {
     (async () => {
@@ -90,6 +49,54 @@ export function AgriCostCalculator({ currencyCode = "USD" }: { currencyCode?: st
       }
     })();
   }, []);
+
+  // Compute actual costs for selected crop directly from inventory tables
+  const userCropScenarios: Scenario[] = crops.map((crop) => {
+    const cropInputs = inventoryItems.filter(i => !i.crop_name || i.crop_name.toLowerCase() === crop.toLowerCase());
+    const cropLabor = laborRecords.filter(l => !l.crop_name || l.crop_name.toLowerCase() === crop.toLowerCase());
+    const cropHarvest = harvestRecords.filter(h => h.crop_name.toLowerCase() === crop.toLowerCase());
+    const cropSales = salesRecords.filter(s => s.crop_name.toLowerCase() === crop.toLowerCase());
+
+    const seedCost = cropInputs
+      .filter(i => i.item_type.toLowerCase().includes("seed") || i.item_type.toLowerCase().includes("stock"))
+      .reduce((sum, i) => sum + (i.quantity * i.price_per_unit), 0);
+
+    const fertCost = cropInputs
+      .filter(i => i.item_type.toLowerCase().includes("fert") || i.item_type.toLowerCase().includes("chem"))
+      .reduce((sum, i) => sum + (i.quantity * i.price_per_unit), 0);
+
+    const otherInputCost = cropInputs
+      .filter(i => !i.item_type.toLowerCase().includes("seed") && !i.item_type.toLowerCase().includes("fert") && !i.item_type.toLowerCase().includes("chem"))
+      .reduce((sum, i) => sum + (i.quantity * i.price_per_unit), 0);
+
+    const laborCost = cropLabor.reduce((sum, l) => sum + (l.worker_count * l.days_worked * l.cost_per_day), 0);
+    const landCost = landCosts.reduce((sum, l) => sum + l.cost_amount, 0) / (crops.length || 1);
+
+    const totalYield = cropHarvest.reduce((sum, h) => sum + h.quantity, 0);
+    const unit = cropHarvest[0]?.unit || cropSales[0]?.unit || "kg";
+    const avgPrice = cropSales.length > 0
+      ? cropSales.reduce((sum, s) => sum + s.price_per_unit, 0) / cropSales.length
+      : 2.0;
+
+    return {
+      scenario_title: `Actual Inventory Record: ${crop}`,
+      crop_name: crop,
+      land_prep_cost: Math.round(landCost),
+      seed_cost: Math.round(seedCost),
+      fertilizer_cost: Math.round(fertCost + otherInputCost),
+      labor_cost: Math.round(laborCost),
+      irrigation_cost: 0,
+      transport_cost: 0,
+      harvest_cost: 0,
+      storage_cost: 0,
+      estimated_yield_units: totalYield || 1000,
+      unit,
+      market_price_per_unit: avgPrice,
+      data_source_type: "verified",
+    };
+  });
+
+  const activeScenarios = scenarios.length > 0 ? scenarios : userCropScenarios;
 
   const calculateScenario = (s: Scenario) => {
     const totalCost =
@@ -128,20 +135,28 @@ export function AgriCostCalculator({ currencyCode = "USD" }: { currencyCode?: st
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Calculator className="h-5 w-5 text-primary" /> Agricultural Cost &amp; Profitability Engine
           </h2>
           <p className="text-xs text-muted-foreground">
-            Location and time-specific cost estimation &amp; multi-scenario comparison
+            Derived directly from your entered inventory inputs, labor, and crop harvest records
           </p>
         </div>
       </div>
 
-      {/* Scenario Comparison Cards */}
+      {crops.length === 0 && (
+        <Card className="border border-dashed p-6 text-center text-xs text-muted-foreground space-y-2">
+          <Package className="h-8 w-8 mx-auto text-muted-foreground/60" />
+          <p className="font-semibold text-foreground">No inventory records found for cost calculation.</p>
+          <p>Add your inputs (seeds, fertilizer, labor, harvest) in the tabs above to calculate actual crop costs and profitability margins.</p>
+        </Card>
+      )}
+
+      {/* Scenario Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {scenarios.map((s, idx) => {
+        {activeScenarios.map((s, idx) => {
           const calc = calculateScenario(s);
           return (
             <Card key={idx} className="border border-border/70 hover:border-primary/50 transition-colors shadow-sm">
@@ -158,12 +173,10 @@ export function AgriCostCalculator({ currencyCode = "USD" }: { currencyCode?: st
               </CardHeader>
               <CardContent className="space-y-3 text-xs">
                 <div className="space-y-1 bg-muted/40 p-2.5 rounded-lg font-mono">
-                  <div className="flex justify-between"><span>Land Prep:</span><span>{currencyCode} {s.land_prep_cost}</span></div>
-                  <div className="flex justify-between"><span>Seeds / Stock:</span><span>{currencyCode} {s.seed_cost}</span></div>
+                  <div className="flex justify-between"><span>Land Cost:</span><span>{currencyCode} {s.land_prep_cost}</span></div>
+                  <div className="flex justify-between"><span>Seeds / Stock Input:</span><span>{currencyCode} {s.seed_cost}</span></div>
                   <div className="flex justify-between"><span>Fertilizer / Inputs:</span><span>{currencyCode} {s.fertilizer_cost}</span></div>
-                  <div className="flex justify-between"><span>Labor:</span><span>{currencyCode} {s.labor_cost}</span></div>
-                  <div className="flex justify-between"><span>Irrigation &amp; Power:</span><span>{currencyCode} {s.irrigation_cost}</span></div>
-                  <div className="flex justify-between"><span>Transport &amp; Storage:</span><span>{currencyCode} {s.transport_cost + s.storage_cost}</span></div>
+                  <div className="flex justify-between"><span>Labor Records:</span><span>{currencyCode} {s.labor_cost}</span></div>
                   <div className="border-t pt-1 flex justify-between font-bold text-foreground">
                     <span>Total Production Cost:</span>
                     <span>{currencyCode} {calc.totalCost.toLocaleString()}</span>
@@ -188,7 +201,7 @@ export function AgriCostCalculator({ currencyCode = "USD" }: { currencyCode?: st
                   onClick={() => saveScenarioToDb(s)}
                   disabled={loading}
                 >
-                  Save Scenario
+                  Save Scenario Record
                 </Button>
               </CardContent>
             </Card>

@@ -386,19 +386,14 @@ export default function MarketLink() {
       <OverviewCards totalSupply={m.totalSupply} totalDemand={m.totalDemand} activeContracts={m.activeContracts} balance={m.balance} />
 
       <Tabs defaultValue="supply" className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 w-full h-auto p-1 gap-1">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto p-1 gap-1">
           <TabsTrigger value="supply">Supply</TabsTrigger>
           <TabsTrigger value="order-listing">Order Listing</TabsTrigger>
           <TabsTrigger value="contracts">Contracts</TabsTrigger>
           <TabsTrigger value="prices">Prices</TabsTrigger>
-          <TabsTrigger value="potential-buyers">Potential Buyers</TabsTrigger>
           <TabsTrigger value="logistics-matcher">Logistics Matcher</TabsTrigger>
           <TabsTrigger value="agtrans">AGTrans</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="potential-buyers" className="mt-3">
-          <PotentialBuyersPanel />
-        </TabsContent>
 
         <TabsContent value="logistics-matcher" className="mt-3">
           <LogisticsMatcherPanel />
