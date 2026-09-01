@@ -1,7 +1,10 @@
-import { ReactNode } from "react";
-import { PremiumComponent } from "@/lib/subscriptions/plans";
-import { useSubscription } from "@/hooks/useSubscription";
-import { usePilotMode } from "@/hooks/usePilotMode";
+import { ReactNode, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { PremiumComponent, COMPONENT_LABELS } from "@/lib/subscriptions/plans";
+import { useTestModeEntitlement } from "@/hooks/useTestModeEntitlement";
+import { SubscriptionDialog } from "@/components/subscription/SubscriptionDialog";
+import { TestModeBadge } from "@/components/system/TestModeBanner";
+import { Loader2 } from "lucide-react";
 
 interface Props {
   component: PremiumComponent;
@@ -9,24 +12,43 @@ interface Props {
 }
 
 /**
- * Paywall is temporarily deactivated for testing.
+ * Subscription paywall.
  *
- * The subscription and pilot hooks are still invoked so the architecture,
- * pricing logic, and subscription state remain intact. All premium
- * components are rendered unconditionally.
+ * Access is resolved through the Test Mode entitlement engine:
+ * Test Mode ON unlocks everything, Test Mode OFF enforces the user's plan.
  */
 export function PremiumGate({ component, children }: Props) {
-  // Keep hooks alive for future reactivation; their results are intentionally ignored.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { enabled: pilot, paywallDisabled, loading: pilotLoading } = usePilotMode();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { hasAccess, loading: subLoading } = useSubscription();
+  const { allowed, viaTestMode, loading } = useTestModeEntitlement(component);
+  const location = useLocation();
+  const [dismissed, setDismissed] = useState(false);
 
-  void pilot;
-  void paywallDisabled;
-  void pilotLoading;
-  void subLoading;
-  void hasAccess(component);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  return <>{children}</>;
+  if (!allowed) {
+    return (
+      <SubscriptionDialog
+        open={!dismissed}
+        onCancel={() => setDismissed(true)}
+        redirectPath={location.pathname}
+        componentLabel={COMPONENT_LABELS[component]}
+      />
+    );
+  }
+
+  return (
+    <>
+      {viaTestMode && (
+        <div className="px-4 pt-3">
+          <TestModeBadge label={`${COMPONENT_LABELS[component]} unlocked by Test Mode`} />
+        </div>
+      )}
+      {children}
+    </>
+  );
 }
