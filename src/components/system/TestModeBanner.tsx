@@ -5,7 +5,7 @@ import { useTestMode } from "@/hooks/useTestMode";
 /** Small inline badge; render only where Test Mode changed behaviour. */
 export function TestModeBadge({ label }: { label?: string }) {
   return (
-    <Badge variant="secondary" className="gap-1.5 border border-warning/40 bg-warning/10 text-warning-foreground">
+    <Badge variant="secondary" className="gap-1.5 border border-warning/40 bg-warning/10 text-foreground">
       <FlaskConical className="h-3 w-3" />
       {label ?? "Test Mode"}
     </Badge>
@@ -19,7 +19,7 @@ export function TestModeBanner() {
   return (
     <div
       role="status"
-      className="w-full bg-warning/15 border-b border-warning/40 px-4 py-2 text-xs sm:text-sm flex items-center justify-center gap-2 text-warning-foreground"
+      className="w-full bg-warning/15 border-b border-warning/40 px-4 py-2 text-xs sm:text-sm flex items-center justify-center gap-2 text-foreground"
     >
       <FlaskConical className="h-4 w-4 shrink-0" />
       <span className="font-semibold">Test Mode active</span>
