@@ -6,9 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Trash2, Ban, CheckCircle, Settings, UserPlus, Search, Activity, Rocket } from "lucide-react";
+import { Trash2, Ban, CheckCircle, Settings, UserPlus, Search, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { usePilotMode } from "@/hooks/usePilotMode";
 
 interface ProfileRow {
   id: string;
@@ -82,8 +81,6 @@ export default function SystemControl() {
         <Settings className="h-6 w-6 text-primary" />
         <h2 className="text-xl font-bold">System Control — User Management</h2>
       </div>
-
-      <PilotModeCard />
 
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
