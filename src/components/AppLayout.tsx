@@ -14,6 +14,7 @@ import { APP_NAME, APP_VERSION_LABEL } from "@/config/version";
 import AppFooter from "@/components/AppFooter";
 import { NotificationsButton } from "./NotificationsButton";
 import { usePresence } from "@/hooks/useMarketChat";
+import { TestModeBanner } from "@/components/system/TestModeBanner";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
@@ -138,6 +139,7 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
           </div>
         </header>
 
+        <TestModeBanner />
         <main className="pb-20">{children}<AppFooter compact /></main>
 
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
