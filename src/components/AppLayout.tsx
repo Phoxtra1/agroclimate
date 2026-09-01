@@ -190,7 +190,9 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
         </aside>
       )}
       <main className={`flex-1 flex flex-col ${!hideSidebar ? "ml-64" : ""}`}>
+        <TestModeBanner />
         <div className="flex-1">{children}</div>
+
         <AppFooter />
       </main>
     </div>
