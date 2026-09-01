@@ -6,9 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Trash2, Ban, CheckCircle, Settings, UserPlus, Search, Activity, Rocket } from "lucide-react";
+import { Trash2, Ban, CheckCircle, Settings, UserPlus, Search, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { usePilotMode } from "@/hooks/usePilotMode";
 
 interface ProfileRow {
   id: string;
@@ -83,8 +82,6 @@ export default function SystemControl() {
         <h2 className="text-xl font-bold">System Control — User Management</h2>
       </div>
 
-      <PilotModeCard />
-
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{users.length}</p><p className="text-xs text-muted-foreground">Total Users</p></CardContent></Card>
@@ -150,54 +147,4 @@ export default function SystemControl() {
   );
 }
 
-function PilotModeCard() {
-  const { enabled, paywallDisabled, loading, setPilotMode } = usePilotMode();
-  const { toast } = useToast();
-  return (
-    <Card className={enabled ? "border-primary" : ""}>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Rocket className="h-4 w-4 text-primary" /> Global Pilot Mode
-          {enabled && <Badge className="ml-2">ACTIVE</Badge>}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <Label className="text-sm font-medium">Enable Global Pilot Mode</Label>
-          <div className="flex flex-col items-end gap-1">
-            <Switch
-              checked={enabled}
-              disabled={loading}
-              onCheckedChange={async (v) => { 
-                await setPilotMode(v, v); 
-                toast({ title: `Global Pilot Mode ${v ? "ON" : "OFF"}` }); 
-              }}
-            />
-            <Label className="text-[10px] text-muted-foreground">{enabled ? "Pilot mode active" : "Commercial Mode enforced"}</Label>
-          </div>
-        </div>
-
-        {enabled && (
-          <div className="pt-4 border-t border-dashed flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
-            <Label className="text-sm font-medium">Bypass Paywall (Free Access)</Label>
-            <div className="flex flex-col items-end gap-1">
-              <Switch
-                checked={paywallDisabled}
-                disabled={loading}
-                onCheckedChange={async (v) => { 
-                  await setPilotMode(enabled, v); 
-                  toast({ 
-                    title: v ? "Paywall Bypassed" : "Paywall Enforced",
-                    description: v ? "All premium modules unlocked" : "Subscription gates are now active"
-                  }); 
-                }}
-              />
-              <Label className="text-[10px] text-muted-foreground">{paywallDisabled ? "Paywall Switched OFF" : "Paywall Switched ON"}</Label>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 

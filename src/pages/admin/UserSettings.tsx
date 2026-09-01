@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
+import TestModeCard from "@/components/system/TestModeCard";
 
 export default function UserSettings() {
   const { toast } = useToast();
@@ -77,8 +78,10 @@ export default function UserSettings() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Users className="h-6 w-6 text-primary" />
-        <h2 className="text-xl font-bold">Admin Profile Settings</h2>
+        <h2 className="text-xl font-bold">Admin Settings</h2>
       </div>
+
+      <TestModeCard />
 
       <Card>
         <CardHeader><CardTitle className="text-base">Profile Information</CardTitle></CardHeader>
