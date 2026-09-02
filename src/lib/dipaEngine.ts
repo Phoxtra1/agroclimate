@@ -692,9 +692,9 @@ export const DipaEngine = {
       providers,
       confidenceMeta: {
         confidence: "High",
-        dataQuality: "Verified Platform Drivers",
+        dataQuality: "Good",
         timestamp: new Date().toISOString(),
-        sourceInfo: "Dipa Registered Logistics Matcher Engine",
+        sourceInfo: "Dipa Registered Logistics Matcher Engine (Verified Platform Drivers)",
       },
     };
   },

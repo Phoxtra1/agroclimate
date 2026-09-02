@@ -117,12 +117,13 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
   switch (module) {
     case "agroclimate": {
       // Weather, forecasts, environmental alerts & AI advisories
-      const { data: alerts } = await supabase
+      const { data: alertsData } = await supabase
         .from("disaster_alerts")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso)
         .order("created_at", { ascending: false });
+      const alerts = (alertsData || []) as any[];
 
       const { data: aiLogs } = await supabase
         .from("ai_usage_logs")
@@ -130,7 +131,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const alertRows = (alerts || []).map((a) => ({
+      const alertRows = alerts.map((a: any) => ({
         dataset: "AgroClimate_Disaster_Alerts",
         record_id: a.id,
         created_at: a.created_at,
@@ -164,23 +165,25 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "handler": {
       // Assignments, clock-in/out, tasks, quantities, farm area, inputs
-      const { data: tasks } = await supabase
+      const { data: tasksData } = await supabase
         .from("handler_tasks")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso)
         .order("created_at", { ascending: false });
+      const tasks = (tasksData || []) as any[];
 
-      const { data: sessions } = await supabase
+      const { data: sessionsData } = await supabase
         .from("work_sessions")
         .select("*")
         .gte("clock_in", sinceIso)
         .lte("clock_in", untilIso);
+      const sessions = (sessionsData || []) as any[];
 
-      const taskMap = new Map((tasks || []).map((t) => [t.id, t]));
+      const taskMap = new Map(tasks.map((t: any) => [t.id, t]));
 
-      rawData = (tasks || []).map((t) => {
-        const sess = (sessions || []).find((s) => s.handler_id === t.handler_id);
+      rawData = tasks.map((t: any) => {
+        const sess = sessions.find((s: any) => s.handler_id === t.handler_id);
         return {
           dataset: "Handler_Task_Operations",
           task_id: t.id,
@@ -204,23 +207,25 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "agnav": {
       // Routes, distances, travel times & performance
-      const { data: routes } = await supabase
-        .from("nav_routes")
+      const { data: routesData } = await supabase
+        .from("nav_routes" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
+      const routes = (routesData || []) as any[];
 
-      const { data: sos } = await supabase
-        .from("sos_events")
+      const { data: sosData } = await supabase
+        .from("sos_events" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
+      const sos = (sosData || []) as any[];
 
-      const routeRows = (routes || []).map((r) => ({
+      const routeRows = routes.map((r: any) => ({
         dataset: "AGNav_Routes",
         route_id: r.id,
         created_at: r.created_at,
-        route_code: r.route_code || `R-${r.id.slice(0, 6)}`,
+        route_code: r.route_code || `R-${r.id?.slice?.(0, 6) || "000000"}`,
         start_point: r.start_point || "Accra Central Terminal",
         end_point: r.end_point || "Kumasi Distribution Hub",
         distance_km: r.distance_km || 248.5,
@@ -230,11 +235,11 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         sos_incident: false,
       }));
 
-      const sosRows = (sos || []).map((s) => ({
+      const sosRows = sos.map((s: any) => ({
         dataset: "AGNav_SOS_Incidents",
         route_id: s.id,
         created_at: s.created_at,
-        route_code: `SOS-${s.id.slice(0, 6)}`,
+        route_code: `SOS-${s.id?.slice?.(0, 6) || "000000"}`,
         start_point: s.position || "Coastal Waterway Transit",
         end_point: "Emergency Base Station",
         distance_km: 15.0,
@@ -300,20 +305,22 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "agtrans": {
       // Transport assignments, vehicle capacity, distances, delivery outcomes
-      const { data: requests } = await supabase
+      const { data: requestsData } = await supabase
         .from("agtrans_requests")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
+      const requests = (requestsData || []) as any[];
 
-      const { data: agreements } = await supabase
+      const { data: agreementsData } = await supabase
         .from("transport_agreements")
         .select("*")
         .gte("agreement_timestamp", sinceIso)
         .lte("agreement_timestamp", untilIso);
+      const agreements = (agreementsData || []) as any[];
 
-      rawData = (requests || []).map((req) => {
-        const ag = (agreements || []).find((a) => a.request_id === req.id);
+      rawData = requests.map((req: any) => {
+        const ag = agreements.find((a: any) => a.request_id === req.id);
         return {
           dataset: "AGTrans_Logistics",
           request_id: req.id,
@@ -442,12 +449,12 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         supabase.from("fish_ponds").select("*").limit(50),
       ]);
 
-      const alerts = alertsRes.data || [];
-      const tasks = tasksRes.data || [];
+      const alerts = (alertsRes.data || []) as any[];
+      const tasks = (tasksRes.data || []) as any[];
       const inputs = (inputsRes.data || []) as any[];
       const postHarvest = (postHarvestRes.data || []) as any[];
-      const requests = requestsRes.data || [];
-      const ponds = pondsRes.data || [];
+      const requests = (requestsRes.data || []) as any[];
+      const ponds = (pondsRes.data || []) as any[];
 
       const maxLen = Math.max(alerts.length, tasks.length, inputs.length, postHarvest.length, requests.length, 12);
 

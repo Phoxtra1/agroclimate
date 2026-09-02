@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 /** Global Pilot Mode — when ON, all subscription/paywall checks are bypassed. */
 export function usePilotMode() {
   const [enabled, setEnabled] = useState<boolean>(() => {
-    return localStorage.getItem("global_pilot_enabled") === "true";
+    const val = localStorage.getItem("global_pilot_enabled");
+    return val === null ? true : val === "true";
   });
   const [paywallDisabled, setPaywallDisabled] = useState<boolean>(() => {
     const val = localStorage.getItem("global_pilot_paywall_disabled");
