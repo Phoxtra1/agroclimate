@@ -130,7 +130,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const alertRows = (alerts || []).map((a) => ({
+      const alertRows = ((alerts || []) as any[]).map((a: any) => ({
         dataset: "AgroClimate_Disaster_Alerts",
         record_id: a.id,
         created_at: a.created_at,
@@ -177,10 +177,10 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         .gte("clock_in", sinceIso)
         .lte("clock_in", untilIso);
 
-      const taskMap = new Map((tasks || []).map((t) => [t.id, t]));
+      const taskMap = new Map(((tasks || []) as any[]).map((t: any) => [t.id, t]));
 
-      rawData = (tasks || []).map((t) => {
-        const sess = (sessions || []).find((s) => s.handler_id === t.handler_id);
+      rawData = ((tasks || []) as any[]).map((t: any) => {
+        const sess = ((sessions || []) as any[]).find((s: any) => s.handler_id === t.handler_id);
         return {
           dataset: "Handler_Task_Operations",
           task_id: t.id,
@@ -205,18 +205,18 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
     case "agnav": {
       // Routes, distances, travel times & performance
       const { data: routes } = await supabase
-        .from("nav_routes")
+        .from("nav_routes" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
       const { data: sos } = await supabase
-        .from("sos_events")
+        .from("sos_events" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const routeRows = (routes || []).map((r) => ({
+      const routeRows = ((routes || []) as any[]).map((r: any) => ({
         dataset: "AGNav_Routes",
         route_id: r.id,
         created_at: r.created_at,
@@ -230,7 +230,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         sos_incident: false,
       }));
 
-      const sosRows = (sos || []).map((s) => ({
+      const sosRows = ((sos || []) as any[]).map((s: any) => ({
         dataset: "AGNav_SOS_Incidents",
         route_id: s.id,
         created_at: s.created_at,
