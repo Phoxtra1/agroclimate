@@ -454,14 +454,14 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
       const chainRows: Record<string, any>[] = [];
 
       for (let i = 0; i < maxLen; i++) {
-        const weather = alerts[i % Math.max(alerts.length, 1)] || {
+        const weather: any = alerts[i % Math.max(alerts.length, 1)] || {
           created_at: new Date().toISOString(),
           alert_type: "weather_advisory",
           severity: "info",
           region: region || "Ashanti Region",
           title: "Favorable Rain Outlook",
         };
-        const task = tasks[i % Math.max(tasks.length, 1)] || {
+        const task: any = tasks[i % Math.max(tasks.length, 1)] || {
           id: `task_${i + 1}`,
           task_name: "Soil Prep & Planting",
           area_covered_ha: 2.4,
@@ -482,7 +482,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
           risk_override: "safe",
           storage_method: "Aerated Dry Storage",
         };
-        const transport = requests[i % Math.max(requests.length, 1)] || {
+        const transport: any = requests[i % Math.max(requests.length, 1)] || {
           tracking_code: `TRK-${1000 + i}`,
           distance_km: 112.0,
           status: "completed",
