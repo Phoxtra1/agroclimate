@@ -55,7 +55,7 @@ export default function Subscription() {
           Prices in USD. Paystack will charge in your local currency automatically.
         </p>
       </div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {PLANS.map((plan) => {
           const isCurrent = subscription?.plan === plan.id;
           return (
@@ -94,7 +94,7 @@ export default function Subscription() {
         })}
       </div>
       <p className="text-xs text-muted-foreground text-center mt-8">
-        Institutional (API) customers requiring invoicing: contact support@amineva.com.
+        Buyers and transport partners are pay-as-you-go — no subscription required; charges apply per order or trip.
       </p>
     </div>
   );

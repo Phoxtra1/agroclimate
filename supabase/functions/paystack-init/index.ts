@@ -12,7 +12,7 @@ const PLAN_PRICES_USD: Record<string, number> = {
   freemium: 0,
   pro: 35,
   enterprise: 75,
-  institutional: 250,
+  
 };
 
 // Paystack officially settles in: NGN, GHS, ZAR, KES, USD, EGP, XOF.
