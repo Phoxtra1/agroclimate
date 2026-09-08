@@ -67,7 +67,7 @@ function NavItems({ onClick, isAdmin }: { onClick?: () => void; isAdmin?: boolea
           )}
         </NavLink>
       ))}
-      {isAdmin && (
+      {(
         <NavLink
           to="/admin"
           onClick={onClick}
