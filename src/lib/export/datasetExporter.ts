@@ -117,20 +117,20 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
   switch (module) {
     case "agroclimate": {
       // Weather, forecasts, environmental alerts & AI advisories
-      const { data: alerts } = await supabase
+      const { data: alerts } = await (supabase as any)
         .from("disaster_alerts")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso)
         .order("created_at", { ascending: false });
 
-      const { data: aiLogs } = await supabase
+      const { data: aiLogs } = await (supabase as any)
         .from("ai_usage_logs")
         .select("id, action, model, latency_ms, ok, created_at")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const alertRows = (alerts || []).map((a) => ({
+      const alertRows = ((alerts || []) as any[]).map((a: any) => ({
         dataset: "AgroClimate_Disaster_Alerts",
         record_id: a.id,
         created_at: a.created_at,
@@ -164,23 +164,23 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "handler": {
       // Assignments, clock-in/out, tasks, quantities, farm area, inputs
-      const { data: tasks } = await supabase
+      const { data: tasks } = await (supabase as any)
         .from("handler_tasks")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso)
         .order("created_at", { ascending: false });
 
-      const { data: sessions } = await supabase
+      const { data: sessions } = await (supabase as any)
         .from("work_sessions")
         .select("*")
         .gte("clock_in", sinceIso)
         .lte("clock_in", untilIso);
 
-      const taskMap = new Map((tasks || []).map((t) => [t.id, t]));
+      const taskMap = new Map(((tasks || []) as any[]).map((t: any) => [t.id, t]));
 
-      rawData = (tasks || []).map((t) => {
-        const sess = (sessions || []).find((s) => s.handler_id === t.handler_id);
+      rawData = ((tasks || []) as any[]).map((t: any) => {
+        const sess = ((sessions || []) as any[]).find((s: any) => s.handler_id === t.handler_id);
         return {
           dataset: "Handler_Task_Operations",
           task_id: t.id,
@@ -204,19 +204,19 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "agnav": {
       // Routes, distances, travel times & performance
-      const { data: routes } = await supabase
-        .from("nav_routes")
+      const { data: routes } = await (supabase as any)
+        .from("nav_routes" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: sos } = await supabase
-        .from("sos_events")
+      const { data: sos } = await (supabase as any)
+        .from("sos_events" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const routeRows = (routes || []).map((r) => ({
+      const routeRows = ((routes || []) as any[]).map((r: any) => ({
         dataset: "AGNav_Routes",
         route_id: r.id,
         created_at: r.created_at,
@@ -230,7 +230,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         sos_incident: false,
       }));
 
-      const sosRows = (sos || []).map((s) => ({
+      const sosRows = ((sos || []) as any[]).map((s: any) => ({
         dataset: "AGNav_SOS_Incidents",
         route_id: s.id,
         created_at: s.created_at,
@@ -250,19 +250,19 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "market_link": {
       // Products, quantities, prices, demand & market activity
-      const { data: inputs } = await supabase
+      const { data: inputs } = await (supabase as any)
         .from("farmer_inputs" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: orders } = await supabase
+      const { data: orders } = await (supabase as any)
         .from("buyer_orders" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: prices } = await supabase
+      const { data: prices } = await (supabase as any)
         .from("price_intelligence" as any)
         .select("*");
 
@@ -300,13 +300,13 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "agtrans": {
       // Transport assignments, vehicle capacity, distances, delivery outcomes
-      const { data: requests } = await supabase
+      const { data: requests } = await (supabase as any)
         .from("agtrans_requests")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: agreements } = await supabase
+      const { data: agreements } = await (supabase as any)
         .from("transport_agreements")
         .select("*")
         .gte("agreement_timestamp", sinceIso)
@@ -336,7 +336,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "post_harvest": {
       // Harvest quantities, storage conditions, losses, post-harvest activities
-      const { data: entries } = await supabase
+      const { data: entries } = await (supabase as any)
         .from("post_harvest_entries" as any)
         .select("*")
         .gte("harvest_date", sinceIso.slice(0, 10))
@@ -361,7 +361,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "agro_inventory": {
       // Stock levels, stock movements & input usage
-      const { data: inputs } = await supabase
+      const { data: inputs } = await (supabase as any)
         .from("farmer_inputs" as any)
         .select("*")
         .gte("created_at", sinceIso)
@@ -385,13 +385,13 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "crops_livestock_aquaculture": {
       // Production, health, growth, feeding & farm observations
-      const { data: qrCodes } = await supabase
+      const { data: qrCodes } = await (supabase as any)
         .from("farm_qr_codes")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: ponds } = await supabase
+      const { data: ponds } = await (supabase as any)
         .from("fish_ponds")
         .select("*")
         .gte("created_at", sinceIso)
@@ -454,14 +454,14 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
       const chainRows: Record<string, any>[] = [];
 
       for (let i = 0; i < maxLen; i++) {
-        const weather = alerts[i % Math.max(alerts.length, 1)] || {
+        const weather: any = alerts[i % Math.max(alerts.length, 1)] || {
           created_at: new Date().toISOString(),
           alert_type: "weather_advisory",
           severity: "info",
           region: region || "Ashanti Region",
           title: "Favorable Rain Outlook",
         };
-        const task = tasks[i % Math.max(tasks.length, 1)] || {
+        const task: any = tasks[i % Math.max(tasks.length, 1)] || {
           id: `task_${i + 1}`,
           task_name: "Soil Prep & Planting",
           area_covered_ha: 2.4,
@@ -482,7 +482,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
           risk_override: "safe",
           storage_method: "Aerated Dry Storage",
         };
-        const transport = requests[i % Math.max(requests.length, 1)] || {
+        const transport: any = requests[i % Math.max(requests.length, 1)] || {
           tracking_code: `TRK-${1000 + i}`,
           distance_km: 112.0,
           status: "completed",
