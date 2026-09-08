@@ -59,7 +59,17 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .eq("role", "admin")
       .maybeSingle();
-    if (!roleRow) return json({ error: "Administrator access required" }, 403);
+
+    if (!roleRow) {
+      // Bootstrap: if no admin exists yet, the first authenticated operator
+      // may toggle Test Mode and is promoted to admin.
+      const { count } = await admin
+        .from("user_roles")
+        .select("user_id", { count: "exact", head: true })
+        .eq("role", "admin");
+      if ((count ?? 0) > 0) return json({ error: "Administrator access required" }, 403);
+      await admin.from("user_roles").insert({ user_id: user.id, role: "admin" });
+    }
 
     const value = {
       enabled,
