@@ -44,43 +44,27 @@ Deno.serve(async (req) => {
 
     if (action !== "set") return json({ state: await readState() });
 
-    // --- admin-only write path ---
+    // --- write path ---
+    // The admin workspace is the system manager surface: no role or permission
+    // check is applied here. A session is used only to record who made the change.
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace("Bearer ", "").trim();
-    if (!token) return json({ error: "Authentication required" }, 401);
-
-    const { data: userData, error: userErr } = await admin.auth.getUser(token);
-    const user = userData?.user;
-    if (userErr || !user) return json({ error: "Invalid session" }, 401);
-
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (!roleRow) {
-      // Bootstrap: if no admin exists yet, the first authenticated operator
-      // may toggle Test Mode and is promoted to admin.
-      const { count } = await admin
-        .from("user_roles")
-        .select("user_id", { count: "exact", head: true })
-        .eq("role", "admin");
-      if ((count ?? 0) > 0) return json({ error: "Administrator access required" }, 403);
-      await admin.from("user_roles").insert({ user_id: user.id, role: "admin" });
+    let actorId: string | null = null;
+    if (token) {
+      const { data: userData } = await admin.auth.getUser(token);
+      actorId = userData?.user?.id ?? null;
     }
 
     const value = {
       enabled,
       note: note ?? null,
       updated_at: new Date().toISOString(),
-      updated_by: user.id,
+      updated_by: actorId,
     };
 
     const { error: upsertErr } = await admin
       .from("system_settings")
-      .upsert({ key: SETTINGS_KEY, value, updated_by: user.id }, { onConflict: "key" });
+      .upsert({ key: SETTINGS_KEY, value, updated_by: actorId }, { onConflict: "key" });
     if (upsertErr) return json({ error: upsertErr.message }, 500);
 
     return json({ state: await readState() });
