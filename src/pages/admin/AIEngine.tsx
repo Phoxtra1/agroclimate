@@ -230,7 +230,7 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                {modelIds.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {modelIds.map(m => <SelectItem key={m} value={m}>{engineName(m)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -260,7 +260,7 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
             <div key={l.id} className="flex items-center gap-2 p-2 border-b last:border-0">
               <Badge variant={l.ok ? "default" : "destructive"} className="text-[10px]">{l.ok ? "OK" : "ERR"}</Badge>
               <span className="font-mono">{l.action}</span>
-              <span className="text-muted-foreground truncate">{l.model}</span>
+              <span className="text-muted-foreground truncate">{engineName(l.model)}</span>
               <span className="ml-auto text-muted-foreground">{l.latency_ms ?? "—"}ms</span>
               <span className="text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span>
             </div>
