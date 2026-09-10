@@ -169,6 +169,8 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
 
   const actions = useMemo(() => Array.from(new Set(logs.map(l => l.action))).sort(), [logs]);
   const modelIds = useMemo(() => Array.from(new Set(logs.map(l => l.model))).sort(), [logs]);
+  const engineName = (raw: string) =>
+    models.find((m: any) => m.gatewayModel === raw || m.id === raw)?.label ?? "Agyenkwa Engine";
 
   const filtered = useMemo(() => logs.filter(l => {
     const t = new Date(l.created_at).getTime();
