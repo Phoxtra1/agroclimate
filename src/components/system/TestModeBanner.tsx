@@ -23,9 +23,7 @@ export function TestModeBanner() {
     >
       <FlaskConical className="h-4 w-4 shrink-0" />
       <span className="font-semibold">Test Mode active</span>
-      <span className="text-muted-foreground hidden sm:inline">
-        · {note || "Safety and demo overrides engaged — all features unlocked, payments bypassed."}
-      </span>
+      {note && <span className="text-muted-foreground hidden sm:inline">· {note}</span>}
     </div>
   );
 }

@@ -83,7 +83,7 @@ export default function AIEngine() {
     const m = models.find((x) => x.id === id);
     if (!m) return;
     await setActiveModel(m);
-    toast({ title: `Active AI model: ${m.label}`, description: "Every AgroClimate component will use this engine on the next request." });
+    toast({ title: `Active AI model: ${m.label}`, description: "All intelligence modules will use this engine on the next request." });
   };
 
   const totalCalls = logs.length;
@@ -105,7 +105,7 @@ export default function AIEngine() {
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Zap className="h-4 w-4" /> Active AI Model</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
-            <Label>Model powering all AgroClimate AI components</Label>
+            <Label>Model powering all Agyenkwa intelligence modules</Label>
             <Select value={model.id} onValueChange={chooseModel} disabled={loading}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -115,7 +115,6 @@ export default function AIEngine() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">{models.find((m) => m.id === model.id)?.description}</p>
-            <div className="text-xs text-muted-foreground">Gateway route: <code>{model.gatewayModel}</code></div>
           </div>
         </CardContent>
       </Card>
@@ -131,7 +130,7 @@ export default function AIEngine() {
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><ScrollText className="h-4 w-4" /> Global System Prompt</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <Textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Guidance appended to every AI call across AgroClimate modules." />
+          <Textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Guidance appended to every AI call across all modules." />
           <Button onClick={savePrompt} disabled={savingPrompt}><Save className="mr-2 h-4 w-4" />{savingPrompt ? "Saving…" : "Save Prompt"}</Button>
         </CardContent>
       </Card>
@@ -170,6 +169,8 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
 
   const actions = useMemo(() => Array.from(new Set(logs.map(l => l.action))).sort(), [logs]);
   const modelIds = useMemo(() => Array.from(new Set(logs.map(l => l.model))).sort(), [logs]);
+  const engineName = (raw: string) =>
+    models.find((m: any) => m.gatewayModel === raw || m.id === raw)?.label ?? "Agyenkwa Engine";
 
   const filtered = useMemo(() => logs.filter(l => {
     const t = new Date(l.created_at).getTime();
@@ -229,7 +230,7 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                {modelIds.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {modelIds.map(m => <SelectItem key={m} value={m}>{engineName(m)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -259,7 +260,7 @@ function AiLogsPanel({ logs, models, totalCalls, ok, avgMs }: { logs: UsageRow[]
             <div key={l.id} className="flex items-center gap-2 p-2 border-b last:border-0">
               <Badge variant={l.ok ? "default" : "destructive"} className="text-[10px]">{l.ok ? "OK" : "ERR"}</Badge>
               <span className="font-mono">{l.action}</span>
-              <span className="text-muted-foreground truncate">{l.model}</span>
+              <span className="text-muted-foreground truncate">{engineName(l.model)}</span>
               <span className="ml-auto text-muted-foreground">{l.latency_ms ?? "—"}ms</span>
               <span className="text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span>
             </div>
