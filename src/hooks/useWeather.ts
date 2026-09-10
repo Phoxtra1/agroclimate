@@ -220,6 +220,21 @@ export function useWeather(lat?: number, lon?: number) {
     };
 
     fetchWeather();
+
+    // Keep conditions (and every alert derived from them) current in real time:
+    // re-check every 10 minutes, when the app regains focus, and when the
+    // device comes back online.
+    const interval = setInterval(fetchWeather, 10 * 60 * 1000);
+    const onWake = () => { if (document.visibilityState === "visible") fetchWeather(); };
+    window.addEventListener("focus", onWake);
+    window.addEventListener("online", fetchWeather);
+    document.addEventListener("visibilitychange", onWake);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onWake);
+      window.removeEventListener("online", fetchWeather);
+      document.removeEventListener("visibilitychange", onWake);
+    };
   }, [lat, lon, refreshTrigger]);
 
   return { forecast, loading, isLive, lastUpdated, refresh };
