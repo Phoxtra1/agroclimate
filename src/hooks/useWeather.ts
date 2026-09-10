@@ -161,7 +161,8 @@ export function useWeather(lat?: number, lon?: number) {
   useEffect(() => {
     if (lat === undefined || lon === undefined) return;
 
-    // Try cache first
+    // Show cached conditions instantly, then keep refreshing in the background
+    let servedFromCache = false;
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached && refreshTrigger === 0) {
       try {
@@ -171,7 +172,7 @@ export function useWeather(lat?: number, lon?: number) {
           setForecast(parsed.data);
           setIsLive(true);
           setLastUpdated(new Date(parsed.timestamp));
-          return;
+          servedFromCache = true;
         }
       } catch { /* ignore bad cache */ }
     }
@@ -219,7 +220,7 @@ export function useWeather(lat?: number, lon?: number) {
       }
     };
 
-    fetchWeather();
+    if (!servedFromCache) fetchWeather();
 
     // Keep conditions (and every alert derived from them) current in real time:
     // re-check every 10 minutes, when the app regains focus, and when the
