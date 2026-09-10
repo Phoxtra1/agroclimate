@@ -115,7 +115,6 @@ export default function AIEngine() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">{models.find((m) => m.id === model.id)?.description}</p>
-            <div className="text-xs text-muted-foreground">Gateway route: <code>{model.gatewayModel}</code></div>
           </div>
         </CardContent>
       </Card>
