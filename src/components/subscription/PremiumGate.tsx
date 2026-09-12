@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Lock, Sparkles, ArrowLeft } from "lucide-react";
 import { PremiumComponent, COMPONENT_LABELS, PLANS } from "@/lib/subscriptions/plans";
 import { useSubscription } from "@/hooks/useSubscription";
-import { usePilotMode } from "@/hooks/useTestMode";
+import { usePilotMode } from "@/hooks/usePilotMode";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 import { Button } from "@/components/ui/button";
 
