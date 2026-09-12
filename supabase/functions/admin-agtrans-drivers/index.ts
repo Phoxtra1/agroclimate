@@ -27,7 +27,7 @@ function json(body: unknown, status = 200) {
 }
 
 /**
- * The admin workspace (/admin) is reached through the central Amineva console,
+ * The admin workspace (/admin) is reached through the central admin console,
  * so a Supabase admin JWT is not always present. Access is allowed when either
  *  - the caller is authenticated and holds the `admin` role, or
  *  - no admin role has been provisioned yet (bootstrap window).

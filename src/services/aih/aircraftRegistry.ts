@@ -18,7 +18,7 @@ const DEFAULT_AIRCRAFT: AircraftAsset[] = [
     id: "active-drone-1",
     name: "Dipa Multi-Spectral UAV",
     type: "drone",
-    manufacturer: "Amineva Systems",
+    manufacturer: "AgroClimate Flight Systems",
     model: "AgroCop-X4",
     protocol: "simulator",
     status: "disconnected",

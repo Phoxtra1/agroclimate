@@ -214,9 +214,8 @@ function BuyerRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  // Admin workspace is reached via the central Amineva Console
-  // (https://agro.amineva.com/admin). No local auth gate is applied —
-  // the identity layer upstream controls access.
+  // Admin workspace is reached via the central Admin Console.
+  // No local auth gate is applied — the identity layer upstream controls access.
   return <AppLayout hideSidebar>{children}</AppLayout>;
 }
 

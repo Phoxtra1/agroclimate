@@ -575,8 +575,8 @@ export async function generateExportFile(
     content = JSON.stringify(
       {
         system: "AgroClimate Data Export Protocol",
-        version: "AGC v1.4",
-        organization: "Amineva Global",
+        version: "AGC v1.6",
+        organization: "AgroClimate",
         module: options.module,
         export_options: options,
         generated_at: new Date().toISOString(),

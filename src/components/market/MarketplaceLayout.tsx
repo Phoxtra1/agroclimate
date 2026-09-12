@@ -68,7 +68,7 @@ export function MarketplaceLayout({
       </header>
       <main className="flex-1 container mx-auto px-3 py-4">{children}</main>
       <footer className="border-t py-3 text-center text-[11px] text-muted-foreground">
-        Market Link · A public agricultural trade access point of AgroClimate by Amineva Global.
+        Market Link · A public agricultural trade access point of AgroClimate.
       </footer>
     </div>
   );

@@ -389,8 +389,8 @@ function Metric({ label, value, small, suffix }: { label: string; value: number;
 /**
  * AdminDashboard
  * --------------
- * AgroClimate admins authenticate centrally via Amineva (https://amineva.com)
- * and reach this workspace through https://agro.amineva.com/admin.
+ * AgroClimate admins authenticate centrally via Central Admin identity
+ * and reach this workspace through the admin portal.
  * No local sign-in gate is rendered here — the central identity layer
  * controls workspace access. Anyone hitting this route lands on the
  * workspace immediately.
@@ -452,14 +452,8 @@ export default function AdminDashboard() {
           </nav>
           <div className="px-3 py-4 border-t border-border">
             <p className="text-[11px] text-muted-foreground px-3">
-              Authenticated via Amineva central identity
+              Authenticated via Central Admin identity
             </p>
-            <a
-              href="https://amineva.com/account"
-              className="block mt-2 px-3 text-xs text-primary hover:underline"
-            >
-              Manage central account ↗
-            </a>
           </div>
         </aside>
 
@@ -483,7 +477,7 @@ export default function AdminDashboard() {
               </nav>
               <div className="mt-6 pt-4 border-t border-border">
                 <p className="text-[11px] text-muted-foreground">
-                  Authenticated via Amineva central identity
+                  Authenticated via Central Admin identity
                 </p>
               </div>
             </SheetContent>

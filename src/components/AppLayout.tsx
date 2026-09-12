@@ -123,7 +123,7 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
                 <img src={agyenkwaIcon} alt={APP_NAME} className="h-8 w-8" />
                 <div className="flex flex-col">
                   <span className="font-bold text-sidebar-foreground">{APP_NAME}</span>
-                  <span className="text-[9px] text-sidebar-foreground/60">by Amineva Global</span>
+                  <span className="text-[9px] text-sidebar-foreground/60">Intelligence Platform</span>
                 </div>
               </div>
               <nav className="space-y-1">
@@ -176,7 +176,7 @@ export function AppLayout({ children, hideSidebar }: { children: ReactNode; hide
               <img src={agyenkwaIcon} alt={APP_NAME} className="h-9 w-9" />
               <div className="flex flex-col leading-tight">
                 <span className="font-bold text-lg text-sidebar-foreground">{APP_NAME}</span>
-                <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL} · by Amineva Global</span>
+                <span className="text-[10px] font-semibold text-primary">{APP_VERSION_LABEL}</span>
               </div>
             </div>
             <NotificationsButton />

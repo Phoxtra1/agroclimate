@@ -65,7 +65,7 @@ serve(async (req) => {
       : "https://api.africastalking.com/version1/messaging";
 
     let sentCount = 0;
-    const message = `AgroClimate Alert:\n${criticalAlerts.join("\n\n")}\n\nStay safe! - AgroClimate by Amineva`;
+    const message = `AgroClimate Alert:\n${criticalAlerts.join("\n\n")}\n\nStay safe! - AgroClimate`;
 
     for (const profile of profiles) {
       let phone = profile.phone?.trim();

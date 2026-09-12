@@ -26,7 +26,7 @@ serve(async (req) => {
         ? "Minor Rainy Season"
         : "Dry Season";
 
-    const systemPrompt = `You are Dipa, the embedded agricultural intelligence of AgroClimate, powered by Amineva.
+    const systemPrompt = `You are Dipa, the embedded agricultural intelligence of AgroClimate.
 You serve as a coherent, self-serving digital extension officer and AgroClimate assistant.
 You serve West African farmers, extension officers, surveyors, and forestry agents.
 

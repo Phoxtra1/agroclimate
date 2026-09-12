@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import aminevaLogo from "@/assets/amineva-logo.png";
+import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 
 type Status = "loading" | "ready" | "success" | "error";
 
@@ -82,8 +82,8 @@ export default function ResetPassword() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-3">
           <img
-            src={aminevaLogo}
-            alt="Amineva Logo"
+            src={agyenkwaIcon}
+            alt="AgroClimate Logo"
             className="h-12 w-12 rounded-full mx-auto"
           />
           <CardTitle>

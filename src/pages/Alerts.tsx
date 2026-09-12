@@ -10,6 +10,12 @@ import {
   X,
   Sparkles,
   Activity,
+  ShieldCheck,
+  History,
+  Info,
+  Play,
+  CheckCircle2,
+  ShieldAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,7 +23,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
 import { useUserAlerts } from "@/hooks/useUserAlerts";
-import type { EnrichedAlert } from "@/hooks/useUserAlerts";
+import type { EnrichedAlert, AlertLifecycleState } from "@/hooks/useUserAlerts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type AlertFilter =
   | "all"
@@ -108,9 +115,34 @@ export default function Alerts() {
   const [showTicketForm, setShowTicketForm] = useState(false);
   const [ticketLoading, setTicketLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<AlertFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "mitigating" | "resolved">("all");
   const [refreshing, setRefreshing] = useState(false);
   const [feedbackState, setFeedbackState] = useState<Record<string, AlertFeedback>>(readFeedbackState);
   const [ticket, setTicket] = useState({ subject: "", description: "", category: "general" });
+
+  // V1.6 Alert Lifecycle State Map (Local Storage persisted)
+  const [lifecycleMap, setLifecycleMap] = useState<
+    Record<string, { state: AlertLifecycleState; mitigationAction?: string; notes?: string; audit: { timestamp: string; event: string; actor: string }[] }>
+  >(() => {
+    try {
+      return JSON.parse(localStorage.getItem("alert_lifecycle_v16_map") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const [mitigationModalAlert, setMitigationModalAlert] = useState<EnrichedAlert | null>(null);
+  const [mitigationActionInput, setMitigationActionInput] = useState("");
+  const [mitigationNotesInput, setMitigationNotesInput] = useState("");
+
+  const [auditModalAlert, setAuditModalAlert] = useState<EnrichedAlert | null>(null);
+  const [lineageModalAlert, setLineageModalAlert] = useState<EnrichedAlert | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("alert_lifecycle_v16_map", JSON.stringify(lifecycleMap));
+    } catch {}
+  }, [lifecycleMap]);
 
   const selectedAdvisory = useMemo(() => {
     if (!aiAdvisory || activeFilter === "all") return null;
@@ -131,10 +163,19 @@ export default function Alerts() {
 
   const filteredAlerts = useMemo(() => {
     return alerts.filter((alert) => {
-      if (activeFilter === "all") return true;
-      return inferAlertFilter(alert) === activeFilter;
+      // Category filter
+      if (activeFilter !== "all" && inferAlertFilter(alert) !== activeFilter) {
+        return false;
+      }
+      // Status filter
+      const lc = lifecycleMap[alert.id]?.state || alert.lifecycleState;
+      if (statusFilter === "active" && (lc === "resolved" || lc === "in_mitigation")) return false;
+      if (statusFilter === "mitigating" && lc !== "in_mitigation") return false;
+      if (statusFilter === "resolved" && lc !== "resolved") return false;
+
+      return true;
     });
-  }, [activeFilter, alerts]);
+  }, [activeFilter, statusFilter, alerts, lifecycleMap]);
 
   const newAlerts = filteredAlerts.filter((alert) => !alert.isRead);
   const earlierAlerts = filteredAlerts.filter((alert) => alert.isRead);
@@ -142,6 +183,62 @@ export default function Alerts() {
   const recordFeedback = useCallback((alertId: string, value: AlertFeedback) => {
     setFeedbackState((prev) => ({ ...prev, [alertId]: value }));
   }, []);
+
+  const handleStartMitigation = (alert: EnrichedAlert) => {
+    setMitigationModalAlert(alert);
+    const existing = lifecycleMap[alert.id];
+    setMitigationActionInput(existing?.mitigationAction || "Deploy field drainage and clear culvert channels");
+    setMitigationNotesInput(existing?.notes || "");
+  };
+
+  const saveMitigationPlan = async () => {
+    if (!mitigationModalAlert) return;
+    const alertId = mitigationModalAlert.id;
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setLifecycleMap((prev) => {
+      const existingAudit = prev[alertId]?.audit || mitigationModalAlert.auditLog || [];
+      return {
+        ...prev,
+        [alertId]: {
+          state: "in_mitigation",
+          mitigationAction: mitigationActionInput,
+          notes: mitigationNotesInput,
+          audit: [
+            ...existingAudit,
+            { timestamp: nowStr, event: `Mitigation Started: ${mitigationActionInput}`, actor: user?.email || "Operator" },
+          ],
+        },
+      };
+    });
+
+    await markRead(alertId);
+    toast({ title: "Mitigation Workflow Started", description: mitigationModalAlert.title });
+    setMitigationModalAlert(null);
+  };
+
+  const handleResolveAlert = async (alert: EnrichedAlert) => {
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setLifecycleMap((prev) => {
+      const existingAudit = prev[alert.id]?.audit || alert.auditLog || [];
+      return {
+        ...prev,
+        [alert.id]: {
+          state: "resolved",
+          mitigationAction: prev[alert.id]?.mitigationAction || "Mitigation completed",
+          notes: prev[alert.id]?.notes || "Resolved",
+          audit: [
+            ...existingAudit,
+            { timestamp: nowStr, event: "Alert Risk Resolved & Verified", actor: user?.email || "Operator" },
+          ],
+        },
+      };
+    });
+
+    await markRead(alert.id);
+    recordFeedback(alert.id, "applied");
+    toast({ title: "Alert Marked as Resolved", description: alert.title });
+  };
 
   const handleApplied = useCallback(async (alert: EnrichedAlert) => {
     await markRead(alert.id);
@@ -207,18 +304,42 @@ export default function Alerts() {
 
   const renderAlert = (alert: EnrichedAlert) => {
     const feedback = feedbackState[alert.id];
-    const isAi = alert.isAiBacked;
+    const lcData = lifecycleMap[alert.id];
+    const lcState: AlertLifecycleState = lcData?.state || alert.lifecycleState;
 
     return (
       <div
         key={alert.id}
-        className="rounded-xl border p-4 shadow-sm transition-all duration-300 border-border bg-card"
+        className={`rounded-xl border p-4 shadow-sm transition-all duration-300 ${
+          lcState === "resolved"
+            ? "border-success/30 bg-success/5"
+            : lcState === "in_mitigation"
+            ? "border-warning/30 bg-warning/5"
+            : "border-border bg-card"
+        }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-semibold">{alert.title}</h3>
               <Badge variant="outline">{filterLabel(inferAlertFilter(alert))}</Badge>
+
+              {/* V1.6 Lifecycle Badge */}
+              <Badge
+                variant={
+                  lcState === "resolved"
+                    ? "secondary"
+                    : lcState === "in_mitigation"
+                    ? "outline"
+                    : alert.type === "danger"
+                    ? "destructive"
+                    : "outline"
+                }
+                className="capitalize text-[10px]"
+              >
+                {lcState === "in_mitigation" ? "⚡ Mitigating" : lcState === "resolved" ? "✓ Resolved" : lcState}
+              </Badge>
+
               {!alert.isRead && <span className="h-2 w-2 rounded-full bg-destructive" />}
               {feedback && (
                 <Badge variant="secondary" className="capitalize">
@@ -228,6 +349,14 @@ export default function Alerts() {
             </div>
 
             <p className="text-sm text-muted-foreground">{alert.message}</p>
+
+            {lcData?.mitigationAction && (
+              <div className="p-2 rounded bg-muted/50 border border-border/40 text-xs space-y-0.5">
+                <span className="font-semibold text-primary">Active Mitigation Plan:</span>
+                <p className="text-foreground">{lcData.mitigationAction}</p>
+                {lcData.notes && <p className="text-muted-foreground text-[11px]">Notes: {lcData.notes}</p>}
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
               <span>{alert.time}</span>
@@ -241,22 +370,41 @@ export default function Alerts() {
                   <span>{forecast[0].rainProb}% rain</span>
                 </>
               )}
+              <span>•</span>
+              <button
+                onClick={() => setLineageModalAlert(alert)}
+                className="text-primary hover:underline font-medium inline-flex items-center gap-1"
+              >
+                <Info className="h-3 w-3" /> Lineage & Transparency
+              </button>
             </div>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => handleApplied(alert)}>
-            <Check className="mr-1 h-3.5 w-3.5" /> Applied
+          {lcState !== "resolved" && (
+            <Button size="sm" variant="default" className="bg-primary text-primary-foreground" onClick={() => handleStartMitigation(alert)}>
+              <Play className="mr-1 h-3.5 w-3.5" /> Mitigation Plan
+            </Button>
+          )}
+
+          {lcState !== "resolved" ? (
+            <Button size="sm" variant="outline" onClick={() => handleResolveAlert(alert)}>
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-success" /> Mark Resolved
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => handleApplied(alert)}>
+              <Check className="mr-1 h-3.5 w-3.5" /> Re-open Plan
+            </Button>
+          )}
+
+          <Button size="sm" variant="ghost" onClick={() => setAuditModalAlert(alert)}>
+            <History className="mr-1 h-3.5 w-3.5" /> Audit Trail
           </Button>
+
           <Button size="sm" variant="outline" onClick={() => handleIgnore(alert)}>
             <X className="mr-1 h-3.5 w-3.5" /> Ignore
           </Button>
-          {!alert.isRead && (
-            <Button size="sm" variant="outline" onClick={() => markRead(alert.id)}>
-              Mark as read
-            </Button>
-          )}
           <Button size="sm" variant="outline" onClick={() => handleDelete(alert)}>
             <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
           </Button>
@@ -304,18 +452,36 @@ export default function Alerts() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {filterOptions.map((option) => (
-          <Button
-            key={option}
-            size="sm"
-            variant={activeFilter === option ? "default" : "outline"}
-            onClick={() => setActiveFilter(option)}
-            className="capitalize"
-          >
-            {filterLabel(option)}
-          </Button>
-        ))}
+      {/* Filter Toolbar (Category + Lifecycle Status) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border p-3 rounded-xl">
+        <div className="flex flex-wrap gap-1.5">
+          {filterOptions.map((option) => (
+            <Button
+              key={option}
+              size="sm"
+              variant={activeFilter === option ? "default" : "ghost"}
+              onClick={() => setActiveFilter(option)}
+              className="capitalize text-xs h-7 px-2.5"
+            >
+              {filterLabel(option)}
+            </Button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border border-border text-xs">
+          <span className="px-2 text-[10px] font-semibold text-muted-foreground uppercase">Status:</span>
+          {(["all", "active", "mitigating", "resolved"] as const).map((st) => (
+            <Button
+              key={st}
+              size="sm"
+              variant={statusFilter === st ? "default" : "ghost"}
+              onClick={() => setStatusFilter(st)}
+              className="capitalize text-[11px] h-6 px-2"
+            >
+              {st}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {showTicketForm && (
@@ -510,6 +676,106 @@ export default function Alerts() {
           </div>
         </div>
       )}
+
+      {/* Mitigation Workflow Dialog */}
+      <Dialog open={!!mitigationModalAlert} onOpenChange={(open) => !open && setMitigationModalAlert(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Play className="h-4 w-4 text-primary" /> Start Mitigation Workflow
+            </DialogTitle>
+            <DialogDescription>
+              Action plan for "{mitigationModalAlert?.title}" in {position.locationName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Mitigation Action Plan</label>
+              <Input
+                value={mitigationActionInput}
+                onChange={(e) => setMitigationActionInput(e.target.value)}
+                placeholder="Describe action step e.g. Clear drainage culvert"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Operational Notes / Field Logs</label>
+              <Textarea
+                rows={3}
+                value={mitigationNotesInput}
+                onChange={(e) => setMitigationNotesInput(e.target.value)}
+                placeholder="Assignee, expected completion, equipment required..."
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setMitigationModalAlert(null)}>Cancel</Button>
+            <Button size="sm" onClick={saveMitigationPlan}>Confirm & Start Mitigation</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Audit History Trail Dialog */}
+      <Dialog open={!!auditModalAlert} onOpenChange={(open) => !open && setAuditModalAlert(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" /> Lifecycle Audit History
+            </DialogTitle>
+            <DialogDescription>
+              Chronological log for alert ID: {auditModalAlert?.id}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 max-h-[50vh] overflow-y-auto">
+            {((auditModalAlert && lifecycleMap[auditModalAlert.id]?.audit) || auditModalAlert?.auditLog || []).map((entry, i) => (
+              <div key={i} className="flex items-start gap-3 p-2.5 rounded bg-muted/40 border border-border/40 text-xs">
+                <span className="h-2 w-2 rounded-full bg-primary mt-1 shrink-0" />
+                <div className="space-y-0.5 flex-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-foreground">{entry.event}</span>
+                    <span className="text-[10px] text-muted-foreground">{entry.timestamp}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Actor: {entry.actor}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" size="sm" onClick={() => setAuditModalAlert(null)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lineage & Transparency Modal */}
+      <Dialog open={!!lineageModalAlert} onOpenChange={(open) => !open && setLineageModalAlert(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Info className="h-4 w-4 text-primary" /> Data Lineage & Transparency
+            </DialogTitle>
+            <DialogDescription>
+              Technical evaluation provenance for "{lineageModalAlert?.title}"
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs text-muted-foreground">
+            <div className="p-3 rounded-lg bg-muted/40 border border-border/40 space-y-1">
+              <p><strong className="text-foreground">Data Provider Stream:</strong> {lineageModalAlert?.lineage.source}</p>
+              <p><strong className="text-foreground">Model Confidence Rating:</strong> {lineageModalAlert?.lineage.confidence}% Verified</p>
+              <p><strong className="text-foreground">Evaluation Methodology:</strong> {lineageModalAlert?.lineage.method}</p>
+              <p><strong className="text-foreground">Geographic Coordinates:</strong> Lat {position.lat.toFixed(4)}, Lon {position.lon.toFixed(4)}</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" size="sm" onClick={() => setLineageModalAlert(null)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

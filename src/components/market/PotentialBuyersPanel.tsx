@@ -66,7 +66,7 @@ export function PotentialBuyersPanel() {
     setSelectedBuyer(buyer);
     setOutreachDraft(
       buyer.outreach_draft ||
-        `Dear Sourcing Team at ${buyer.company_name},\n\nWe identified your public procurement requirements for ${buyer.product_interest}.\nAgroClimate connects verified agricultural producers with international market channels.\n\nBest regards,\nAmineva Global Sourcing Desk`
+        `Dear Sourcing Team at ${buyer.company_name},\n\nWe identified your public procurement requirements for ${buyer.product_interest}.\nAgroClimate connects verified agricultural producers with international market channels.\n\nBest regards,\nAgroClimate Sourcing Desk`
     );
   };
 
