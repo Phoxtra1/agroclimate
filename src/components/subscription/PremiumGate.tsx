@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Lock, Sparkles, ArrowLeft } from "lucide-react";
 import { PremiumComponent, COMPONENT_LABELS, PLANS } from "@/lib/subscriptions/plans";
 import { useSubscription } from "@/hooks/useSubscription";
-import { usePilotMode } from "@/hooks/usePilotMode";
+import { useTestMode } from "@/hooks/useTestMode";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 import { Button } from "@/components/ui/button";
 
@@ -22,13 +22,13 @@ export function PremiumGate({ component, children }: Props) {
   const location = useLocation();
   const [dialogOpen, setDialogOpen] = useState(true);
 
-  const { enabled: pilotEnabled, paywallDisabled, loading: pilotLoading } = usePilotMode();
+  const { enabled: testEnabled, paywallDisabled, loading: testLoading } = useTestMode();
   const { loading: subLoading, hasAccess } = useSubscription();
 
   // Test mode active check: when pilot/test mode is enabled and paywalls are disabled, bypass paywall
-  const isTestModeActive = pilotEnabled && paywallDisabled;
+  const isTestModeActive = testEnabled && paywallDisabled;
 
-  if (pilotLoading || subLoading) {
+  if (testLoading || subLoading) {
     return <>{children}</>;
   }
 
