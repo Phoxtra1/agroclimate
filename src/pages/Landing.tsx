@@ -124,7 +124,7 @@ export default function Landing() {
                   </Button>
                 </Link>
               </div>
-              <p className="text-xs font-semibold text-primary mb-2">{APP_VERSION_LABEL} · by Amineva Global</p>
+              <p className="text-xs font-semibold text-primary mb-2">{APP_VERSION_LABEL}</p>
               <h2 className="text-3xl lg:text-5xl font-extrabold text-foreground leading-tight mb-4">
                 Global Agricultural &amp; <span className="text-gradient-primary">Climate Intelligence</span>
               </h2>
