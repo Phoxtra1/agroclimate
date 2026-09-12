@@ -18,11 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Layers, Plane, Settings, Users,
-  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database
+  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database, LogOut
 } from "lucide-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
+import { useAuth } from "@/hooks/useAuth";
 
 type EngineKey =
   | "overview" | "data-export" | "alert" | "ai" | "flight" | "system"
@@ -398,6 +399,12 @@ function Metric({ label, value, small, suffix }: { label: string; value: number;
 export default function AdminDashboard() {
   const [activeEngine, setActiveEngine] = useState<EngineKey>("overview");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.assign("/");
+  };
 
   const renderEngine = () => {
     switch (activeEngine) {
@@ -451,15 +458,9 @@ export default function AdminDashboard() {
             <NavButtons />
           </nav>
           <div className="px-3 py-4 border-t border-border">
-            <p className="text-[11px] text-muted-foreground px-3">
-              Authenticated via Amineva central identity
-            </p>
-            <a
-              href="https://amineva.com/account"
-              className="block mt-2 px-3 text-xs text-primary hover:underline"
-            >
-              Manage central account ↗
-            </a>
+            <Button variant="ghost" onClick={handleSignOut} className="w-full justify-start text-muted-foreground hover:text-foreground">
+              <LogOut className="mr-2 h-4 w-4" /> Sign out
+            </Button>
           </div>
         </aside>
 
@@ -482,9 +483,9 @@ export default function AdminDashboard() {
                 <NavButtons onClick={() => setSheetOpen(false)} />
               </nav>
               <div className="mt-6 pt-4 border-t border-border">
-                <p className="text-[11px] text-muted-foreground">
-                  Authenticated via Amineva central identity
-                </p>
+                <Button variant="ghost" onClick={handleSignOut} className="w-full justify-start text-muted-foreground hover:text-foreground">
+                  <LogOut className="mr-2 h-4 w-4" /> Sign out
+                </Button>
               </div>
             </SheetContent>
           </Sheet>
