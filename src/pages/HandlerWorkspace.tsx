@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
+import { HandlerDashboard } from "@/components/handler/HandlerDashboard";
 
 export default function HandlerWorkspace() {
   const { user, signOut } = useAuth();
@@ -225,6 +226,9 @@ export default function HandlerWorkspace() {
             <span className="text-xs">Clock Out</span>
           </Button>
         </div>
+
+        {/* Live dashboard: hours, completed tasks, open issues, GPS */}
+        <HandlerDashboard handlerId={handler.id} activeSession={activeSession} tasks={tasks} />
 
         {activeSession && (
           <Card className="border-primary/30 bg-primary/5">

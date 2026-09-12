@@ -125,7 +125,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
         .order("created_at", { ascending: false });
       const alerts = (alertsData || []) as any[];
 
-      const { data: aiLogs } = await supabase
+      const { data: aiLogs } = await (supabase as any)
         .from("ai_usage_logs")
         .select("id, action, model, latency_ms, ok, created_at")
         .gte("created_at", sinceIso)
@@ -255,19 +255,19 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "market_link": {
       // Products, quantities, prices, demand & market activity
-      const { data: inputs } = await supabase
+      const { data: inputs } = await (supabase as any)
         .from("farmer_inputs" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: orders } = await supabase
+      const { data: orders } = await (supabase as any)
         .from("buyer_orders" as any)
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: prices } = await supabase
+      const { data: prices } = await (supabase as any)
         .from("price_intelligence" as any)
         .select("*");
 
@@ -343,7 +343,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "post_harvest": {
       // Harvest quantities, storage conditions, losses, post-harvest activities
-      const { data: entries } = await supabase
+      const { data: entries } = await (supabase as any)
         .from("post_harvest_entries" as any)
         .select("*")
         .gte("harvest_date", sinceIso.slice(0, 10))
@@ -368,7 +368,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "agro_inventory": {
       // Stock levels, stock movements & input usage
-      const { data: inputs } = await supabase
+      const { data: inputs } = await (supabase as any)
         .from("farmer_inputs" as any)
         .select("*")
         .gte("created_at", sinceIso)
@@ -392,13 +392,13 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
 
     case "crops_livestock_aquaculture": {
       // Production, health, growth, feeding & farm observations
-      const { data: qrCodes } = await supabase
+      const { data: qrCodes } = await (supabase as any)
         .from("farm_qr_codes")
         .select("*")
         .gte("created_at", sinceIso)
         .lte("created_at", untilIso);
 
-      const { data: ponds } = await supabase
+      const { data: ponds } = await (supabase as any)
         .from("fish_ponds")
         .select("*")
         .gte("created_at", sinceIso)
@@ -461,14 +461,14 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
       const chainRows: Record<string, any>[] = [];
 
       for (let i = 0; i < maxLen; i++) {
-        const weather = alerts[i % Math.max(alerts.length, 1)] || {
+        const weather: any = alerts[i % Math.max(alerts.length, 1)] || {
           created_at: new Date().toISOString(),
           alert_type: "weather_advisory",
           severity: "info",
           region: region || "Ashanti Region",
           title: "Favorable Rain Outlook",
         };
-        const task = tasks[i % Math.max(tasks.length, 1)] || {
+        const task: any = tasks[i % Math.max(tasks.length, 1)] || {
           id: `task_${i + 1}`,
           task_name: "Soil Prep & Planting",
           area_covered_ha: 2.4,
@@ -489,7 +489,7 @@ export async function fetchExportDataset(options: ExportFilterOptions): Promise<
           risk_override: "safe",
           storage_method: "Aerated Dry Storage",
         };
-        const transport = requests[i % Math.max(requests.length, 1)] || {
+        const transport: any = requests[i % Math.max(requests.length, 1)] || {
           tracking_code: `TRK-${1000 + i}`,
           distance_km: 112.0,
           status: "completed",

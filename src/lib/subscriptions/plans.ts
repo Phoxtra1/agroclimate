@@ -12,7 +12,7 @@ export type PremiumComponent =
   | "agtrans"
   | "agyenkwa_api";
 
-export type PlanId = "freemium" | "pro" | "enterprise" | "institutional";
+export type PlanId = "freemium" | "pro" | "enterprise";
 
 export interface Plan {
   id: PlanId;
@@ -71,14 +71,6 @@ export const PLANS: Plan[] = [
       "agro_inventory", "agro_forecast", "agro_risk",
       "flight_advisory", "agnav", "agtrans",
     ],
-  },
-  {
-    id: "institutional",
-    name: "Institutional",
-    priceUsd: 250,
-    tagline: "Full API access for integrators and organisations.",
-    features: ["AgroClimate API", "API Integration", "API Management", "API Usage"],
-    components: ["agyenkwa_api"],
   },
 ];
 

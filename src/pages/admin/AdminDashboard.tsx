@@ -18,11 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   Shield, Bell, Layers, Plane, Settings, Users,
-  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database
+  ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database, LogOut
 } from "lucide-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
+import { useAuth } from "@/hooks/useAuth";
 
 type EngineKey =
   | "overview" | "data-export" | "alert" | "ai" | "flight" | "system"
@@ -398,6 +399,12 @@ function Metric({ label, value, small, suffix }: { label: string; value: number;
 export default function AdminDashboard() {
   const [activeEngine, setActiveEngine] = useState<EngineKey>("overview");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.assign("/");
+  };
 
   const renderEngine = () => {
     switch (activeEngine) {
