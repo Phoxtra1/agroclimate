@@ -22,11 +22,11 @@ export function PremiumGate({ component, children }: Props) {
   const location = useLocation();
   const [dialogOpen, setDialogOpen] = useState(true);
 
-  const { enabled: testEnabled, paywallDisabled, loading: testLoading } = useTestMode();
+  const { testMode, loading: testLoading } = useTestMode();
   const { loading: subLoading, hasAccess } = useSubscription();
 
-  // Test mode active check: when pilot/test mode is enabled and paywalls are disabled, bypass paywall
-  const isTestModeActive = testEnabled && paywallDisabled;
+  // Test Mode unlocks all premium features while it is active
+  const isTestModeActive = testMode;
 
   if (testLoading || subLoading) {
     return <>{children}</>;
