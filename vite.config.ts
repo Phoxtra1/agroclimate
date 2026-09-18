@@ -27,8 +27,8 @@ export default defineConfig(({ mode }) => ({
 
 
       manifest: {
-        name: "Agyenkwa",
-        short_name: "Agyenkwa",
+        name: "AgroClimate",
+        short_name: "AGC",
         description:
           "Agriculture & climate intelligence for African producers",
 
