@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     if (!r.ok) return json({ ok: false, message: s?.error?.message || "Could not confirm card payment." });
     const plan = s?.metadata?.plan;
     const expected = Math.round((PLAN_PRICES_USD[plan] ?? -1) * 100);
-    const verified = s.payment_status === "paid" && s.status === "complete" && s.amount_subtotal === expected;
+    const verified = s.payment_status === "paid" && s.status === "complete" && (s.currency_conversion?.amount_subtotal ?? s.amount_subtotal) === expected;
     if (!verified && s.status === "open") return json({ ok: false, pending: true, message: "Payment is still being confirmed." });
     return json(await activateVerified("stripe", session_id, verified));
   } catch (e) {
