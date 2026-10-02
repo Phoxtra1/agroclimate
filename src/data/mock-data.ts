@@ -14,6 +14,7 @@ export interface WeatherDay {
   evapotranspiration?: number;
   soilMoisture?: number;
   soilTemperature?: number;
+  isoDate?: string; // provider timestamp for this period
 }
 
 export interface CropCalendarEntry {

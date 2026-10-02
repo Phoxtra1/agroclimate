@@ -8,6 +8,7 @@ const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes for freshness
 interface CachedWeather {
   data: WeatherDay[];
   timestamp: number;
+  observedAt?: string | null;
   lat: number;
   lon: number;
 }
@@ -97,6 +98,7 @@ function mapTomorrowToWeatherDay(daily: any, index: number): WeatherDay {
   const agro = getDeterministicAgroMetrics(tempHigh, tempLow, humidity, wind, rainProb, vals.rainAccumulationSum);
 
   return {
+    isoDate: daily.time,
     day: index === 0 ? "Today" : days[date.getDay()],
     date: `${months[date.getMonth()]} ${date.getDate()}`,
     icon: weatherCodeMap[code] || "☀️",
@@ -129,6 +131,7 @@ function mapRealtimeToWeatherDay(realtime: any): WeatherDay {
   const agro = getDeterministicAgroMetrics(tempHigh, tempLow, humidity, wind, rainProb, vals.rainAccumulation);
 
   return {
+    isoDate: realtime?.data?.time,
     day: "Today",
     date: `${months[now.getMonth()]} ${now.getDate()}`,
     icon: weatherCodeMap[code] || "☀️",
@@ -152,6 +155,8 @@ export function useWeather(lat?: number, lon?: number) {
   const [isLive, setIsLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [observedAt, setObservedAt] = useState<Date | null>(null);
+  const [source, setSource] = useState<"live" | "cache" | "none">("none");
 
   const refresh = useCallback(() => {
     localStorage.removeItem(CACHE_KEY);
@@ -172,6 +177,8 @@ export function useWeather(lat?: number, lon?: number) {
           setForecast(parsed.data);
           setIsLive(true);
           setLastUpdated(new Date(parsed.timestamp));
+          setObservedAt(parsed.observedAt ? new Date(parsed.observedAt) : null);
+          setSource("cache");
           servedFromCache = true;
         }
       } catch { /* ignore bad cache */ }
@@ -206,15 +213,17 @@ export function useWeather(lat?: number, lon?: number) {
           setForecast(forecastDays);
           setIsLive(true);
           const timestamp = Date.now();
+          const obs = data.realtime?.data?.time ?? null;
           setLastUpdated(new Date(timestamp));
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp, lat, lon }));
+          setObservedAt(obs ? new Date(obs) : null);
+          setSource("live");
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp, observedAt: obs, lat, lon }));
         }
       } catch (err) {
-        console.warn("Weather API unavailable, using cached/mock data:", err);
-        // Ensure mock forecast is enriched and set as active fallback
-        setForecast(enrichMockForecast(mockForecast));
+        // Never substitute sample values: keep the last real reading (if any)
+        // and mark the data as not live so the UI can say so honestly.
+        console.warn("Weather API unavailable:", err);
         setIsLive(false);
-        setLastUpdated(new Date());
       } finally {
         setLoading(false);
       }
@@ -238,5 +247,5 @@ export function useWeather(lat?: number, lon?: number) {
     };
   }, [lat, lon, refreshTrigger]);
 
-  return { forecast, loading, isLive, lastUpdated, refresh };
+  return { forecast, loading, isLive, lastUpdated, observedAt, source, refresh };
 }
