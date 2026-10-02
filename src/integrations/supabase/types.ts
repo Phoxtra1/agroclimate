@@ -2358,6 +2358,8 @@ export type Database = {
           id: string
           paystack_reference: string | null
           plan: string
+          provider: string
+          provider_reference: string | null
           status: string
           updated_at: string
           user_id: string
@@ -2372,6 +2374,8 @@ export type Database = {
           id?: string
           paystack_reference?: string | null
           plan?: string
+          provider?: string
+          provider_reference?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -2386,6 +2390,8 @@ export type Database = {
           id?: string
           paystack_reference?: string | null
           plan?: string
+          provider?: string
+          provider_reference?: string | null
           status?: string
           updated_at?: string
           user_id?: string
