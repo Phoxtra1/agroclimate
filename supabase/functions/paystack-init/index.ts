@@ -1,100 +1,48 @@
-// Initialises a Paystack transaction for an Agyenkwa subscription.
-// - Loads USD plan price from the plans table below.
-// - Converts USD → user's local Paystack-supported currency (backend-only).
-// - Falls back to USD when the user's country isn't Paystack-supported.
-// - Returns { authorization_url, reference } for the frontend to redirect to.
-//
-// Requires PAYSTACK_SECRET_KEY. Currency conversion uses open.er-api.com.
+// Sikasem → Mobile Money → Paystack. Records a pending Adesua row.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { PLAN_PRICES_USD, recordPending, requireUser } from "../_shared/adesua.ts";
+import { currencyForCountry, getExchangeRate } from "./currency.ts";
 
-const PLAN_PRICES_USD: Record<string, number> = {
-  freemium: 0,
-  pro: 35,
-  enterprise: 75,
-  
-};
-
-// Paystack officially settles in: NGN, GHS, ZAR, KES, USD, EGP, XOF.
-// We infer currency from the caller's country via Cloudflare or IP fallback.
-const COUNTRY_CURRENCY: Record<string, string> = {
-  NG: "NGN", GH: "GHS", ZA: "ZAR", KE: "KES", EG: "EGP",
-  CI: "XOF", SN: "XOF", BJ: "XOF", TG: "XOF", ML: "XOF", BF: "XOF",
-};
-
-async function getExchangeRate(target: string): Promise<number> {
-  if (target === "USD") return 1;
-  try {
-    const r = await fetch(`https://open.er-api.com/v6/latest/USD`);
-    const j = await r.json();
-    return Number(j?.rates?.[target]) || 1;
-  } catch { return 1; }
-}
+const json = (b: unknown, status = 200) =>
+  new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
   const PAYSTACK = Deno.env.get("PAYSTACK_SECRET_KEY");
-  if (!PAYSTACK) {
-    return new Response(JSON.stringify({ error: "Paystack is not configured. Add PAYSTACK_SECRET_KEY to enable payments." }), {
-      status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (!PAYSTACK) return json({ error: "Mobile Money is not configured yet." }, 501);
 
   try {
-    const { plan, email, return_path } = await req.json();
-    if (!plan || !email) {
-      return new Response(JSON.stringify({ error: "plan and email required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    const user = await requireUser(req);
+    if (!user?.email) return json({ error: "Please sign in first." }, 401);
+    const { plan, return_path } = await req.json();
     const priceUsd = PLAN_PRICES_USD[plan];
-    if (priceUsd === undefined) return new Response(JSON.stringify({ error: "Unknown plan" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    if (priceUsd === 0) return new Response(JSON.stringify({ authorization_url: null, message: "Free plan" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!priceUsd) return json({ error: "Unknown or free plan" }, 400);
 
-    // Resolve auth user
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const authHeader = req.headers.get("Authorization") || "";
-    const jwt = authHeader.replace("Bearer ", "");
-    const { data: userData } = await supabase.auth.getUser(jwt);
-    const userId = userData?.user?.id;
-
-    // Detect country → currency
     const country = req.headers.get("cf-ipcountry") || req.headers.get("x-country") || "";
-    const currency = COUNTRY_CURRENCY[country.toUpperCase()] || "USD";
+    const currency = currencyForCountry(country);
     const rate = await getExchangeRate(currency);
     const amountLocal = priceUsd * rate;
-    // Paystack expects the smallest currency unit
-    const amountMinor = Math.round(amountLocal * 100);
-
     const reference = `agy_${plan}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
     const origin = req.headers.get("origin") || "https://agro.amineva.com";
-    const callback_url = `${origin}/subscription/verify?reference=${reference}&return=${encodeURIComponent(return_path || "/dashboard")}`;
+    const callback_url = `${origin}/subscription/verify?provider=paystack&reference=${reference}&return=${encodeURIComponent(return_path || "/dashboard")}`;
 
     const r = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: { Authorization: `Bearer ${PAYSTACK}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        email, amount: amountMinor, currency, reference, callback_url,
-        metadata: { plan, user_id: userId, price_usd: priceUsd, rate },
+        email: user.email, amount: Math.round(amountLocal * 100), currency, reference, callback_url,
+        channels: ["mobile_money"],
+        metadata: { plan, user_id: user.id, price_usd: priceUsd, rate },
       }),
     });
     const j = await r.json();
-    if (!j?.status) {
-      return new Response(JSON.stringify({ error: j?.message || "Paystack init failed" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!r.ok || !j?.status) {
+      console.error(`Paystack init failed [${r.status}]`, j);
+      return json({ error: j?.message || "Paystack init failed" }, 400);
     }
-
-    // Record pending row
-    if (userId) {
-      await supabase.from("user_subscriptions").insert({
-        user_id: userId, plan, status: "pending", paystack_reference: reference,
-        amount_usd: priceUsd, currency, amount_local: amountLocal,
-      });
-    }
-
-    return new Response(JSON.stringify({ authorization_url: j.data.authorization_url, reference }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await recordPending({ userId: user.id, plan, provider: "paystack", reference, amountUsd: priceUsd, currency, amountLocal });
+    return json({ authorization_url: j.data.authorization_url, reference });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String((e as Error).message || e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return json({ error: String((e as Error).message || e) }, 500);
   }
 });
