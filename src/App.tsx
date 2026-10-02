@@ -46,6 +46,7 @@ import PendingApproval from "./pages/agtrans-partner/PendingApproval";
 import LiveTracking from "./pages/LiveTracking";
 import Subscription from "./pages/Subscription";
 import SubscriptionVerify from "./pages/SubscriptionVerify";
+import Sikasem from "./pages/Sikasem";
 import { useDriverStatus } from "@/hooks/useDriverStatus";
 import { PremiumGate } from "@/components/subscription/PremiumGate";
 import { installOfflineSync } from "@/lib/offlineQueue";
@@ -310,6 +311,7 @@ function AppRoutes() {
       <Route path="/market-link" element={<ProtectedRoute><PremiumGate component="market_link"><MarketLink /></PremiumGate></ProtectedRoute>} />
       <Route path="/agnav" element={<ProtectedRoute><PremiumGate component="agnav"><AGNav /></PremiumGate></ProtectedRoute>} />
       <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
+      <Route path="/subscription/pay" element={<ProtectedRoute><Sikasem /></ProtectedRoute>} />
       <Route path="/subscription/verify" element={<SubscriptionVerify />} />
       <Route
         path="/learning"

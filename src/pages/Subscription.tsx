@@ -19,29 +19,11 @@ export default function Subscription() {
   const navigate = useNavigate();
   const [busyPlan, setBusyPlan] = useState<PlanId | null>(null);
 
-  const startCheckout = async (plan: PlanId) => {
+  const startCheckout = (plan: PlanId) => {
     if (plan === "freemium") { navigate(returnPath); return; }
     if (!user) { toast({ title: "Please sign in first", variant: "destructive" }); return; }
     setBusyPlan(plan);
-    try {
-      const { data, error } = await supabase.functions.invoke("paystack-init", {
-        body: { plan, email: user.email, return_path: returnPath },
-      });
-      if (error) throw error;
-      if (data?.authorization_url) {
-        // Paystack will convert USD → local currency server-side and open checkout in local currency.
-        window.location.href = data.authorization_url;
-        return;
-      }
-      throw new Error(data?.error || "Payment could not be initialised.");
-    } catch (e: any) {
-      toast({
-        title: "Payment unavailable",
-        description: e?.message || "Paystack is not configured yet. Please contact the administrator.",
-        variant: "destructive",
-      });
-      setBusyPlan(null);
-    }
+    navigate(`/subscription/pay?plan=${plan}&return=${encodeURIComponent(returnPath)}`);
   };
 
   return (
