@@ -120,7 +120,18 @@ function mapRealtimeToWeatherDay(realtime: any): WeatherDay {
 }
 
 export function useWeather(lat?: number, lon?: number) {
-  const [forecast, setForecast] = useState<WeatherDay[]>([]);
+  const [forecast, setForecast] = useState<WeatherDay[]>(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const parsed: CachedWeather = JSON.parse(cached);
+        if (Array.isArray(parsed.data) && parsed.data.length > 0) {
+          return parsed.data;
+        }
+      }
+    } catch { /* ignore bad cache */ }
+    return weeklyForecast;
+  });
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -171,8 +182,9 @@ export function useWeather(lat?: number, lon?: number) {
         if (data.realtime?.data?.values) {
           const realtimeDay = mapRealtimeToWeatherDay(data.realtime);
           if (forecastDays.length > 0) {
-            // Keep forecast high/low but use realtime current temp
+            // Preserve forecasted high and low while incorporating current realtime parameters
             realtimeDay.tempLow = forecastDays[0].tempLow;
+            realtimeDay.tempHigh = Math.max(forecastDays[0].tempHigh, realtimeDay.tempHigh);
             forecastDays[0] = realtimeDay;
           } else {
             forecastDays.unshift(realtimeDay);

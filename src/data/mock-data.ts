@@ -53,13 +53,13 @@ const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function generateWeeklyForecast(): WeatherDay[] {
   const forecast: WeatherDay[] = [];
   const baseData = [
-    { icon: "☀️", tempHigh: 34, tempLow: 23, rainProb: 15, description: "Sunny and warm", humidity: 62, wind: 8 },
-    { icon: "⛅", tempHigh: 33, tempLow: 22, rainProb: 30, description: "Partly cloudy", humidity: 65, wind: 10 },
-    { icon: "🌧️", tempHigh: 30, tempLow: 22, rainProb: 75, description: "Rain expected", humidity: 80, wind: 12 },
-    { icon: "🌧️", tempHigh: 28, tempLow: 21, rainProb: 85, description: "Heavy rain likely", humidity: 88, wind: 15 },
-    { icon: "⛅", tempHigh: 31, tempLow: 22, rainProb: 40, description: "Clearing up", humidity: 70, wind: 9 },
-    { icon: "☀️", tempHigh: 33, tempLow: 23, rainProb: 10, description: "Sunny", humidity: 58, wind: 7 },
-    { icon: "☀️", tempHigh: 35, tempLow: 24, rainProb: 5, description: "Hot and dry", humidity: 50, wind: 6 },
+    { icon: "☀️", tempHigh: 34, tempLow: 23, rainProb: 15, description: "Sunny and warm", humidity: 62, wind: 8, weatherCode: 1000, rainMm: 0, evapotranspiration: 5.2, soilMoisture: 32, soilTemperature: 29 },
+    { icon: "⛅", tempHigh: 33, tempLow: 22, rainProb: 30, description: "Partly cloudy", humidity: 65, wind: 10, weatherCode: 1101, rainMm: 1.2, evapotranspiration: 4.8, soilMoisture: 35, soilTemperature: 28 },
+    { icon: "🌧️", tempHigh: 30, tempLow: 22, rainProb: 75, description: "Rain expected", humidity: 80, wind: 12, weatherCode: 4001, rainMm: 12.5, evapotranspiration: 3.1, soilMoisture: 68, soilTemperature: 25 },
+    { icon: "🌧️", tempHigh: 28, tempLow: 21, rainProb: 85, description: "Heavy rain likely", humidity: 88, wind: 15, weatherCode: 4201, rainMm: 24.0, evapotranspiration: 2.5, soilMoisture: 85, soilTemperature: 24 },
+    { icon: "⛅", tempHigh: 31, tempLow: 22, rainProb: 40, description: "Clearing up", humidity: 70, wind: 9, weatherCode: 1100, rainMm: 3.5, evapotranspiration: 4.2, soilMoisture: 62, soilTemperature: 27 },
+    { icon: "☀️", tempHigh: 33, tempLow: 23, rainProb: 10, description: "Sunny", humidity: 58, wind: 7, weatherCode: 1000, rainMm: 0, evapotranspiration: 5.0, soilMoisture: 45, soilTemperature: 28 },
+    { icon: "☀️", tempHigh: 35, tempLow: 24, rainProb: 5, description: "Hot and dry", humidity: 50, wind: 6, weatherCode: 1000, rainMm: 0, evapotranspiration: 5.6, soilMoisture: 36, soilTemperature: 30 },
   ];
 
   const now = new Date();
@@ -71,6 +71,7 @@ function generateWeeklyForecast(): WeatherDay[] {
     forecast.push({
       day: dayName,
       date: dateString,
+      isoDate: d.toISOString(),
       ...baseData[i]
     });
   }
