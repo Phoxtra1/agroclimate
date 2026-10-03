@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useProfile } from "@/hooks/useProfile";
 
 type Method = "card" | "momo";
 
@@ -14,6 +15,7 @@ export default function Sikasem() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { profile } = useProfile();
   const planId = (params.get("plan") || "pro") as PlanId;
   const returnPath = params.get("return") || "/dashboard";
   const plan = PLANS.find((p) => p.id === planId && p.priceUsd > 0);
@@ -29,15 +31,19 @@ export default function Sikasem() {
     setBusy(true);
     try {
       const fn = method === "card" ? "stripe-checkout" : "paystack-init";
-      const { data, error } = await supabase.functions.invoke(fn, { body: { plan: plan.id, return_path: returnPath } });
+      const { data, error } = await supabase.functions.invoke(fn, {
+        body: { plan: plan.id, return_path: returnPath, country: profile?.country || undefined },
+      });
       if (error) {
         const ctx: any = (error as any).context;
         const details = ctx?.json ? (await ctx.json().catch(() => null))?.error : null;
         throw new Error(details || error.message);
       }
-      const url = data?.url || data?.authorization_url;
+      const url = data?.checkout_url || data?.url || data?.authorization_url;
       if (!url) throw new Error(data?.error || "Payment could not start.");
-      window.location.href = url;
+      const destination = new URL(url);
+      if (destination.protocol !== "https:") throw new Error("The payment provider returned an invalid checkout address.");
+      window.location.assign(destination.toString());
     } catch (e: any) {
       toast({ title: "Payment unavailable", description: e?.message, variant: "destructive" });
       setBusy(false);
@@ -51,9 +57,9 @@ export default function Sikasem() {
 
   return (
     <div className="max-w-md mx-auto p-4 lg:p-8">
-      <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground flex items-center gap-1 mb-4 hover:text-foreground">
+      <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4 h-auto px-0 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
-      </button>
+      </Button>
       <div className="bg-card border rounded-xl p-6 shadow-sm space-y-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Sikasem</p>
@@ -64,13 +70,15 @@ export default function Sikasem() {
         </div>
         <div role="radiogroup" className="space-y-3">
           {options.map(({ id, title, desc, Icon }) => (
-            <button
+            <Button
               key={id}
               role="radio"
               aria-checked={method === id}
+              type="button"
+              variant="outline"
               onClick={() => setMethod(id)}
               className={cn(
-                "w-full text-left flex gap-3 items-start rounded-lg border p-4 transition-colors",
+                "h-auto w-full justify-start whitespace-normal text-left flex gap-3 items-start rounded-lg border p-4 transition-colors",
                 method === id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
               )}
             >
@@ -79,11 +87,11 @@ export default function Sikasem() {
                 <p className="font-semibold text-sm">{title}</p>
                 <p className="text-xs text-muted-foreground">{desc}</p>
               </div>
-            </button>
+            </Button>
           ))}
         </div>
         <Button className="w-full" onClick={pay} disabled={busy}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continue to secure payment"}
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : method === "card" ? "Open secure card checkout" : "Open Mobile Money checkout"}
         </Button>
         <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5" /> Access is activated only after your payment is confirmed.

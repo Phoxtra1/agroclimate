@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { WeatherDay, weeklyForecast as mockForecast } from "@/data/mock-data";
+import { WeatherDay } from "@/data/mock-data";
 
 const CACHE_KEY = "agroclimate_weather_cache";
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes for freshness
@@ -51,36 +51,6 @@ function getDeterministicAgroMetrics(tempHigh: number, tempLow: number, humidity
 
   return { rainMm, evapotranspiration, soilMoisture, soilTemperature };
 }
-
-// Map mock forecast to include deterministic agricultural metrics and dynamic current dates
-const enrichMockForecast = (list: WeatherDay[]): WeatherDay[] => {
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const now = new Date();
-
-  return list.map((item, index) => {
-    const targetDate = new Date(now.getTime() + index * 24 * 60 * 60 * 1000);
-    const tempHigh = item.tempHigh;
-    const tempLow = item.tempLow;
-    const humidity = item.humidity;
-    const wind = item.wind;
-    const rainProb = item.rainProb;
-
-    const weatherCode = item.weatherCode ?? (item.icon === "🌧️" ? 4001 : item.icon === "⛅" ? 1101 : 1000);
-    const agro = getDeterministicAgroMetrics(tempHigh, tempLow, humidity, wind, rainProb, item.rainMm);
-
-    return {
-      ...item,
-      day: index === 0 ? "Today" : days[targetDate.getDay()],
-      date: `${months[targetDate.getMonth()]} ${targetDate.getDate()}`,
-      weatherCode,
-      rainMm: item.rainMm ?? agro.rainMm,
-      evapotranspiration: item.evapotranspiration ?? agro.evapotranspiration,
-      soilMoisture: item.soilMoisture ?? agro.soilMoisture,
-      soilTemperature: item.soilTemperature ?? agro.soilTemperature,
-    };
-  });
-};
 
 function mapTomorrowToWeatherDay(daily: any, index: number): WeatherDay {
   const date = new Date(daily.time);
@@ -150,7 +120,7 @@ function mapRealtimeToWeatherDay(realtime: any): WeatherDay {
 }
 
 export function useWeather(lat?: number, lon?: number) {
-  const [forecast, setForecast] = useState<WeatherDay[]>(() => enrichMockForecast(mockForecast));
+  const [forecast, setForecast] = useState<WeatherDay[]>([]);
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);

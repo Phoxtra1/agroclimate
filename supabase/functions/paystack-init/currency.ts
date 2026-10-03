@@ -6,7 +6,12 @@ const COUNTRY_CURRENCY: Record<string, string> = {
 };
 
 export function currencyForCountry(country: string): string {
-  return COUNTRY_CURRENCY[(country || "").toUpperCase()] || "USD";
+  const normalized = (country || "").trim().toUpperCase();
+  if (normalized === "GHANA") return "GHS";
+  if (normalized === "NIGERIA") return "NGN";
+  if (normalized === "KENYA") return "KES";
+  if (normalized === "SOUTH AFRICA") return "ZAR";
+  return COUNTRY_CURRENCY[normalized] || "GHS";
 }
 
 export async function getExchangeRate(target: string): Promise<number> {
