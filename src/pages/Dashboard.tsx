@@ -93,7 +93,7 @@ export default function Dashboard() {
 
         {/* Block 2: 7-Day Forecast */}
         <section className="bg-card rounded-xl border p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-3">
+          <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-2">
             <div>
               <h2 className="font-bold text-base">7-Day Forecast</h2>
               <p className="text-xs text-muted-foreground">
@@ -109,14 +109,14 @@ export default function Dashboard() {
               </Button>
             </div>
           </div>
-          <div className="max-h-[460px] overflow-y-auto pr-1 space-y-1">
+          <div className="max-h-[285px] overflow-y-auto pr-1 space-y-1">
             {forecast.length === 0 ? (
               <p className="py-6 text-sm text-muted-foreground">No current forecast is available.</p>
             ) : (
               forecast.slice(0, 7).map((day, index) => (
-                <div key={`${day.isoDate ?? day.date}-${index}`} className="border-b border-border last:border-0 py-2">
+                <div key={`${day.isoDate ?? day.date}-${index}`} className="border-b border-border last:border-0 py-1.5">
                   <ForecastRow day={day} />
-                  <div className="pt-1"><ForecastTimestamp day={day} /></div>
+                  <div className="pt-0.5"><ForecastTimestamp day={day} /></div>
                 </div>
               ))
             )}
