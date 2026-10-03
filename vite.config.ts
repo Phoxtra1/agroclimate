@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => ({
 
 
       manifest: {
-        name: "AgroClimate",
+        name: "Agroclimate",
         short_name: "AGC",
         description:
           "Agriculture & climate intelligence for African producers",

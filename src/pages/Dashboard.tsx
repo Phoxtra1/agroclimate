@@ -61,9 +61,9 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6 items-start">
         {/* Main column */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className="lg:col-span-2 space-y-6">
           <AgroClimateIntelligence
             forecast={forecast}
             location={position.locationName}
@@ -72,18 +72,21 @@ export default function Dashboard() {
             observedAt={observedAt}
             lastUpdated={lastUpdated}
           />
-          {forecast[0] ? <TodayWeather weather={forecast[0]} /> : (
-            <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
-              Current temperature and rainfall are unavailable. Refresh when your connection returns.
-            </div>
-          )}
-          {forecast[0] && <AdvisoryCard {...dynamicAdvisory} />}
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            {forecast[0] ? <TodayWeather weather={forecast[0]} /> : (
+              <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
+                Current temperature and rainfall are unavailable. Refresh when your connection returns.
+              </div>
+            )}
+            {forecast[0] && <AdvisoryCard {...dynamicAdvisory} />}
+          </div>
 
           {/* 7-Day Forecast */}
-          <section>
-            <div className="flex items-end justify-between gap-3 mb-3">
+          <section className="bg-card rounded-xl border p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3 mb-4 border-b border-border/50 pb-3">
               <div>
-                <h2 className="font-bold">7-Day Forecast</h2>
+                <h2 className="font-bold text-base">7-Day Forecast</h2>
                 <p className="text-xs text-muted-foreground">
                   Updated {lastUpdated ? lastUpdated.toLocaleString() : "when live data becomes available"}
                 </p>
@@ -97,13 +100,13 @@ export default function Dashboard() {
                 </Button>
               </div>
             </div>
-            <div className="bg-card rounded-lg border px-4 shadow-sm">
+            <div>
               {forecast.length === 0 ? (
                 <p className="py-6 text-sm text-muted-foreground">No current forecast is available.</p>
               ) : forecast.slice(0, 7).map((day, index) => (
-                <div key={`${day.isoDate ?? day.date}-${index}`} className="border-b border-border last:border-0 py-1">
+                <div key={`${day.isoDate ?? day.date}-${index}`} className="border-b border-border last:border-0 py-2">
                   <ForecastRow day={day} />
-                  <div className="pb-2"><ForecastTimestamp day={day} /></div>
+                  <div className="pt-1"><ForecastTimestamp day={day} /></div>
                 </div>
               ))}
             </div>
@@ -117,7 +120,7 @@ export default function Dashboard() {
                 Full view <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
-            <div className="bg-card rounded-xl p-4 shadow-sm">
+            <div className="bg-card rounded-xl p-4 border shadow-sm">
               <CropCalendarView calendar={cropCalendars[0]} />
             </div>
           </section>
@@ -125,9 +128,9 @@ export default function Dashboard() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* 1. AI Crop Advisory */}
+          {/* 1. Dipa Crop Advisory */}
           <section>
-            <h2 className="font-bold mb-3">🌱 AI Crop Advisory</h2>
+            <h2 className="font-bold mb-3">🌱 Dipa Crop Advisory</h2>
             <AICropAdvisory
               advisory={advisory}
               loading={advisoryLoading}
@@ -135,47 +138,50 @@ export default function Dashboard() {
             />
           </section>
 
-          {/* 2. Aquaculture Monitoring */}
-          <section className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Fish className="h-4 w-4 text-primary" />
-                <h2 className="font-bold text-sm">Aquaculture Monitoring</h2>
+          {/* Quick Hub Tools */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+            {/* 2. Aquaculture Monitoring */}
+            <section className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Fish className="h-4 w-4 text-primary" />
+                  <h2 className="font-bold text-sm">Aquaculture</h2>
+                </div>
+                <Link to="/aquaculture" className="text-xs text-primary font-medium hover:underline">
+                  View Ponds
+                </Link>
               </div>
-              <Link to="/aquaculture" className="text-xs text-primary font-medium hover:underline">
-                View Ponds
+              <p className="text-[11px] text-muted-foreground mb-3">
+                Real-time water quality and feeding schedules.
+              </p>
+              <Link to="/aquaculture">
+                <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
+                  Pond Status
+                </Button>
               </Link>
-            </div>
-            <p className="text-[11px] text-muted-foreground mb-3">
-              Real-time monitoring of water quality and feeding schedules.
-            </p>
-            <Link to="/aquaculture">
-              <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
-                Pond Status
-              </Button>
-            </Link>
-          </section>
+            </section>
 
-          {/* 3. Agro Inventory */}
-          <section className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-primary" />
-                <h2 className="font-bold text-sm">Agro Inventory</h2>
+            {/* 3. Agro Inventory */}
+            <section className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  <h2 className="font-bold text-sm">Agro Inventory</h2>
+                </div>
+                <Link to="/inventory" className="text-xs text-primary font-medium hover:underline">
+                  Manage
+                </Link>
               </div>
-              <Link to="/inventory" className="text-xs text-primary font-medium hover:underline">
-                Manage
+              <p className="text-[11px] text-muted-foreground mb-3">
+                Track seeds, fertilizers, and equipment stock levels.
+              </p>
+              <Link to="/inventory">
+                <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
+                  Open Inventory <ArrowRight className="h-3 w-3 ml-2" />
+                </Button>
               </Link>
-            </div>
-            <p className="text-[11px] text-muted-foreground mb-3">
-              Track seeds, fertilizers, and equipment stock levels.
-            </p>
-            <Link to="/inventory">
-              <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
-                Open Inventory <ArrowRight className="h-3 w-3 ml-2" />
-              </Button>
-            </Link>
-          </section>
+            </section>
+          </div>
 
           <Button asChild variant="outline" className="w-full">
             <Link to="/alerts">Open Alerts Centre <ChevronRight className="h-4 w-4" /></Link>

@@ -33,7 +33,7 @@ export const PLANS: Plan[] = [
       "Dashboard Alerts",
       "Weather Overview",
       "Environmental Alerts",
-      "Limited AI Assistant Preview",
+      "Limited Dipa Assistant Preview",
     ],
     components: [],
   },
@@ -43,7 +43,7 @@ export const PLANS: Plan[] = [
     priceUsd: 35,
     tagline: "Everyday tools for active farmers.",
     features: [
-      "Full AI Assistant",
+      "Full Dipa Assistant",
       "Handler",
       "Post-Harvest Tracker",
       "Market Link",
@@ -75,7 +75,7 @@ export const PLANS: Plan[] = [
 ];
 
 export const COMPONENT_LABELS: Record<PremiumComponent, string> = {
-  ai_assistant: "AI Assistant",
+  ai_assistant: "Dipa Assistant",
   agro_forecast: "Agro Forecast",
   agro_inventory: "Agro Inventory",
   agro_risk: "AgroRisk",

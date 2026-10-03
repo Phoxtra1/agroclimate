@@ -546,7 +546,7 @@ export default function Alerts() {
           </div>
 
           <div className="space-y-4">
-            {/* AI Proactive Advisory Hub */}
+            {/* Dipa Proactive Advisory Hub */}
             {selectedAdvisory ? (
               <div className="rounded-xl border border-border bg-card p-4 relative overflow-hidden shadow-md">
                 <div className="absolute top-0 right-0 h-32 w-32 bg-primary/10 rounded-full blur-3xl" />
@@ -557,7 +557,7 @@ export default function Alerts() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
                     </span>
-                    AI Proactive Advisory
+                    Dipa Proactive Advisory
                   </h3>
                   <Badge variant={selectedAdvisory.level === "critical" || selectedAdvisory.level === "high" ? "destructive" : "secondary"} className="capitalize">
                     {selectedAdvisory.level} Risk
@@ -614,7 +614,7 @@ export default function Alerts() {
                 <div className="flex items-center justify-between border-b border-border/50 pb-2">
                   <h3 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
                     <Activity className="h-4 w-4 text-primary animate-pulse" />
-                    AI Ecological Health Panel
+                    Dipa Ecological Health Panel
                   </h3>
                   {isAiLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
                 </div>
