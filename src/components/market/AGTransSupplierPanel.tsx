@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
+import { MultiSelectDropdown } from "@/components/ui/multi-select-dropdown";
 import {
   Truck, MapPin, Route, Calendar, Star, ShieldCheck, Search, AlertCircle, CheckCircle2, XCircle,
   DollarSign, Package, Clock, Eye, Navigation, RotateCcw, History,
@@ -145,8 +146,8 @@ export function AGTransSupplierPanel() {
   const [vehicleType, setVehicleType] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [destinationFilter, setDestinationFilter] = useState("");
-  const [selectedCargo, setSelectedCargo] = useState<string>("");
-  const [selectedFeature, setSelectedFeature] = useState<string>("");
+  const [selectedCargo, setSelectedCargo] = useState<string[]>([]);
+  const [selectedFeature, setSelectedFeature] = useState<string[]>([]);
   const [minRating, setMinRating] = useState<string>("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [pricingFilter, setPricingFilter] = useState<string>("");
@@ -167,8 +168,8 @@ export function AGTransSupplierPanel() {
       if (vehicleType && normalize(o.vehicle_type) !== normalize(vehicleType)) return false;
       if (locationFilter && !normalize(`${o.current_location_text} ${o.pickup_area} ${o.planned_route}`).includes(normalize(locationFilter))) return false;
       if (destinationFilter && !normalize(`${o.destination} ${o.planned_route}`).includes(normalize(destinationFilter))) return false;
-      if (selectedCargo && !(o.cargo_types_accepted || []).map(normalize).includes(normalize(selectedCargo))) return false;
-      if (selectedFeature && !(o.vehicle_features || []).map(normalize).includes(normalize(selectedFeature))) return false;
+      if (selectedCargo.length > 0 && !selectedCargo.some((c) => (o.cargo_types_accepted || []).map(normalize).includes(normalize(c)))) return false;
+      if (selectedFeature.length > 0 && !selectedFeature.some((f) => (o.vehicle_features || []).map(normalize).includes(normalize(f)))) return false;
       if (minRating && minRating !== "any" && Number(o.driver_rating || 0) < Number(minRating)) return false;
       if (verifiedOnly && o.approval_status !== "approved") return false;
       if (pricingFilter && pricingFilter !== "all" && normalize(o.pricing_type) !== normalize(pricingFilter)) return false;
@@ -328,14 +329,18 @@ export function AGTransSupplierPanel() {
             <Input placeholder="Current location" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} />
             <Input placeholder="Destination" value={destinationFilter} onChange={(e) => setDestinationFilter(e.target.value)} />
             <Input placeholder="Vehicle type" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} />
-            <Select value={selectedCargo} onValueChange={setSelectedCargo}>
-              <SelectTrigger><SelectValue placeholder="Cargo type" /></SelectTrigger>
-              <SelectContent>{CARGO_TYPES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={selectedFeature} onValueChange={setSelectedFeature}>
-              <SelectTrigger><SelectValue placeholder="Vehicle feature" /></SelectTrigger>
-              <SelectContent>{VEHICLE_FEATURES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
-            </Select>
+            <MultiSelectDropdown
+              options={CARGO_TYPES}
+              selected={selectedCargo}
+              onChange={setSelectedCargo}
+              placeholder="Cargo types"
+            />
+            <MultiSelectDropdown
+              options={VEHICLE_FEATURES}
+              selected={selectedFeature}
+              onChange={setSelectedFeature}
+              placeholder="Vehicle features"
+            />
             <Select value={pricingFilter || "any"} onValueChange={(v) => setPricingFilter(v === "any" ? "" : v)}>
               <SelectTrigger><SelectValue placeholder="Pricing type" /></SelectTrigger>
               <SelectContent><SelectItem value="all">Any</SelectItem>{PRICING_TYPE.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
