@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { MultiSelectDropdown } from "@/components/ui/multi-select-dropdown";
 import {
   Truck, DollarSign, Package, Star, Navigation, Pause, X,
   CheckCircle2, RotateCcw, Eye, History, ClipboardList, Settings, Map,
@@ -407,43 +408,29 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Vehicle Features</Label>
-        <div className="flex flex-wrap gap-2">
-          {VEHICLE_FEATURES.map((feature) => {
-            const selected = ((offerForm.vehicle_features as string[]) || []).includes(feature);
-            return (
-              <Button
-                key={feature}
-                type="button"
-                variant={selected ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleArray("vehicle_features", feature, VEHICLE_FEATURES)}
-              >
-                {feature}
-              </Button>
-            );
-          })}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Vehicle Features</Label>
+          <MultiSelectDropdown
+            options={VEHICLE_FEATURES}
+            selected={(offerForm.vehicle_features as string[]) || []}
+            onChange={(selected) =>
+              setOfferForm((prev) => ({ ...prev, vehicle_features: selected }))
+            }
+            placeholder="Select vehicle features"
+          />
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label>Cargo Types Accepted</Label>
-        <div className="flex flex-wrap gap-2">
-          {CARGO_TYPES.map((cargo) => {
-            const selected = ((offerForm.cargo_types_accepted as string[]) || []).includes(cargo);
-            return (
-              <Button
-                key={cargo}
-                type="button"
-                variant={selected ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleArray("cargo_types_accepted", cargo, CARGO_TYPES)}
-              >
-                {cargo}
-              </Button>
-            );
-          })}
+        <div className="space-y-2">
+          <Label>Cargo Types Accepted</Label>
+          <MultiSelectDropdown
+            options={CARGO_TYPES}
+            selected={(offerForm.cargo_types_accepted as string[]) || []}
+            onChange={(selected) =>
+              setOfferForm((prev) => ({ ...prev, cargo_types_accepted: selected }))
+            }
+            placeholder="Select cargo types accepted"
+          />
         </div>
       </div>
 
