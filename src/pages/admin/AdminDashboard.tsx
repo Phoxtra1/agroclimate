@@ -12,12 +12,13 @@ import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
 import AGNavEngine from "./AGNavEngine";
 import AdminAGTransPanel from "./AdminAGTransPanel";
 import DataExporterPanel from "./DataExporterPanel";
+import AgrofundPanel from "./AgrofundPanel";
 import DriverApprovals, { useDriverApprovals } from "@/components/admin/DriverApprovals";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
-  Shield, Bell, Layers, Plane, Settings, Users,
+  Shield, Bell, Layers, Plane, Settings, Users, Landmark,
   ShieldAlert, Menu, CreditCard, Archive, Store, Anchor, Truck, Download, Database, LogOut
 } from "lucide-react";
 
@@ -26,11 +27,12 @@ import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 import { useAuth } from "@/hooks/useAuth";
 
 type EngineKey =
-  | "overview" | "data-export" | "alert" | "ai" | "flight" | "system"
+  | "overview" | "data-export" | "agrofund" | "alert" | "ai" | "flight" | "system"
   | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans" | "approvals";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
+  { key: "agrofund", label: "Agrofund", icon: Landmark },
   { key: "data-export", label: "Data Export Hub", icon: Database },
   { key: "approvals", label: "Driver Approvals", icon: ShieldAlert },
   { key: "alert", label: "Alert Engine", icon: Bell },
@@ -408,6 +410,7 @@ export default function AdminDashboard() {
 
   const renderEngine = () => {
     switch (activeEngine) {
+      case "agrofund": return <AgrofundPanel />;
       case "data-export": return <DataExporterPanel />;
       case "alert": return <AlertEngine />;
       case "ai": return <AIEngine />;
