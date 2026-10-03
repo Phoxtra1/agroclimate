@@ -28,9 +28,9 @@ export default function Subscription() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 lg:p-8">
-      <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground flex items-center gap-1 mb-4 hover:text-foreground">
+      <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4 h-auto px-0 text-sm text-muted-foreground hover:bg-transparent hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
-      </button>
+      </Button>
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold">Choose your AgroClimate plan</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -68,7 +68,7 @@ export default function Subscription() {
                   variant={plan.id === "freemium" ? "outline" : "default"}
                   onClick={() => startCheckout(plan.id)}
                 >
-                  {busyPlan === plan.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isCurrent ? "Current plan" : plan.priceUsd === 0 ? "Continue free" : "Continue"}
+                  {busyPlan === plan.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isCurrent ? "Current plan" : plan.priceUsd === 0 ? "Continue free" : "Proceed to Pay"}
                 </Button>
               </CardContent>
             </Card>

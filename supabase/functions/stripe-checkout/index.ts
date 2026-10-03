@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       return json({ error: s?.error?.message || "Card checkout could not start." }, 400);
     }
     await recordPending({ userId: user.id, plan, provider: "stripe", reference: s.id, amountUsd: priceUsd, currency: "USD", amountLocal: priceUsd });
-    return json({ url: s.url });
+    return json({ checkout_url: s.url });
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
   }

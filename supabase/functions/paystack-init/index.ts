@@ -14,11 +14,13 @@ Deno.serve(async (req) => {
   try {
     const user = await requireUser(req);
     if (!user?.email) return json({ error: "Please sign in first." }, 401);
-    const { plan, return_path } = await req.json();
+    const { plan, return_path, country: suppliedCountry } = await req.json();
     const priceUsd = PLAN_PRICES_USD[plan];
     if (!priceUsd) return json({ error: "Unknown or free plan" }, 400);
 
-    const country = req.headers.get("cf-ipcountry") || req.headers.get("x-country") || "";
+    const country = typeof suppliedCountry === "string" && /^[A-Za-z ]{2,56}$/.test(suppliedCountry)
+      ? suppliedCountry
+      : req.headers.get("cf-ipcountry") || req.headers.get("x-country") || "";
     const currency = currencyForCountry(country);
     const rate = await getExchangeRate(currency);
     const amountLocal = priceUsd * rate;
@@ -38,10 +40,13 @@ Deno.serve(async (req) => {
     const j = await r.json();
     if (!r.ok || !j?.status) {
       console.error(`Paystack init failed [${r.status}]`, j);
-      return json({ error: j?.message || "Paystack init failed" }, 400);
+      const message = j?.message === "No active channel to process transaction. Please contact merchant"
+        ? `Mobile Money is not active for ${currency} on this Paystack account. Enable a supported Mobile Money channel in Paystack and try again.`
+        : j?.message || "Paystack init failed";
+      return json({ error: message }, 400);
     }
     await recordPending({ userId: user.id, plan, provider: "paystack", reference, amountUsd: priceUsd, currency, amountLocal });
-    return json({ authorization_url: j.data.authorization_url, reference });
+    return json({ checkout_url: j.data.authorization_url, reference });
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
   }

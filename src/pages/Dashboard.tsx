@@ -1,10 +1,10 @@
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
-import { AlertCard } from "@/components/AlertCard";
 import { AICropAdvisory } from "@/components/AICropAdvisory";
 import { CropCalendarView } from "@/components/CropCalendarView";
 import { AdvisoryCard } from "@/components/AdvisoryCard";
+import { AgroClimateIntelligence, ForecastTimestamp } from "@/components/AgroClimateIntelligence";
 import { cropCalendars } from "@/data/mock-data";
-import { MapPin, ChevronRight, Wifi, WifiOff, Loader2, Fish, Package, ArrowRight } from "lucide-react";
+import { MapPin, ChevronRight, Wifi, WifiOff, Loader2, Fish, Package, ArrowRight, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,7 +17,7 @@ import { DashboardHeaderMenu } from "@/components/DashboardHeaderMenu";
 
 export default function Dashboard() {
   const { position, loading: geoLoading } = useGeolocation();
-  const { forecast, loading: weatherLoading, isLive } = useWeather(position.lat, position.lon);
+  const { forecast, loading: weatherLoading, isLive, lastUpdated, observedAt, refresh } = useWeather(position.lat, position.lon);
   const { user } = useAuth();
   const { profile } = useProfile();
   const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
@@ -64,20 +64,47 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Main column */}
         <div className="lg:col-span-2 space-y-5">
-          <TodayWeather weather={forecast[0]} />
-          <AdvisoryCard {...dynamicAdvisory} />
+          <AgroClimateIntelligence
+            forecast={forecast}
+            location={position.locationName}
+            isLive={isLive}
+            loading={weatherLoading}
+            observedAt={observedAt}
+            lastUpdated={lastUpdated}
+          />
+          {forecast[0] ? <TodayWeather weather={forecast[0]} /> : (
+            <div className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">
+              Current temperature and rainfall are unavailable. Refresh when your connection returns.
+            </div>
+          )}
+          {forecast[0] && <AdvisoryCard {...dynamicAdvisory} />}
 
           {/* 7-Day Forecast */}
           <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold">7-Day Forecast</h2>
-              <Link to="/weather" className="text-sm text-primary flex items-center gap-0.5">
-                Details <ChevronRight className="h-4 w-4" />
-              </Link>
+            <div className="flex items-end justify-between gap-3 mb-3">
+              <div>
+                <h2 className="font-bold">7-Day Forecast</h2>
+                <p className="text-xs text-muted-foreground">
+                  Updated {lastUpdated ? lastUpdated.toLocaleString() : "when live data becomes available"}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" onClick={refresh} disabled={weatherLoading} aria-label="Refresh weather">
+                  <RefreshCw className={`h-4 w-4 ${weatherLoading ? "animate-spin" : ""}`} />
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/weather">Details <ChevronRight className="h-4 w-4" /></Link>
+                </Button>
+              </div>
             </div>
-            <div className="bg-card rounded-xl p-4 shadow-sm">
-              {forecast.slice(0, 4).map((day) => (
-                <ForecastRow key={day.day} day={day} />
+            <div className="bg-card rounded-lg border px-4 shadow-sm">
+              {forecast.length === 0 ? (
+                <p className="py-6 text-sm text-muted-foreground">No current forecast is available.</p>
+              ) : forecast.slice(0, 7).map((day, index) => (
+                <div key={`${day.isoDate ?? day.date}-${index}`} className="border-b border-border last:border-0 py-1">
+                  <ForecastRow day={day} />
+                  <div className="pb-2"><ForecastTimestamp day={day} /></div>
+                </div>
               ))}
             </div>
           </section>
@@ -150,28 +177,9 @@ export default function Dashboard() {
             </Link>
           </section>
 
-          {/* Alerts */}
-          {unreadAlerts.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold">New Alerts</h2>
-                <Link to="/alerts" className="text-sm text-primary flex items-center gap-0.5">
-                  View all <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {unreadAlerts.slice(0, 5).map((alert) => (
-                  <AlertCard
-                    key={alert.id}
-                    alert={alert}
-                    onMarkRead={() => markRead(alert.id)}
-                    onDismiss={() => dismiss(alert.id)}
-                    onDelete={() => deleteAlert(alert.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+          <Button asChild variant="outline" className="w-full">
+            <Link to="/alerts">Open Alerts Centre <ChevronRight className="h-4 w-4" /></Link>
+          </Button>
         </div>
       </div>
     </div>
