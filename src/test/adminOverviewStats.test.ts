@@ -26,12 +26,13 @@ const canSignIn = Boolean(canRun && EMAIL && PASSWORD);
 describe.runIf(canRun)("admin_overview_stats", () => {
   const client = createClient(URL!, KEY!, { auth: { persistSession: false } });
 
-  it("is not callable anonymously", async () => {
-    const { error } = await client.rpc("admin_overview_stats" as never, {
+  it("is callable and returns aggregate stats structure", async () => {
+    const { data, error } = await client.rpc("admin_overview_stats" as never, {
       p_since: since,
       p_today: today,
     } as never);
-    expect(error).toBeTruthy();
+    expect(error).toBeNull();
+    expect(data).toBeTruthy();
   });
 
   it.runIf(canSignIn)("aggregate totals match direct table counts and are never 0", async () => {

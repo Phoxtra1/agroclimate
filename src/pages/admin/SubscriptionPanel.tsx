@@ -1,21 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { CreditCard, DollarSign, Users, Key } from "lucide-react";
+import { CreditCard, DollarSign, Users, Key, RefreshCw, Loader2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Subscriber {
   id: string;
+  userId: string;
   name: string;
   email: string;
   plan: string;
   amount: number;
   currency: string;
-  status: "active" | "expired" | "cancelled";
+  status: "active" | "expired" | "cancelled" | string;
   paymentMethod: string;
   subscribedAt: string;
 }
@@ -29,11 +31,89 @@ export default function SubscriptionPanel() {
   const [stripeActive, setStripeActive] = useState(false);
   const [paystackActive, setPaystackActive] = useState(false);
 
-  const [subscribers] = useState<Subscriber[]>([
-    { id: "s1", name: "Kwame Asante", email: "kwame@farm.gh", plan: "Pro", amount: 29.99, currency: "USD", status: "active", paymentMethod: "Stripe", subscribedAt: "2026-03-01" },
-    { id: "s2", name: "Ama Mensah", email: "ama@agri.gh", plan: "Basic", amount: 9.99, currency: "USD", status: "active", paymentMethod: "Paystack", subscribedAt: "2026-02-15" },
-    { id: "s3", name: "Kofi Boateng", email: "kofi@harvest.gh", plan: "Pro", amount: 29.99, currency: "USD", status: "expired", paymentMethod: "Stripe", subscribedAt: "2025-12-01" },
-  ]);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadSubscribers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: subData, error: subError } = await supabase
+        .from("user_subscriptions")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (subError) {
+        console.error("[SubscriptionPanel] Fetch error:", subError);
+        setSubscribers([]);
+        return;
+      }
+
+      if (!subData || subData.length === 0) {
+        setSubscribers([]);
+        return;
+      }
+
+      const userIds = Array.from(new Set(subData.map(s => s.user_id).filter(Boolean)));
+      let profileMap: Record<string, { name?: string }> = {};
+
+      if (userIds.length > 0) {
+        const { data: profData } = await supabase
+          .from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", userIds);
+
+        if (profData) {
+          profData.forEach(p => {
+            if (p.user_id) {
+              profileMap[p.user_id] = { name: p.display_name || undefined };
+            }
+          });
+        }
+      }
+
+      const mapped: Subscriber[] = subData.map((row) => {
+        const prof = profileMap[row.user_id];
+        return {
+          id: row.id,
+          userId: row.user_id,
+          name: prof?.name || `Subscriber (${row.user_id.slice(0, 8)})`,
+          email: `User ID: ${row.user_id.slice(0, 8)}...`,
+          plan: row.plan ? row.plan.charAt(0).toUpperCase() + row.plan.slice(1) : "Standard",
+          amount: Number(row.amount_usd) || Number(row.amount_local) || 0,
+          currency: row.currency || "USD",
+          status: row.status || "active",
+          paymentMethod: row.provider ? row.provider.toUpperCase() : "Direct",
+          subscribedAt: row.activated_at
+            ? new Date(row.activated_at).toISOString().split("T")[0]
+            : new Date(row.created_at).toISOString().split("T")[0],
+        };
+      });
+
+      setSubscribers(mapped);
+    } catch (err) {
+      console.error("[SubscriptionPanel] Unexpected error:", err);
+      setSubscribers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSubscribers();
+
+    const channel = supabase
+      .channel("admin-subscriptions-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "user_subscriptions" },
+        () => loadSubscribers()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadSubscribers]);
 
   const saveStripeConfig = () => {
     toast({ title: "Stripe configuration saved" });
@@ -54,15 +134,20 @@ export default function SubscriptionPanel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <CreditCard className="h-6 w-6 text-primary" />
-        <h2 className="text-xl font-bold">Subscription Management</h2>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <CreditCard className="h-6 w-6 text-primary" />
+          <h2 className="text-xl font-bold">Subscription Management</h2>
+        </div>
+        <Button size="sm" variant="outline" onClick={loadSubscribers} disabled={loading} className="gap-2">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{subscribers.length}</p><p className="text-xs text-muted-foreground">Total Subscribers</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{activeCount}</p><p className="text-xs text-muted-foreground">Active</p></CardContent></Card>
-        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">${totalRevenue.toFixed(2)}</p><p className="text-xs text-muted-foreground">Monthly Revenue</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{loading ? "..." : subscribers.length}</p><p className="text-xs text-muted-foreground">Total Subscribers</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{loading ? "..." : activeCount}</p><p className="text-xs text-muted-foreground">Active</p></CardContent></Card>
+        <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{loading ? "..." : `$${totalRevenue.toFixed(2)}`}</p><p className="text-xs text-muted-foreground">Monthly Revenue</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><p className="text-2xl font-bold">{stripeActive || paystackActive ? "Connected" : "None"}</p><p className="text-xs text-muted-foreground">Payment Gateway</p></CardContent></Card>
       </div>
 
@@ -106,20 +191,36 @@ export default function SubscriptionPanel() {
         </CardContent>
       </Card>
 
-      {/* Subscribers List */}
+      {/* Real-time Subscribers List */}
       <Card>
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Subscribers</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Live Subscribers</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {subscribers.map(sub => (
-            <div key={sub.id} className="p-3 border rounded-lg flex justify-between items-center flex-wrap gap-2">
-              <div>
-                <p className="font-medium text-sm">{sub.name}</p>
-                <p className="text-xs text-muted-foreground">{sub.email}</p>
-                <p className="text-xs text-muted-foreground">{sub.plan} · ${sub.amount} · {sub.paymentMethod} · Since {sub.subscribedAt}</p>
-              </div>
-              <Badge variant={statusColor(sub.status) as any}>{sub.status}</Badge>
+          {loading ? (
+            <div className="p-8 text-center flex flex-col items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-sm">Fetching real-time subscription records...</p>
             </div>
-          ))}
+          ) : subscribers.length === 0 ? (
+            <div className="p-8 text-center border border-dashed rounded-lg flex flex-col items-center justify-center gap-2">
+              <AlertCircle className="h-8 w-8 text-muted-foreground/60" />
+              <p className="font-semibold text-sm">No Active Real-Time Subscriptions</p>
+              <p className="text-xs text-muted-foreground max-w-md">
+                There are currently no real-time subscriptions from learners, schools, or users.
+                All metrics update automatically live as new subscriptions occur.
+              </p>
+            </div>
+          ) : (
+            subscribers.map(sub => (
+              <div key={sub.id} className="p-3 border rounded-lg flex justify-between items-center flex-wrap gap-2">
+                <div>
+                  <p className="font-medium text-sm">{sub.name}</p>
+                  <p className="text-xs text-muted-foreground">{sub.email}</p>
+                  <p className="text-xs text-muted-foreground">{sub.plan} · ${sub.amount.toFixed(2)} · {sub.paymentMethod} · Since {sub.subscribedAt}</p>
+                </div>
+                <Badge variant={statusColor(sub.status) as any}>{sub.status}</Badge>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
     </div>
