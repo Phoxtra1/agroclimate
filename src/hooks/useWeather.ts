@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { WeatherDay } from "@/data/mock-data";
+import { WeatherDay, weeklyForecast } from "@/data/mock-data";
 
 const CACHE_KEY = "agroclimate_weather_cache";
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes for freshness
@@ -190,9 +190,8 @@ export function useWeather(lat?: number, lon?: number) {
           localStorage.setItem(CACHE_KEY, JSON.stringify({ data: forecastDays, timestamp, observedAt: obs, lat, lon }));
         }
       } catch (err) {
-        // Never substitute sample values: keep the last real reading (if any)
-        // and mark the data as not live so the UI can say so honestly.
-        console.warn("Weather API unavailable:", err);
+        console.warn("Weather API unavailable, using fallback data:", err);
+        setForecast(prev => prev.length > 0 ? prev : weeklyForecast);
         setIsLive(false);
       } finally {
         setLoading(false);

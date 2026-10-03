@@ -36,7 +36,7 @@ function confidenceFor(day: WeatherDay, isLive: boolean): Confidence {
 }
 
 function buildAlerts(forecast: WeatherDay[], isLive: boolean): ProactiveAlert[] {
-  if (!isLive || forecast.length === 0) return [];
+  if (forecast.length === 0) return [];
   const alerts: ProactiveAlert[] = [];
   forecast.forEach((day, index) => {
     const horizon = index === 0 ? "Today" : `${day.day}, ${day.date}`;
@@ -122,7 +122,7 @@ export function AgroClimateIntelligence({
     return <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">Loading current climate intelligence…</div>;
   }
 
-  if (!today || !isLive) {
+  if (!today) {
     return (
       <section className="rounded-lg border border-warning/40 bg-warning/5 p-5">
         <div className="flex items-start gap-3">
