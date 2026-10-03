@@ -546,7 +546,7 @@ function useEnvironmentState(forecast: any[]): EnvironmentState | null {
       humidity: day.humidity ?? 60,
       windSpeed: day.windSpeed ?? day.wind ?? 5,
       windGust: day.windGust ?? (day.wind ? day.wind * 1.4 : 8),
-      rainfall: day.rainfall ?? (day.rainProb != null ? day.rainProb * 0.3 : 0),
+      rainfall: day.rainfall ?? day.rainMm ?? (day.rainProb != null ? day.rainProb * 0.3 : 0),
       pressure: day.pressure ?? 1013,
       visibility: day.visibility ?? 10,
     }));

@@ -36,15 +36,15 @@ export function TodayWeather({ weather }: { weather: WeatherDay }) {
 
 export function ForecastRow({ day }: { day: WeatherDay }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
+    <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
       <div className="w-20">
         <p className="font-semibold text-sm">{day.day}</p>
-        <p className="text-xs text-muted-foreground">{day.date}</p>
+        <p className="text-[11px] text-muted-foreground">{day.date}</p>
       </div>
       <span className="text-2xl">{day.icon}</span>
       <div className="text-right text-sm">
-        <p className="font-semibold">{day.tempHigh}° / {day.tempLow}°</p>
-        <p className="text-muted-foreground flex items-center gap-1 justify-end">
+        <p className="font-semibold text-sm">{day.tempHigh}° / {day.tempLow}°</p>
+        <p className="text-muted-foreground text-xs flex items-center gap-1 justify-end">
           <span className="text-sky-400">💧</span> {day.rainProb}%
         </p>
       </div>
