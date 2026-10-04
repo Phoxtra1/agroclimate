@@ -149,7 +149,7 @@ export function useAgrofund() {
       if (auditsErr) console.warn("Error fetching agrofund_audit_logs:", auditsErr.message);
 
       if (opps && opps.length > 0) {
-        setOpportunities(opps as AgrofundOpportunity[]);
+        setOpportunities(opps as unknown as AgrofundOpportunity[]);
       } else {
         // Fallback initial curated opportunities discovered by DIPA
         const fallbackOpps: AgrofundOpportunity[] = [
@@ -285,13 +285,13 @@ export function useAgrofund() {
         setOpportunities(fallbackOpps);
       }
 
-      if (logs && logs.length > 0) setRefreshLogs(logs as RefreshLog[]);
-      if (notifs && notifs.length > 0) setNotifications(notifs as AgrofundNotification[]);
-      if (audits && audits.length > 0) setAuditLogs(audits as AuditLog[]);
+      if (logs && logs.length > 0) setRefreshLogs(logs as unknown as RefreshLog[]);
+      if (notifs && notifs.length > 0) setNotifications(notifs as unknown as AgrofundNotification[]);
+      if (audits && audits.length > 0) setAuditLogs(audits as unknown as AuditLog[]);
 
       if (trks) {
         const trackerMap: Record<string, ApplicationTracker> = {};
-        (trks as ApplicationTracker[]).forEach((t) => {
+        (trks as unknown as ApplicationTracker[]).forEach((t) => {
           trackerMap[t.opportunity_id] = t;
         });
         setTrackers(trackerMap);
@@ -299,7 +299,7 @@ export function useAgrofund() {
 
       if (bms) {
         const bmMap: Record<string, BookmarkNote> = {};
-        (bms as BookmarkNote[]).forEach((b) => {
+        (bms as unknown as BookmarkNote[]).forEach((b) => {
           bmMap[b.opportunity_id] = b;
         });
         setBookmarksNotes(bmMap);
