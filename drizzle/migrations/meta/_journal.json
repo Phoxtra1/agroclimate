@@ -8,6 +8,13 @@
       "when": 1791303077945,
       "tag": "0000_create_agrofund_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791303661986,
+      "tag": "0001_agrofund_weekly_quota",
+      "breakpoints": true
     }
   ]
 }
