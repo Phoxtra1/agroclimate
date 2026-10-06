@@ -1,304 +1,285 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-interface FetchRequestPayload {
-  action?: "fetch_opportunities" | "scheduled_refresh";
-  manualTriggeredBy?: string;
+const WEEKLY_QUOTA = 5;
+const MODEL = "openai/gpt-6-astra";
+
+const PROFILE = `AgroClimate is a Ghana-based agriculture & climate intelligence platform for African smallholder farmers:
+live weather and climate-risk alerts, flood/drought early warning, crop and livestock advisory, aquaculture monitoring,
+drone/aerial field intelligence, a farmer–buyer market link, agri-logistics (transport matching) and SMS alerts for low-connectivity users.
+It is a registered early-stage agri-tech/climate-tech startup led by an African (Ghanaian) founder.`;
+
+function isoWeek(d = new Date()) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+const clean = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const normLink = (u: string) => (u || "").trim().toLowerCase().replace(/\/+$/, "");
+const fingerprintOf = (org: string, title: string) => `${clean(org).slice(0, 40)}-${clean(title).slice(0, 80)}`;
+
+const candidateSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["candidates"],
+  properties: {
+    candidates: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "organisation_name", "title", "category", "funding_amount", "currency", "eligible_countries",
+          "eligibility_requirements", "required_documents", "deadline", "application_portal_url", "source_url",
+          "why_agroclimate_fits", "eligibility_assessment", "relevance_score",
+        ],
+        properties: {
+          organisation_name: { type: "string" },
+          title: { type: "string" },
+          category: { type: "string", enum: ["agri-tech", "agriculture", "climate_resilience", "sustainable_food_systems", "climate_tech", "innovation"] },
+          funding_amount: { type: ["number", "null"] },
+          currency: { type: "string" },
+          eligible_countries: { type: "array", items: { type: "string" } },
+          eligibility_requirements: { type: "string" },
+          required_documents: { type: "array", items: { type: "string" } },
+          deadline: { type: ["string", "null"], description: "ISO date YYYY-MM-DD, or null if rolling" },
+          application_portal_url: { type: "string", description: "Direct URL of the page/portal where applications are submitted" },
+          source_url: { type: "string" },
+          why_agroclimate_fits: { type: "string" },
+          eligibility_assessment: { type: "string", enum: ["Fully Eligible", "High Eligibility", "Conditional Eligibility"] },
+          relevance_score: { type: "number" },
+        },
+      },
+    },
+  },
+};
+
+class GatewayError extends Error {
+  constructor(public status: number, message: string) { super(message); }
 }
 
-// REAL Verified Seed Sources & Grants open to Ghanaian/African Founders
-const CURATED_FUNDING_SOURCES = [
-  {
-    fingerprint: "agra-catalytic-grant-2026",
-    organisation_name: "Alliance for a Green Revolution in Africa (AGRA)",
-    title: "AGRA Agri-Business Catalytic Innovation Grant",
-    category: "agri-tech",
-    funding_amount: 150000,
-    currency: "USD",
-    eligible_countries: ["Ghana", "Kenya", "Nigeria", "Rwanda", "Tanzania"],
-    eligibility_requirements: "Registered agribusinesses operating in Sub-Saharan Africa with at least 2 years of operational track record in climate-smart agriculture or digital extension.",
-    required_documents: ["Business Registration Certificate", "2-Year Audited Financials", "Pitch Deck", "Environmental Impact Assessment"],
-    days_to_deadline: 45,
-    official_application_link: "https://agra.org/grants-and-opportunities/catalytic-grant-2026",
-    eligibility_assessment: "High Eligibility",
-    eligibility_reasons: "Explicitly prioritises Ghanaian and Sub-Saharan African agri-tech and climate resilience startups with demonstrated farmer adoption.",
-    relevance_score: 95,
-    is_unclear_unverified: false,
-    unclear_details: null,
-    source_url: "https://agra.org/grants-and-opportunities",
-    source_evidence_summary: "Official AGRA opportunity call targeting climate resilience innovations and digital advisory platforms in West Africa.",
-    source_snippet: "AGRA invites applications from registered agribusinesses and agri-tech innovators in Ghana and East Africa for funding up to $150,000.",
-    source_credibility_score: 98,
-  },
-  {
-    fingerprint: "afdb-agri-pitch-competition-2026",
-    organisation_name: "African Development Bank (AfDB)",
-    title: "AfDB Youth AgriPitch Competition & Accelerator",
-    category: "agriculture",
-    funding_amount: 120000,
-    currency: "USD",
-    eligible_countries: ["Ghana", "All African Union Member States"],
-    eligibility_requirements: "African founders aged 18–35 leading youth-owned agribusinesses with proven market traction in sustainable food systems.",
-    required_documents: ["Founder ID/Passport", "Company Profile", "Traction Metrics", "Pitch Video Link"],
-    days_to_deadline: 18,
-    official_application_link: "https://www.afdb.org/en/topics-and-sectors/initiatives-partnerships/youth-agripitch",
-    eligibility_assessment: "Fully Eligible",
-    eligibility_reasons: "Directly targets young African entrepreneurs and Ghanaian founders in sustainable agriculture and post-harvest technology.",
-    relevance_score: 98,
-    is_unclear_unverified: false,
-    unclear_details: null,
-    source_url: "https://www.afdb.org/en/news-and-events/competitions",
-    source_evidence_summary: "African Development Bank flagship AgriPitch program providing grant equity and capacity building for youth-led agri-enterprises.",
-    source_snippet: "The African Development Bank announces the 2026 Youth AgriPitch Competition offering grants up to $120,000 for innovative agri-preneurs.",
-    source_credibility_score: 99,
-  },
-  {
-    fingerprint: "gsma-innovation-fund-climate-2026",
-    organisation_name: "GSMA Mobile for Development Foundation",
-    title: "GSMA Innovation Fund for Climate Resilience & Agri-Tech",
-    category: "climate_resilience",
-    funding_amount: 250000,
-    currency: "GBP",
-    eligible_countries: ["Ghana", "Kenya", "Uganda", "Ethiopia", "Senegal"],
-    eligibility_requirements: "Small and growing enterprises utilising mobile technology or IoT to build climate resilience for smallholder farmers in Africa.",
-    required_documents: ["Incorporation Certificate", "Project Proposal", "Budget Breakdown", "Technical Roadmap"],
-    days_to_deadline: 6,
-    official_application_link: "https://www.gsma.com/mobilefordevelopment/innovation-fund/climate-resilience",
-    eligibility_assessment: "High Eligibility",
-    eligibility_reasons: "Matches AgroClimate/Agyenkwa tech profile directly; open to Ghanaian technology-enabled agricultural solutions.",
-    relevance_score: 92,
-    is_unclear_unverified: false,
-    unclear_details: null,
-    source_url: "https://www.gsma.com/mobilefordevelopment/grants",
-    source_evidence_summary: "GSMA grant scheme supported by UK Foreign, Commonwealth & Development Office (FCDO) targeting climate adaptation tech.",
-    source_snippet: "GSMA Innovation Fund awards up to £250,000 for mobile-enabled climate resilience solutions serving smallholder farming communities.",
-    source_credibility_score: 96,
-  },
-  {
-    fingerprint: "tef-entrepreneurship-programme-2026",
-    organisation_name: "Tony Elumelu Foundation",
-    title: "Tony Elumelu Foundation Agribusiness Seed Capital Grant",
-    category: "sustainable_food_systems",
-    funding_amount: 5000,
-    currency: "USD",
-    eligible_countries: ["Ghana", "All 54 African Countries"],
-    eligibility_requirements: "Early-stage African entrepreneurs with innovative business ideas or existing businesses under 5 years old in agriculture or agri-processing.",
-    required_documents: ["National ID", "Business Plan Summary", "Founder Resume"],
-    days_to_deadline: 3,
-    official_application_link: "https://www.tonyelumelufoundation.org/apply",
-    eligibility_assessment: "High Eligibility",
-    eligibility_reasons: "Pan-African grant with strong Ghanaian recipient history, focused on food systems and rural youth empowerment.",
-    relevance_score: 90,
-    is_unclear_unverified: false,
-    unclear_details: null,
-    source_url: "https://www.tonyelumelufoundation.org/programmes",
-    source_evidence_summary: "Largest African philanthropic initiative supporting young entrepreneurs across 54 African countries.",
-    source_snippet: "TEF Seed Capital program provides $5,000 non-refundable grant plus mentorship and training for African agri-tech founders.",
-    source_credibility_score: 97,
-  },
-  {
-    fingerprint: "ifad-innovate4food-2026",
-    organisation_name: "International Fund for Agricultural Development (IFAD)",
-    title: "IFAD Innovate4Food West Africa Adaptation Challenge",
-    category: "sustainable_food_systems",
-    funding_amount: 200000,
-    currency: "USD",
-    eligible_countries: ["Ghana", "Cote d'Ivoire", "Burkina Faso", "Mali"],
-    eligibility_requirements: "Agri-tech initiatives reducing post-harvest losses and improving climate adaptation in smallholder grain and horticulture supply chains.",
-    required_documents: ["Commercial Registration", "3-Year Impact Strategy", "Audit Reports"],
-    days_to_deadline: 30,
-    official_application_link: "https://www.ifad.org/en/innovate4food-west-africa",
-    eligibility_assessment: "High Eligibility",
-    eligibility_reasons: "Focuses on West Africa with priority scoring for Ghanaian sustainable food systems enterprises.",
-    relevance_score: 94,
-    is_unclear_unverified: false,
-    unclear_details: null,
-    source_url: "https://www.ifad.org/en/calls-for-proposals",
-    source_evidence_summary: "UN agency IFAD call for proposals supporting West African smallholder climate adaptation and market linkage.",
-    source_snippet: "IFAD announces $200,000 challenge grants for scalable post-harvest and climate adaptation solutions in West Africa.",
-    source_credibility_score: 98,
-  },
-  {
-    fingerprint: "eib-africa-green-agri-fund-2026",
-    organisation_name: "European Investment Bank (EIB) & Global Environment Facility",
-    title: "EIB African Green Agriculture Climate Resilience Grant",
-    category: "climate_resilience",
-    funding_amount: 500000,
-    currency: "EUR",
-    eligible_countries: ["Ghana", "Senegal", "Malawi", "Zambia", "Kenya"],
-    eligibility_requirements: "Medium to large scale agricultural cooperatives and agri-tech consortia building climate resilient irrigation or solar storage.",
-    required_documents: ["Cooperative/Company License", "Audited Financials", "Environmental Risk Plan"],
-    days_to_deadline: 60,
-    official_application_link: "https://www.eib.org/en/projects/topics/climate-action/africa-green-agri-fund",
-    eligibility_assessment: "Conditional Eligibility",
-    eligibility_reasons: "Requires consortium partnership or co-funding, open to Ghanaian commercial agri-enterprises.",
-    relevance_score: 88,
-    is_unclear_unverified: true,
-    unclear_details: "Minimum co-funding match percentage is pending final EIB clarification circular.",
-    source_url: "https://www.eib.org/en/grants/africa-climate",
-    source_evidence_summary: "EIB Green Climate Financing facility for African sustainable food and climate infrastructure.",
-    source_snippet: "EIB announces €500,000 grant allocations for climate resilience in Sub-Saharan Africa.",
-    source_credibility_score: 95,
+async function askDipa(apiKey: string, exclude: string[], today: string) {
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "fetch" },
+    body: JSON.stringify({
+      model: MODEL,
+      stream: true,
+      store: false,
+      reasoning: { effort: "medium", summary: "auto" },
+      include: ["reasoning.encrypted_content"],
+      text: { format: { type: "json_schema", name: "funding_candidates", strict: true, schema: candidateSchema } },
+      input: [
+        {
+          role: "system",
+          content: `You are Dipa, AgroClimate's funding scout. Today is ${today}.
+Return up to 15 funding opportunities (grants, accelerators with funding, challenge prizes, climate/agri innovation funds)
+whose application portal is OPEN and accepting applications now or recurs on a known annual cycle that is currently open,
+and that AgroClimate is genuinely eligible for. Applicant profile:\n${PROFILE}
+Rules: give the direct application portal URL (not a news article or a generic homepage). Only use organisations and URLs you are confident exist.
+Never include closed calls, loans-only products, or anything listed in the exclusion list. Prefer Ghana / West Africa / pan-African eligibility.`,
+        },
+        { role: "user", content: `Exclusion list (already known, do not repeat):\n${exclude.slice(0, 300).join("\n") || "(none)"}` },
+      ],
+    }),
+  });
+  if (!res.ok || !res.body) {
+    const t = await res.text().catch(() => "");
+    let msg = t;
+    try { msg = JSON.parse(t)?.error?.message || JSON.parse(t)?.message || t; } catch { /* raw */ }
+    throw new GatewayError(res.status, msg || `AI request failed (${res.status})`);
   }
-];
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", text = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      let ev: any;
+      try { ev = JSON.parse(data); } catch { continue; }
+      if (ev.type === "response.output_text.delta") text += ev.delta || "";
+      else if (ev.type === "response.refusal.delta") throw new GatewayError(422, "The discovery request was declined.");
+      else if (ev.type === "error" || ev.type === "response.failed")
+        throw new GatewayError(502, ev.error?.message || ev.response?.error?.message || "Discovery failed");
+    }
+  }
+  if (!text.trim()) throw new GatewayError(422, "Discovery returned no results.");
+  return (JSON.parse(text).candidates || []) as any[];
+}
 
-serve(async (req) => {
+const OPEN_WORDS = /(apply now|apply here|submit (your )?application|application form|applications? (are )?(now )?open|call for (applications|proposals)|register to apply|start (your )?application|deadline)/i;
+const CLOSED_WORDS = /(applications? (are |is )?(now )?closed|call (is )?closed|no longer accepting|submission period has ended|this call has closed)/i;
+
+async function verifyPortal(url: string) {
+  try {
+    if (!/^https:\/\//i.test(url)) return { ok: false, reason: "not https" };
+    const r = await fetch(url, {
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 (AgroClimate Dipa funding verifier)", Accept: "text/html" },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) return { ok: false, reason: `HTTP ${r.status}` };
+    const html = (await r.text()).slice(0, 400000);
+    const textOnly = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    if (CLOSED_WORDS.test(textOnly)) return { ok: false, reason: "portal says closed" };
+    if (!OPEN_WORDS.test(textOnly) && !/<form/i.test(html)) return { ok: false, reason: "no application entry point" };
+    const m = textOnly.match(new RegExp(`.{0,160}${OPEN_WORDS.source}.{0,160}`, "i"));
+    return { ok: true, finalUrl: r.url, snippet: (m?.[0] || textOnly.slice(0, 300)).trim() };
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+}
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const body = await req.json().catch(() => ({}));
+  const refreshType = body?.action === "scheduled_refresh" ? "scheduled" : "manual";
+  const week = isoWeek();
+  const now = new Date();
+
+  // Mark expired items based on their stored deadline (no fabricated dates).
+  await supabase.from("agrofund_opportunities").update({ is_expired: true })
+    .lt("deadline", now.toISOString()).eq("is_expired", false);
+
+  // Single-flight lock: skip if another run started in the last 10 minutes.
+  const { data: running } = await supabase.from("agrofund_refresh_logs").select("id")
+    .eq("status", "in_progress").gte("created_at", new Date(Date.now() - 10 * 60000).toISOString()).limit(1);
+  if (running?.length) return json({ success: true, summary: { skipped: true, reason: "A discovery run is already in progress." } });
+
+  const { count: weekCount } = await supabase.from("agrofund_opportunities")
+    .select("id", { count: "exact", head: true }).eq("discovery_week", week);
+  const remaining = Math.max(0, WEEKLY_QUOTA - (weekCount || 0));
+
+  const nextMonday = new Date(now);
+  nextMonday.setUTCDate(now.getUTCDate() + ((8 - (now.getUTCDay() || 7)) % 7 || 7));
+  nextMonday.setUTCHours(6, 0, 0, 0);
+
+  if (remaining === 0) {
+    const { data: log } = await supabase.from("agrofund_refresh_logs").insert({
+      refresh_type: refreshType, status: "success", opportunities_found: 0, new_inserted: 0, records_updated: 0,
+      error_message: `Weekly quota of ${WEEKLY_QUOTA} new opportunities already reached for ${week}.`,
+    }).select().single();
+    return json({ success: true, summary: { week, quotaReached: true, newInserted: 0, nextScheduledRefresh: nextMonday.toISOString() }, refreshLog: log });
+  }
+
+  const { data: lock } = await supabase.from("agrofund_refresh_logs")
+    .insert({ refresh_type: refreshType, status: "in_progress" }).select("id").single();
+
+  const finish = async (patch: Record<string, unknown>) => {
+    const { data } = await supabase.from("agrofund_refresh_logs")
+      .update({ ...patch, completed_at: new Date().toISOString() }).eq("id", lock!.id).select().single();
+    return data;
+  };
+
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!apiKey) throw new GatewayError(401, "AI discovery is not configured.");
 
-    const body: FetchRequestPayload = await req.json().catch(() => ({ action: "fetch_opportunities" }));
-    const refreshType = body.action === "scheduled_refresh" ? "scheduled" : "manual";
+    const { data: existing } = await supabase.from("agrofund_opportunities")
+      .select("fingerprint, official_application_link, organisation_name, title");
+    const fps = new Set((existing || []).map((e: any) => e.fingerprint));
+    const links = new Set((existing || []).map((e: any) => normLink(e.official_application_link)));
+    const exclude = (existing || []).map((e: any) => `${e.organisation_name} — ${e.title} (${e.official_application_link})`);
 
-    let newInsertedCount = 0;
-    let recordsUpdatedCount = 0;
-    const errors: string[] = [];
+    const candidates = await askDipa(apiKey, exclude, now.toISOString().slice(0, 10));
+    const rejected: string[] = [];
+    let inserted = 0;
 
-    // Run discovery & deduplication pipeline
-    for (const source of CURATED_FUNDING_SOURCES) {
-      const deadlineDate = new Date();
-      deadlineDate.setDate(deadlineDate.getDate() + source.days_to_deadline);
+    for (const c of candidates) {
+      if (inserted >= remaining) break;
+      const fp = fingerprintOf(c.organisation_name, c.title);
+      const link = normLink(c.application_portal_url);
+      if (fps.has(fp) || links.has(link)) { rejected.push(`${c.title}: duplicate`); continue; }
+      if (c.deadline && new Date(c.deadline) < now) { rejected.push(`${c.title}: deadline passed`); continue; }
 
-      // Check existing record by fingerprint
-      const { data: existing } = await supabase
-        .from("agrofund_opportunities")
-        .select("id, deadline, funding_amount, title, status")
-        .eq("fingerprint", source.fingerprint)
-        .maybeSingle();
+      const v = await verifyPortal(c.application_portal_url);
+      if (!v.ok) { rejected.push(`${c.title}: ${v.reason}`); continue; }
+      const finalLink = normLink(v.finalUrl || c.application_portal_url);
+      if (links.has(finalLink)) { rejected.push(`${c.title}: duplicate`); continue; }
 
-      if (existing) {
-        // Deduplication: Update existing record if details changed or deadline updated
-        const { error: updateErr } = await supabase
-          .from("agrofund_opportunities")
-          .update({
-            funding_amount: source.funding_amount,
-            currency: source.currency,
-            deadline: deadlineDate.toISOString(),
-            last_verified_at: new Date().toISOString(),
-            is_expired: source.days_to_deadline <= 0,
-            is_unclear_unverified: source.is_unclear_unverified,
-            unclear_details: source.unclear_details,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
+      const { data: rec, error } = await supabase.from("agrofund_opportunities").insert({
+        fingerprint: fp,
+        organisation_name: c.organisation_name,
+        title: c.title,
+        category: c.category,
+        funding_amount: c.funding_amount ?? 0,
+        currency: c.currency || "USD",
+        eligible_countries: c.eligible_countries,
+        eligibility_requirements: c.eligibility_requirements,
+        required_documents: c.required_documents,
+        deadline: c.deadline ? new Date(c.deadline).toISOString() : null,
+        official_application_link: c.application_portal_url,
+        status: "pending_review",
+        is_published: false,
+        eligibility_assessment: c.eligibility_assessment,
+        eligibility_reasons: c.why_agroclimate_fits,
+        relevance_score: Math.max(0, Math.min(100, c.relevance_score || 0)),
+        is_unclear_unverified: !c.deadline || c.funding_amount == null,
+        unclear_details: [!c.deadline && "No fixed deadline found (rolling or unpublished).", c.funding_amount == null && "Funding amount not stated."].filter(Boolean).join(" ") || null,
+        missing_info_flags: [!c.deadline && "deadline", c.funding_amount == null && "funding_amount"].filter(Boolean),
+        source_url: c.source_url || c.application_portal_url,
+        source_evidence_summary: `Application portal checked live on ${now.toISOString().slice(0, 10)} and shows an open application entry point.`,
+        source_snippet: v.snippet?.slice(0, 500),
+        source_credibility_score: 80,
+        discovery_week: week,
+        portal_verified_at: now.toISOString(),
+      }).select("id").single();
 
-        if (updateErr) {
-          errors.push(`Failed to update ${source.fingerprint}: ${updateErr.message}`);
-        } else {
-          recordsUpdatedCount++;
+      if (error) { rejected.push(`${c.title}: ${error.message}`); continue; }
+      fps.add(fp); links.add(link); links.add(finalLink);
+      inserted++;
 
-          // Check for material changes or approaching deadlines to notify admins
-          if (source.days_to_deadline <= 7 && source.days_to_deadline > 0) {
-            const notifKey = `approaching_deadline_${existing.id}_${deadlineDate.toISOString().slice(0, 10)}`;
-            await supabase.from("agrofund_notifications").insert({
-              opportunity_id: existing.id,
-              type: "approaching_deadline",
-              title: `Deadline Approaching: ${source.title}`,
-              message: `${source.organisation_name} grant deadline is in ${source.days_to_deadline} days (${deadlineDate.toLocaleDateString()}).`,
-              notification_key: notifKey,
-            });
-          }
-        }
-      } else {
-        // Insert genuinely new opportunity -> sent to Pending Review by default
-        const { data: newRecord, error: insertErr } = await supabase
-          .from("agrofund_opportunities")
-          .insert({
-            fingerprint: source.fingerprint,
-            organisation_name: source.organisation_name,
-            title: source.title,
-            category: source.category,
-            funding_amount: source.funding_amount,
-            currency: source.currency,
-            eligible_countries: source.eligible_countries,
-            eligibility_requirements: source.eligibility_requirements,
-            required_documents: source.required_documents,
-            deadline: deadlineDate.toISOString(),
-            official_application_link: source.official_application_link,
-            status: "pending_review",
-            is_published: false,
-            eligibility_assessment: source.eligibility_assessment,
-            eligibility_reasons: source.eligibility_reasons,
-            relevance_score: source.relevance_score,
-            is_unclear_unverified: source.is_unclear_unverified,
-            unclear_details: source.unclear_details,
-            is_expired: source.days_to_deadline <= 0,
-            source_url: source.source_url,
-            source_evidence_summary: source.source_evidence_summary,
-            source_snippet: source.source_snippet,
-            source_credibility_score: source.source_credibility_score,
-          })
-          .select("id")
-          .single();
-
-        if (insertErr) {
-          errors.push(`Failed to insert ${source.fingerprint}: ${insertErr.message}`);
-        } else {
-          newInsertedCount++;
-
-          // Seed application tracker record
-          await supabase.from("agrofund_application_trackers").insert({
-            opportunity_id: newRecord.id,
-            stage: "not_applied",
-            internal_notes: "Discovered by DIPA background intelligence engine.",
-          });
-
-          // Dispatch notification for genuinely new opportunity
-          const notifKey = `new_opp_${newRecord.id}`;
-          await supabase.from("agrofund_notifications").insert({
-            opportunity_id: newRecord.id,
-            type: "new_opportunity",
-            title: `New Opportunity Discovered: ${source.title}`,
-            message: `DIPA fetched a new opportunity from ${source.organisation_name} worth ${source.currency} ${source.funding_amount.toLocaleString()}. Sent to Pending Review.`,
-            notification_key: notifKey,
-          });
-        }
-      }
+      await supabase.from("agrofund_application_trackers").insert({
+        opportunity_id: rec.id, stage: "not_applied", internal_notes: "Discovered by Dipa weekly funding scout.",
+      });
+      await supabase.from("agrofund_notifications").insert({
+        opportunity_id: rec.id, type: "new_opportunity",
+        title: `New open portal: ${c.title}`,
+        message: `${c.organisation_name} is accepting applications. Sent to Pending Review.`,
+        notification_key: `new_opp_${rec.id}`,
+      });
     }
 
-    // Log refresh execution
-    const refreshStatus = errors.length > 0 && newInsertedCount === 0 && recordsUpdatedCount === 0 ? "error" : "success";
-    const { data: refreshLog } = await supabase
-      .from("agrofund_refresh_logs")
-      .insert({
-        refresh_type: refreshType,
-        status: refreshStatus,
-        opportunities_found: CURATED_FUNDING_SOURCES.length,
-        new_inserted: newInsertedCount,
-        records_updated: recordsUpdatedCount,
-        error_message: errors.length > 0 ? errors.join("; ") : null,
-      })
-      .select()
-      .single();
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        summary: {
-          refreshType,
-          totalFetched: CURATED_FUNDING_SOURCES.length,
-          newInserted: newInsertedCount,
-          recordsUpdated: recordsUpdatedCount,
-          errors,
-          lastSuccessfulRefresh: new Date().toISOString(),
-          nextScheduledRefresh: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
-        },
-        refreshLog,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err?.message || "Unknown error in dipa-agrofund" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    const shortfall = remaining - inserted;
+    const log = await finish({
+      status: "success",
+      opportunities_found: candidates.length,
+      new_inserted: inserted,
+      records_updated: 0,
+      error_message: shortfall > 0
+        ? `${inserted} of ${remaining} remaining weekly slots filled; only portals verified as open were accepted. Skipped: ${rejected.slice(0, 12).join("; ")}`
+        : null,
+    });
+    return json({
+      success: true,
+      summary: { week, refreshType, totalFetched: candidates.length, newInserted: inserted, weeklyRemaining: remaining - inserted, recordsUpdated: 0, errors: [], lastSuccessfulRefresh: new Date().toISOString(), nextScheduledRefresh: nextMonday.toISOString() },
+      refreshLog: log,
+    });
+  } catch (err) {
+    const status = err instanceof GatewayError ? err.status : 500;
+    const msg = status === 402 ? "AI credits are exhausted; weekly discovery is paused until credits are added."
+      : status === 429 ? "Discovery is rate limited; it will try again on the next run."
+      : (err as Error).message || "Discovery failed";
+    await finish({ status: "error", error_message: msg });
+    return json({ error: msg }, status >= 400 && status < 600 ? status : 500);
   }
 });
