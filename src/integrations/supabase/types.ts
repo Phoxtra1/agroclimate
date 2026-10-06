@@ -117,6 +117,299 @@ export type Database = {
           },
         ]
       }
+      agrofund_application_trackers: {
+        Row: {
+          assigned_to: string | null
+          id: string
+          internal_notes: string | null
+          opportunity_id: string | null
+          stage: string
+          submission_date: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          id?: string
+          internal_notes?: string | null
+          opportunity_id?: string | null
+          stage?: string
+          submission_date?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          id?: string
+          internal_notes?: string | null
+          opportunity_id?: string | null
+          stage?: string
+          submission_date?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agrofund_application_trackers_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "agrofund_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agrofund_audit_logs: {
+        Row: {
+          action: string
+          admin_id: string | null
+          created_at: string | null
+          id: string
+          new_state: Json | null
+          notes: string | null
+          opportunity_id: string | null
+          previous_state: Json | null
+        }
+        Insert: {
+          action: string
+          admin_id?: string | null
+          created_at?: string | null
+          id?: string
+          new_state?: Json | null
+          notes?: string | null
+          opportunity_id?: string | null
+          previous_state?: Json | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string | null
+          created_at?: string | null
+          id?: string
+          new_state?: Json | null
+          notes?: string | null
+          opportunity_id?: string | null
+          previous_state?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agrofund_audit_logs_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "agrofund_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agrofund_bookmarks_notes: {
+        Row: {
+          id: string
+          is_bookmarked: boolean | null
+          note: string | null
+          opportunity_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          is_bookmarked?: boolean | null
+          note?: string | null
+          opportunity_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          is_bookmarked?: boolean | null
+          note?: string | null
+          opportunity_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agrofund_bookmarks_notes_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "agrofund_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agrofund_notifications: {
+        Row: {
+          created_at: string | null
+          id: string
+          message: string
+          notification_key: string
+          opportunity_id: string | null
+          read: boolean | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message: string
+          notification_key: string
+          opportunity_id?: string | null
+          read?: boolean | null
+          title: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message?: string
+          notification_key?: string
+          opportunity_id?: string | null
+          read?: boolean | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agrofund_notifications_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "agrofund_opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agrofund_opportunities: {
+        Row: {
+          category: string
+          created_at: string | null
+          currency: string
+          deadline: string | null
+          eligibility_assessment: string
+          eligibility_reasons: string
+          eligibility_requirements: string
+          eligible_countries: string[] | null
+          fingerprint: string
+          funding_amount: number | null
+          id: string
+          is_broken_link: boolean | null
+          is_expired: boolean | null
+          is_published: boolean
+          is_suspicious_source: boolean | null
+          is_unclear_unverified: boolean | null
+          last_verified_at: string | null
+          missing_info_flags: string[] | null
+          official_application_link: string
+          organisation_name: string
+          released_at: string | null
+          relevance_score: number | null
+          required_documents: string[] | null
+          source_credibility_score: number | null
+          source_evidence_summary: string
+          source_snippet: string | null
+          source_url: string
+          status: string
+          title: string
+          unclear_details: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string | null
+          currency?: string
+          deadline?: string | null
+          eligibility_assessment?: string
+          eligibility_reasons?: string
+          eligibility_requirements?: string
+          eligible_countries?: string[] | null
+          fingerprint: string
+          funding_amount?: number | null
+          id?: string
+          is_broken_link?: boolean | null
+          is_expired?: boolean | null
+          is_published?: boolean
+          is_suspicious_source?: boolean | null
+          is_unclear_unverified?: boolean | null
+          last_verified_at?: string | null
+          missing_info_flags?: string[] | null
+          official_application_link: string
+          organisation_name: string
+          released_at?: string | null
+          relevance_score?: number | null
+          required_documents?: string[] | null
+          source_credibility_score?: number | null
+          source_evidence_summary?: string
+          source_snippet?: string | null
+          source_url?: string
+          status?: string
+          title: string
+          unclear_details?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          currency?: string
+          deadline?: string | null
+          eligibility_assessment?: string
+          eligibility_reasons?: string
+          eligibility_requirements?: string
+          eligible_countries?: string[] | null
+          fingerprint?: string
+          funding_amount?: number | null
+          id?: string
+          is_broken_link?: boolean | null
+          is_expired?: boolean | null
+          is_published?: boolean
+          is_suspicious_source?: boolean | null
+          is_unclear_unverified?: boolean | null
+          last_verified_at?: string | null
+          missing_info_flags?: string[] | null
+          official_application_link?: string
+          organisation_name?: string
+          released_at?: string | null
+          relevance_score?: number | null
+          required_documents?: string[] | null
+          source_credibility_score?: number | null
+          source_evidence_summary?: string
+          source_snippet?: string | null
+          source_url?: string
+          status?: string
+          title?: string
+          unclear_details?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      agrofund_refresh_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          new_inserted: number | null
+          opportunities_found: number | null
+          records_updated: number | null
+          refresh_type: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          new_inserted?: number | null
+          opportunities_found?: number | null
+          records_updated?: number | null
+          refresh_type?: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          new_inserted?: number | null
+          opportunities_found?: number | null
+          records_updated?: number | null
+          refresh_type?: string
+          status?: string
+        }
+        Relationships: []
+      }
       agtrans_drivers: {
         Row: {
           admin_suspended: boolean

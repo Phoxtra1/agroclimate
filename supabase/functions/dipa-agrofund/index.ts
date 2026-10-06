@@ -204,7 +204,7 @@ serve(async (req) => {
               title: `Deadline Approaching: ${source.title}`,
               message: `${source.organisation_name} grant deadline is in ${source.days_to_deadline} days (${deadlineDate.toLocaleDateString()}).`,
               notification_key: notifKey,
-            }).catch(() => {/* Duplicate notification suppressed */});
+            });
           }
         }
       } else {
@@ -249,7 +249,7 @@ serve(async (req) => {
             opportunity_id: newRecord.id,
             stage: "not_applied",
             internal_notes: "Discovered by DIPA background intelligence engine.",
-          }).catch(() => {});
+          });
 
           // Dispatch notification for genuinely new opportunity
           const notifKey = `new_opp_${newRecord.id}`;
@@ -259,7 +259,7 @@ serve(async (req) => {
             title: `New Opportunity Discovered: ${source.title}`,
             message: `DIPA fetched a new opportunity from ${source.organisation_name} worth ${source.currency} ${source.funding_amount.toLocaleString()}. Sent to Pending Review.`,
             notification_key: notifKey,
-          }).catch(() => {});
+          });
         }
       }
     }
