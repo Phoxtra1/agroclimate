@@ -278,6 +278,7 @@ export type Database = {
           created_at: string | null
           currency: string
           deadline: string | null
+          discovery_week: string | null
           eligibility_assessment: string
           eligibility_reasons: string
           eligibility_requirements: string
@@ -294,6 +295,7 @@ export type Database = {
           missing_info_flags: string[] | null
           official_application_link: string
           organisation_name: string
+          portal_verified_at: string | null
           released_at: string | null
           relevance_score: number | null
           required_documents: string[] | null
@@ -311,6 +313,7 @@ export type Database = {
           created_at?: string | null
           currency?: string
           deadline?: string | null
+          discovery_week?: string | null
           eligibility_assessment?: string
           eligibility_reasons?: string
           eligibility_requirements?: string
@@ -327,6 +330,7 @@ export type Database = {
           missing_info_flags?: string[] | null
           official_application_link: string
           organisation_name: string
+          portal_verified_at?: string | null
           released_at?: string | null
           relevance_score?: number | null
           required_documents?: string[] | null
@@ -344,6 +348,7 @@ export type Database = {
           created_at?: string | null
           currency?: string
           deadline?: string | null
+          discovery_week?: string | null
           eligibility_assessment?: string
           eligibility_reasons?: string
           eligibility_requirements?: string
@@ -360,6 +365,7 @@ export type Database = {
           missing_info_flags?: string[] | null
           official_application_link?: string
           organisation_name?: string
+          portal_verified_at?: string | null
           released_at?: string | null
           relevance_score?: number | null
           required_documents?: string[] | null
