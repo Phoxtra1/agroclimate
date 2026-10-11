@@ -461,9 +461,13 @@ export default function AdminDashboard() {
             <NavButtons />
           </nav>
           <div className="px-3 py-4 border-t border-border">
-            <p className="text-[11px] text-muted-foreground px-3">
-              Authenticated via Central Admin identity
-            </p>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
           </div>
         </aside>
 
@@ -486,9 +490,13 @@ export default function AdminDashboard() {
                 <NavButtons onClick={() => setSheetOpen(false)} />
               </nav>
               <div className="mt-6 pt-4 border-t border-border">
-                <p className="text-[11px] text-muted-foreground">
-                  Authenticated via Central Admin identity
-                </p>
+                <button
+                  onClick={() => { setSheetOpen(false); handleSignOut(); }}
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
               </div>
             </SheetContent>
           </Sheet>
