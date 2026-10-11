@@ -8,7 +8,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const WEEKLY_QUOTA = 5;
-const MODEL = "openai/gpt-6-astra";
+const MODEL = "google/gemini-2.5-pro";
 
 const PROFILE = `AgroClimate is a Ghana-based agriculture & climate intelligence platform for African smallholder farmers:
 live weather and climate-risk alerts, flood/drought early warning, crop and livestock advisory, aquaculture monitoring,
@@ -68,58 +68,34 @@ class GatewayError extends Error {
 }
 
 async function askDipa(apiKey: string, exclude: string[], today: string) {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "fetch" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: MODEL,
-      stream: true,
-      store: false,
-      reasoning: { effort: "medium", summary: "auto" },
-      include: ["reasoning.encrypted_content"],
-      text: { format: { type: "json_schema", name: "funding_candidates", strict: true, schema: candidateSchema } },
-      input: [
+      response_format: { type: "json_object" },
+      messages: [
         {
           role: "system",
           content: `You are Dipa, AgroClimate's funding scout. Today is ${today}.
-Return up to 15 funding opportunities (grants, accelerators with funding, challenge prizes, climate/agri innovation funds)
-whose application portal is OPEN and accepting applications now or recurs on a known annual cycle that is currently open,
-and that AgroClimate is genuinely eligible for. Applicant profile:\n${PROFILE}
-Rules: give the direct application portal URL (not a news article or a generic homepage). Only use organisations and URLs you are confident exist.
-Never include closed calls, loans-only products, or anything listed in the exclusion list. Prefer Ghana / West Africa / pan-African eligibility.`,
+Return JSON {"candidates":[...]} with up to 15 funding programmes (grants, funded accelerators, challenge prizes, climate/agri innovation funds)
+whose application portal is OPEN and accepting applications right now, and that AgroClimate is genuinely eligible for. Applicant profile:\n${PROFILE}
+Each candidate must have exactly these keys: ${JSON.stringify(candidateSchema.properties.candidates.items.properties)}.
+Rules: application_portal_url must be the direct page where applications are submitted (not news, blogs, directories or generic homepages).
+Only use organisations and URLs you are confident exist. Never include closed calls, loans-only products, unrelated sectors, or anything in the exclusion list.
+Prefer Ghana / West Africa / pan-African eligibility.`,
         },
         { role: "user", content: `Exclusion list (already known, do not repeat):\n${exclude.slice(0, 300).join("\n") || "(none)"}` },
       ],
     }),
   });
-  if (!res.ok || !res.body) {
+  if (!res.ok) {
     const t = await res.text().catch(() => "");
-    let msg = t;
-    try { msg = JSON.parse(t)?.error?.message || JSON.parse(t)?.message || t; } catch { /* raw */ }
-    throw new GatewayError(res.status, msg || `AI request failed (${res.status})`);
+    throw new GatewayError(res.status, t.slice(0, 300) || `AI request failed (${res.status})`);
   }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "", text = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      if (!line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      let ev: any;
-      try { ev = JSON.parse(data); } catch { continue; }
-      if (ev.type === "response.output_text.delta") text += ev.delta || "";
-      else if (ev.type === "response.refusal.delta") throw new GatewayError(422, "The discovery request was declined.");
-      else if (ev.type === "error" || ev.type === "response.failed")
-        throw new GatewayError(502, ev.error?.message || ev.response?.error?.message || "Discovery failed");
-    }
-  }
+  const j = await res.json();
+  let text: string = j?.choices?.[0]?.message?.content || "";
+  text = text.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
   if (!text.trim()) throw new GatewayError(422, "Discovery returned no results.");
   return (JSON.parse(text).candidates || []) as any[];
 }
