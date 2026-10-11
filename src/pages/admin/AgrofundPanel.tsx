@@ -67,6 +67,20 @@ export default function AgrofundPanel() {
 
   // Metrics summary
   const totalCount = opportunities.length;
+  const WEEKLY_QUOTA = 5;
+  const currentWeek = (() => {
+    const d = new Date();
+    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const day = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - day);
+    const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    const w = Math.ceil(((t.getTime() - y.getTime()) / 86400000 + 1) / 7);
+    return `${t.getUTCFullYear()}-W${String(w).padStart(2, "0")}`;
+  })();
+  const weeklyRemaining = Math.max(
+    0,
+    WEEKLY_QUOTA - opportunities.filter((o) => (o as { discovery_week?: string | null }).discovery_week === currentWeek).length,
+  );
   const pendingCount = opportunities.filter((o) => o.status === "pending_review").length;
   const approvedCount = opportunities.filter((o) => o.status === "approved").length;
   const publishedCount = opportunities.filter((o) => o.is_published).length;
@@ -224,11 +238,17 @@ export default function AgrofundPanel() {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <Card className="bg-card">
           <CardContent className="pt-4 text-center">
             <p className="text-2xl font-bold">{totalCount}</p>
             <p className="text-xs text-muted-foreground">Total Discovered</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-primary/10 border-primary/30">
+          <CardContent className="pt-4 text-center">
+            <p className="text-2xl font-bold text-primary">{weeklyRemaining} / {WEEKLY_QUOTA}</p>
+            <p className="text-xs text-muted-foreground">Left this week ({currentWeek})</p>
           </CardContent>
         </Card>
         <Card className="bg-amber-500/10 border-amber-500/30">
