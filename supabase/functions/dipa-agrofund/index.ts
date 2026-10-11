@@ -115,7 +115,10 @@ async function verifyPortal(url: string) {
     const html = (await r.text()).slice(0, 400000);
     const textOnly = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     if (CLOSED_WORDS.test(textOnly)) return { ok: false, reason: "portal says closed" };
-    if (!OPEN_WORDS.test(textOnly) && !/<form/i.test(html)) return { ok: false, reason: "no application entry point" };
+    if (!OPEN_WORDS.test(textOnly)) return { ok: false, reason: "no open application call on page" };
+    const want = new URL(url), got = new URL(r.url);
+    if (want.pathname.length > 1 && (got.pathname.length <= 1 || got.hostname.replace(/^www\./, "") !== want.hostname.replace(/^www\./, "")))
+      return { ok: false, reason: "portal redirected to a generic page" };
     const m = textOnly.match(new RegExp(`.{0,160}${OPEN_WORDS.source}.{0,160}`, "i"));
     return { ok: true, finalUrl: r.url, snippet: (m?.[0] || textOnly.slice(0, 300)).trim() };
   } catch (e) {
