@@ -272,8 +272,8 @@ export default function DroneAdvisory() {
                 <p className="text-sm font-medium">Dipa Intelligence Layer</p>
                 <p className="text-xs text-muted-foreground">Dipa unifies both manual uploads and API data — interpreting patterns, simplifying outputs, translating into local language, and explaining risks with actionable recommendations.</p>
               </div>
-              <Link to="/dipa">
-                <Button size="sm" variant="default" className="shrink-0">Ask Dipa</Button>
+              <Link to="/flight-advisory">
+                <Button size="sm" variant="default" className="shrink-0">Evaluate Flight</Button>
               </Link>
             </CardContent>
           </Card>

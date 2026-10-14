@@ -100,9 +100,9 @@ export default function Landing() {
     { icon: Bot, title: "Dipa Intelligence", desc: "Decision-support engine backing all AgroClimate modules" },
     { icon: Cloud, title: "Climate Risk Engine", desc: "Dynamic global hazard evaluation & rainfall forecasts" },
     { icon: Sprout, title: "Crop Suitability", desc: "Multi-factor agricultural ranking & planting guidance" },
-    { icon: Fish, title: "Aquaculture", desc: "Water quality monitoring & dissolved oxygen tracking" },
+    { icon: Shield, title: "Produce & Safety", desc: "Quality characteristics, pesticide PHI & sensor screening" },
     { icon: Plane, title: "Flight Advisory", desc: "Mission safety evaluation & aerial survey control" },
-    { icon: Leaf, title: "Environmental Monitor", desc: "Ecological health scoring & turbulence modeling" },
+    { icon: Leaf, title: "Agro & Climate Risk", desc: "Ecological health scoring & terrain hazard modeling" },
     { icon: Bell, title: "Proactive Alerts", desc: "Location-aware disaster warnings & risk mitigation" },
     { icon: Shield, title: "Global & Regional", desc: "Worldwide climate intelligence with Ghana & Africa logistics" },
   ];

@@ -43,12 +43,6 @@ export function DashboardHeaderMenu({ unreadCount = 0, alerts = [], onMarkRead, 
 
   return (
     <div className="flex items-center gap-1">
-      <Link to="/farm-business">
-        <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="Farm Business Hub">
-          <Lightbulb className="h-4 w-4" />
-          <span className="hidden sm:inline text-xs font-medium">Business</span>
-        </Button>
-      </Link>
       <Link to="/post-harvest">
         <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="Post-Harvest">
           <Archive className="h-4 w-4" />

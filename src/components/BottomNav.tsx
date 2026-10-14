@@ -1,10 +1,10 @@
-import { Home, Cloud, CalendarDays, Bell, User } from "lucide-react";
+import { Home, Cloud, ShieldCheck, Bell, User } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const navItems = [
   { to: "/", icon: Home, label: "Home" },
   { to: "/weather", icon: Cloud, label: "Weather" },
-  { to: "/calendar", icon: CalendarDays, label: "Crops" },
+  { to: "/produce-safety", icon: ShieldCheck, label: "Safety" },
   { to: "/alerts", icon: Bell, label: "Alerts" },
   { to: "/profile", icon: User, label: "Profile" },
 ];
