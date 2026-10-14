@@ -84,6 +84,8 @@ function filterLabel(value: AlertFilter | "aquaculture" | "general") {
       return "Environment";
     case "flight":
       return "Flight";
+    case "aquaculture":
+      return "Aquaculture";
     case "general":
       return "General";
     default:
