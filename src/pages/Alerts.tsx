@@ -72,7 +72,7 @@ function inferAlertFilter(alert: Pick<EnrichedAlert, "id" | "title" | "message">
   return "general";
 }
 
-function filterLabel(value: AlertFilter) {
+function filterLabel(value: AlertFilter | "aquaculture" | "general") {
   switch (value) {
     case "weather":
       return "Weather";
@@ -84,6 +84,8 @@ function filterLabel(value: AlertFilter) {
       return "Environment";
     case "flight":
       return "Flight";
+    case "aquaculture":
+      return "Aquaculture";
     case "general":
       return "General";
     default:
