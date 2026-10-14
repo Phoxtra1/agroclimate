@@ -182,7 +182,7 @@ function generateWeatherAlerts(forecast: WeatherDay[], location: string): Alert[
 }
 
 function generateMockAlertsAdvisory(location: string, forecast: WeatherDay[]): AIAlertAdvisory[] {
-  const categories: ("weather" | "crop" | "livestock" | "environment" | "flight")[] = [
+  const categories: ("weather" | "crop" | "livestock" | "aquaculture" | "environment" | "flight")[] = [
     "weather", "crop", "livestock", "environment", "flight"
   ];
   if (!forecast || forecast.length === 0) return [];

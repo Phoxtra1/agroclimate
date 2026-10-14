@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgriCostCalculator } from "@/components/inventory/AgriCostCalculator";
 
