@@ -287,21 +287,21 @@ export default function AgroLearning() {
             </div>
           </div>
 
-          {/* Ask Dipa CTA */}
+          {/* Produce & Safety CTA */}
           {(selectedTopic === "explainer" || selectedTopic === "post-harvest") && (
             <Card className="mt-4 border-dashed border-primary/40">
               <CardContent className="pt-4 flex items-center gap-3">
-                <Bot className="h-5 w-5 text-primary shrink-0" />
+                <ShieldCheck className="h-5 w-5 text-primary shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">
-                    {selectedTopic === "post-harvest" ? "Need personalized business or preservation advice?" : "Need help understanding a feature?"}
+                    {selectedTopic === "post-harvest" ? "Verify produce quality and pesticide safety?" : "Need quality verification?"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedTopic === "post-harvest" ? "Ask Dipa for strategies tailored to your crops, location, and season." : "Ask Dipa for a personalized walkthrough."}
+                    Assess batch characteristics, visual inspection and sensor screening.
                   </p>
                 </div>
-                <Link to="/dipa">
-                  <Button size="sm">Ask Dipa</Button>
+                <Link to="/produce-safety">
+                  <Button size="sm">Open Safety Hub</Button>
                 </Link>
               </CardContent>
             </Card>

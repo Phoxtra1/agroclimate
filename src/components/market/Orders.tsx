@@ -54,12 +54,26 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Upgraded Safety & Produce Requirements for Buyers
+  const [colorReq, setColorReq] = useState("");
+  const [maxDefectPct, setMaxDefectPct] = useState("3.0");
+  const [safetyRequirement, setSafetyRequirement] = useState("Standard GAP");
+  const [testingRequired, setTestingRequired] = useState("Sensor or Lab Verification Preferred");
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) { toast.error("Sign in to post buyer demand"); return; }
     if (!product.trim() || !qty || !price.trim()) { toast.error("Product, quantity and target price required"); return; }
     setBusy(true);
     try {
+      const fullNotes = [
+        notes ? `Notes: ${notes}` : "",
+        colorReq ? `Required Color: ${colorReq}` : "",
+        `Max Defects Allowed: ${maxDefectPct}%`,
+        `Safety Standard: ${safetyRequirement}`,
+        `Testing/Verification Req: ${testingRequired}`
+      ].filter(Boolean).join(" | ");
+
       const { error } = await supabase.from("buyer_orders").insert({
         buyer_id: user.id,
         buyer_name: name || user.email || null,
@@ -76,7 +90,7 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
         moisture: moisture || null,
         contact_email: email || user.email || null,
         contact_phone: phone || null,
-        notes: notes || null,
+        notes: fullNotes,
         order_status: "active",
       });
       if (error) throw error;
@@ -88,22 +102,52 @@ export function PlaceOrderForm({ onPlaced }: { onPlaced?: () => void }) {
   };
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div><Label>Buyer / company name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your business" /></div>
-      <div><Label>Product needed</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Crop, livestock, fish, mineral, raw/refined material" required /></div>
-      <div><Label>Quantity</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
+    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+      <div><Label>Buyer / Company Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Volta Processors Ltd" /></div>
+      <div><Label>Product Needed</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Maize, Tomatoes, Cocoa" required /></div>
+      <div><Label>Quantity Needed</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
       <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Quality (e.g. fresh, dried)</Label><Input value={quality} onChange={(e) => setQuality(e.target.value)} /></div>
-      <div><Label>Grade</Label><Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="A / B / C" /></div>
-      <div><Label>Moisture %</Label><Input value={moisture} onChange={(e) => setMoisture(e.target.value)} placeholder="e.g. ≤ 14%" /></div>
-      <div><Label>Target price / {unit}</Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="GHS 250, USD 40, ₦15000" required /></div>
-      <div><Label>Delivery region / location</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
-      <div><Label>Delivery from</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
-      <div><Label>Delivery to</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
-      <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-      <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-      <div className="sm:col-span-2"><Label>Additional notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
-      <div className="sm:col-span-2"><Button type="submit" disabled={busy} className="w-full h-11">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Order"}</Button></div>
+      <div><Label>Target Price / {unit}</Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. GHS 250" required /></div>
+      <div><Label>Minimum Quality Grade</Label><Input value={grade} onChange={(e) => setGrade(e.target.value)} placeholder="e.g. Grade A or Grade B" /></div>
+
+      {/* Upgraded Quality & Safety Requirements */}
+      <div><Label>Color / Appearance Preference</Label><Input value={colorReq} onChange={(e) => setColorReq(e.target.value)} placeholder="e.g. Deep red, uniform yellow" /></div>
+      <div><Label>Max Allowable Defects (%)</Label><Input type="number" step="0.1" value={maxDefectPct} onChange={(e) => setMaxDefectPct(e.target.value)} placeholder="3.0" /></div>
+      <div><Label>Max Moisture % Required</Label><Input value={moisture} onChange={(e) => setMoisture(e.target.value)} placeholder="e.g. ≤ 13.0%" /></div>
+      <div>
+        <Label>Safety &amp; Residue Standard</Label>
+        <Select value={safetyRequirement} onValueChange={setSafetyRequirement}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Standard GAP">Good Agricultural Practices (GAP)</SelectItem>
+            <SelectItem value="PHI Compliant">Strict Pre-Harvest Interval (PHI) Verification</SelectItem>
+            <SelectItem value="Export MRL Compliant">Export Maximum Residue Limit (MRL) Safe</SelectItem>
+            <SelectItem value="Organic Certified">Organic Certified Only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Verification Requirement</Label>
+        <Select value={testingRequired} onValueChange={setTestingRequired}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Supplier Declared Acceptable">Supplier Declaration Acceptable</SelectItem>
+            <SelectItem value="Visual Photo Verification">Visual Photo Capture Required</SelectItem>
+            <SelectItem value="Sensor or Lab Verification Preferred">Digital Moisture/Sensor Screening Required</SelectItem>
+            <SelectItem value="Accredited Lab COA Required">Accredited Lab COA Required Before Delivery</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div><Label>Delivery Region / Location</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
+      <div><Label>Delivery From</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
+      <div><Label>Delivery To</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
+      <div><Label>Contact Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+      <div><Label>Contact Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+
+      <div className="sm:col-span-2"><Label>Additional Purchase Specifications</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
+      <div className="sm:col-span-2"><Button type="submit" disabled={busy} className="w-full h-11 font-bold">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish Pre-Order Requirements"}</Button></div>
     </form>
   );
 }

@@ -92,12 +92,13 @@ function generateWeatherAlerts(forecast: WeatherDay[], location: string): Alert[
   }
 
   // === CROPS ===
-  if (today.humidity > 85 && today.tempHigh > 28) {
+  // Multi-factor contextual fungal disease check: humidity > 80% AND (rainProb > 30% OR temp > 25°C)
+  if (today.humidity > 80 && (today.rainProb > 30 || today.tempHigh > 25)) {
     alerts.push({
       id: createAlertId("crop-fungal", location, dk),
       type: "warning",
       title: "Crop Fungal Disease Risk",
-      message: `High humidity (${today.humidity}%) with warm temps in ${location}. Monitor crops for blight, rust, and mildew.`,
+      message: `High humidity (${today.humidity}%) combined with warm temps/rainfall in ${location}. Monitor crops for blight, rust, and mildew.`,
       time: timeStr, read: false,
     });
   }
@@ -129,27 +130,6 @@ function generateWeatherAlerts(forecast: WeatherDay[], location: string): Alert[
       type: "warning",
       title: "Livestock Shelter Advisory",
       message: `Storm conditions in ${location}. Move livestock to covered shelter and secure enclosures.`,
-      time: timeStr, read: false,
-    });
-  }
-
-  // === AQUACULTURE ===
-  if (today.tempHigh > 33) {
-    alerts.push({
-      id: createAlertId("aqua-temp", location, dk),
-      type: "warning",
-      title: "Pond Temperature Warning",
-      message: `High ambient temp (${today.tempHigh}°C) in ${location} may raise pond water temperature. Check dissolved oxygen and aerate if needed.`,
-      time: timeStr, read: false,
-    });
-  }
-
-  if (today.rainProb > 70) {
-    alerts.push({
-      id: createAlertId("aqua-overflow", location, dk),
-      type: "warning",
-      title: "Pond Overflow Risk",
-      message: `Heavy rain expected in ${location}. Check pond outlets and drainage to prevent fish escape.`,
       time: timeStr, read: false,
     });
   }
@@ -202,8 +182,8 @@ function generateWeatherAlerts(forecast: WeatherDay[], location: string): Alert[
 }
 
 function generateMockAlertsAdvisory(location: string, forecast: WeatherDay[]): AIAlertAdvisory[] {
-  const categories: ("weather" | "crop" | "livestock" | "aquaculture" | "environment" | "flight")[] = [
-    "weather", "crop", "livestock", "aquaculture", "environment", "flight"
+  const categories: ("weather" | "crop" | "livestock" | "environment" | "flight")[] = [
+    "weather", "crop", "livestock", "environment", "flight"
   ];
   if (!forecast || forecast.length === 0) return [];
   const today = forecast[0];

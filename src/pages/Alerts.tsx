@@ -42,7 +42,6 @@ type AlertFilter =
   | "weather"
   | "crop"
   | "livestock"
-  | "aquaculture"
   | "environment"
   | "flight"
   | "general";
@@ -67,7 +66,6 @@ function inferAlertFilter(alert: Pick<EnrichedAlert, "id" | "title" | "message">
   if (source.includes("weather") || alert.id.startsWith("weather-")) return "weather";
   if (source.includes("crop") || source.includes("fungal") || source.includes("planting") || alert.id.startsWith("crop-")) return "crop";
   if (source.includes("livestock") || alert.id.startsWith("livestock-")) return "livestock";
-  if (source.includes("pond") || source.includes("aquaculture") || source.includes("fish") || alert.id.startsWith("aqua-")) return "aquaculture";
   if (source.includes("environment") || source.includes("dry spell") || source.includes("bush fire") || alert.id.startsWith("env-")) return "environment";
   if (source.includes("flight") || source.includes("no-fly") || alert.id.startsWith("flight-")) return "flight";
 
@@ -82,8 +80,6 @@ function filterLabel(value: AlertFilter) {
       return "Crops";
     case "livestock":
       return "Livestock";
-    case "aquaculture":
-      return "Aquaculture";
     case "environment":
       return "Environment";
     case "flight":
@@ -296,7 +292,6 @@ export default function Alerts() {
     "weather",
     "crop",
     "livestock",
-    "aquaculture",
     "environment",
     "flight",
     "general",
@@ -497,7 +492,6 @@ export default function Alerts() {
               <SelectItem value="weather">Weather Issue</SelectItem>
               <SelectItem value="crop">Crop Problem</SelectItem>
               <SelectItem value="livestock">Livestock Issue</SelectItem>
-              <SelectItem value="aquaculture">Aquaculture Issue</SelectItem>
               <SelectItem value="technical">Technical Problem</SelectItem>
             </SelectContent>
           </Select>

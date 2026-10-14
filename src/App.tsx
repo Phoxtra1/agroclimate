@@ -13,20 +13,16 @@ import Landing from "./pages/Landing";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import Weather from "./pages/Weather";
-import CropCalendar from "./pages/CropCalendar";
-import CropProduction from "./pages/CropProduction";
 import Livestock from "./pages/Livestock";
 import Alerts from "./pages/Alerts";
 import Profile from "./pages/Profile";
-import Aquaculture from "./pages/Aquaculture";
-import DipaAI from "./pages/DipaAI";
 import DroneAdvisory from "./pages/DroneAdvisory";
 import AgroInventory from "./pages/AgroInventory";
 import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
 import AgroLearning from "./pages/AgroLearning";
 import VerifyEmail from "./pages/VerifyEmail";
 import ResetPassword from "./pages/ResetPassword";
-import FarmBusinessHub from "./pages/FarmBusinessHub";
+import ProduceSafetyPage from "./pages/ProduceSafety";
 import HandlerManagement from "./pages/HandlerManagement";
 import HandlerWorkspace from "./pages/HandlerWorkspace";
 import PostHarvestTracker from "./pages/PostHarvestTracker";
@@ -294,18 +290,19 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
-      <Route path="/calendar" element={<ProtectedRoute><CropCalendar /></ProtectedRoute>} />
-      <Route path="/crops" element={<ProtectedRoute><CropProduction /></ProtectedRoute>} />
+      <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/crops" element={<Navigate to="/dashboard" replace />} />
       <Route path="/livestock" element={<ProtectedRoute><Livestock /></ProtectedRoute>} />
-      <Route path="/aquaculture" element={<ProtectedRoute><Aquaculture /></ProtectedRoute>} />
+      <Route path="/aquaculture" element={<Navigate to="/dashboard" replace />} />
       <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-      <Route path="/dipa" element={<ProtectedRoute><PremiumGate component="ai_assistant"><DipaAI /></PremiumGate></ProtectedRoute>} />
+      <Route path="/dipa" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/produce-safety" element={<ProtectedRoute><ProduceSafetyPage /></ProtectedRoute>} />
       <Route path="/flight-advisory" element={<ProtectedRoute><PremiumGate component="flight_advisory"><DroneAdvisory /></PremiumGate></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><PremiumGate component="agro_inventory"><AgroInventory /></PremiumGate></ProtectedRoute>} />
       <Route path="/drone" element={<Navigate to="/flight-advisory" replace />} />
       <Route path="/environment" element={<ProtectedRoute><EnvironmentalMonitor /></ProtectedRoute>} />
-      <Route path="/farm-business" element={<ProtectedRoute><FarmBusinessHub /></ProtectedRoute>} />
+      <Route path="/farm-business" element={<Navigate to="/dashboard" replace />} />
       <Route path="/handler-management" element={<ProtectedRoute><PremiumGate component="handler"><HandlerManagement /></PremiumGate></ProtectedRoute>} />
       <Route path="/post-harvest" element={<ProtectedRoute><PremiumGate component="post_harvest"><PostHarvestTracker /></PremiumGate></ProtectedRoute>} />
       <Route path="/market-link" element={<ProtectedRoute><PremiumGate component="market_link"><MarketLink /></PremiumGate></ProtectedRoute>} />

@@ -28,6 +28,7 @@ import { estimateMarketPrice } from "@/lib/pricingEngine";
 import { AGTransSupplierPanel } from "@/components/market/AGTransSupplierPanel";
 import { PotentialBuyersPanel } from "@/components/market/PotentialBuyersPanel";
 import { LogisticsMatcherPanel } from "@/components/market/LogisticsMatcherPanel";
+import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
@@ -73,6 +74,16 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Upgraded Produce Batch & Safety fields
+  const [batchId, setBatchId] = useState(`LOT-${Date.now().toString().slice(-6)}`);
+  const [harvestDate, setHarvestDate] = useState(new Date().toISOString().slice(0, 10));
+  const [moisture, setMoisture] = useState("");
+  const [defectPct, setDefectPct] = useState("");
+  const [pesticideName, setPesticideName] = useState("");
+  const [pesticideDate, setPesticideDate] = useState("");
+  const [phiDays, setPhiDays] = useState("14");
+  const [verificationStatus, setVerificationStatus] = useState<"Declared" | "Visual Assessment Passed" | "Sensor Screened" | "Lab Verified">("Declared");
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) { toast.error("Sign in first"); return; }
@@ -116,7 +127,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
         expected_quantity: Number(qty),
         unit,
         quality_grade: grade,
-        harvest_start: start || null,
+        harvest_start: start || harvestDate || null,
         harvest_end: end || null,
         delivery_timeline: delivery || null,
         suggested_price: finalPrice,
@@ -124,7 +135,15 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
         image_url,
         contact_email: email || user.email || null,
         contact_phone: phone || null,
-        notes: notes || null,
+        notes: [
+          notes ? `Notes: ${notes}` : "",
+          `Batch: ${batchId}`,
+          `Moisture: ${moisture || "N/A"}%`,
+          `Defects: ${defectPct || "N/A"}%`,
+          `Pesticide Log: ${pesticideName || "None"} (Applied: ${pesticideDate || "N/A"}, PHI: ${phiDays} days)`,
+          `Verification Status: ${verificationStatus}`,
+          `[Notice: Pesticide records alone do not guarantee residue-free produce.]`
+        ].filter(Boolean).join(" | "),
       };
       // Optional columns added by the workflow-correction migration. If the
       // migration has not been applied to the connected Supabase project yet,
@@ -156,23 +175,49 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
   };
 
   return (
-    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div><Label>Product</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Crop, livestock, fish, mineral, raw/refined material" required /></div>
+    <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+      <div><Label>Product Name</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Yellow Maize, Roma Tomatoes" required /></div>
       <div><Label>Category</Label><Select value={category} onValueChange={setCategory}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
       <div><Label>Quantity</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
       <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Quality grade</Label><Select value={grade} onValueChange={setGrade}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="A">A — Premium</SelectItem><SelectItem value="B">B — Standard</SelectItem><SelectItem value="C">C — Economy</SelectItem></SelectContent></Select></div>
-      <div><Label>Price / {unit} <span className="text-[10px] text-muted-foreground">(leave blank to auto-estimate)</span></Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="GHS 250, USD 40, ₦15000" /></div>
-      <div><Label>Region / location</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
-      <div><Label>Delivery timeline</Label><Input value={delivery} onChange={(e) => setDelivery(e.target.value)} placeholder="e.g. within 14 days" /></div>
-      <div><Label>Availability start</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
-      <div><Label>Availability end</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
-      <div><Label>Climate/handling risk</Label><Select value={risk} onValueChange={(v) => setRisk(v as any)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent></Select></div>
-      <div><Label>Contact email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={user?.email || ""} /></div>
-      <div><Label>Contact phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-      <div className="sm:col-span-2"><Label>Description / notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
-      <div className="sm:col-span-2"><Label className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Product image</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></div>
-      <div className="sm:col-span-2"><Button type="submit" disabled={busy} className="w-full h-11">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish supply listing"}</Button></div>
+      <div><Label>Quality Grade</Label><Select value={grade} onValueChange={setGrade}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="A">A — Premium Quality</SelectItem><SelectItem value="B">B — Standard Grade</SelectItem><SelectItem value="C">C — Commercial/Economy</SelectItem></SelectContent></Select></div>
+      <div><Label>Price / {unit} <span className="text-[10px] text-muted-foreground">(blank to auto-estimate)</span></Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. GHS 250" /></div>
+
+      {/* Upgraded Batch Identification & Quality Details */}
+      <div><Label>Batch / Lot Number</Label><Input value={batchId} onChange={(e) => setBatchId(e.target.value)} placeholder="LOT-2025-001" className="font-mono" /></div>
+      <div><Label>Harvest Date</Label><Input type="date" value={harvestDate} onChange={(e) => setHarvestDate(e.target.value)} /></div>
+      <div><Label>Moisture Content (%)</Label><Input type="number" step="0.1" value={moisture} onChange={(e) => setMoisture(e.target.value)} placeholder="e.g. 12.5%" /></div>
+      <div><Label>Max Defect Rate (%)</Label><Input type="number" step="0.1" value={defectPct} onChange={(e) => setDefectPct(e.target.value)} placeholder="e.g. 2.0%" /></div>
+
+      {/* Upgraded Pesticide & PHI Details */}
+      <div><Label>Pesticide Product Used</Label><Input value={pesticideName} onChange={(e) => setPesticideName(e.target.value)} placeholder="e.g. Mancozeb / Cypermethrin" /></div>
+      <div><Label>Application Date</Label><Input type="date" value={pesticideDate} onChange={(e) => setPesticideDate(e.target.value)} /></div>
+      <div><Label>Pre-Harvest Interval (PHI Days)</Label><Input type="number" value={phiDays} onChange={(e) => setPhiDays(e.target.value)} placeholder="14" /></div>
+      <div>
+        <Label>Verification Status</Label>
+        <Select value={verificationStatus} onValueChange={(v: any) => setVerificationStatus(v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Declared">Declared (Supplier Logged)</SelectItem>
+            <SelectItem value="Visual Assessment Passed">Visual Assessment Passed</SelectItem>
+            <SelectItem value="Sensor Screened">Sensor Screened</SelectItem>
+            <SelectItem value="Lab Verified">Lab Verified (Accredited COA)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div><Label>Region / Location</Label><Input value={region} onChange={(e) => setRegion(e.target.value)} /></div>
+      <div><Label>Delivery Timeline</Label><Input value={delivery} onChange={(e) => setDelivery(e.target.value)} placeholder="e.g. within 14 days" /></div>
+      <div><Label>Contact Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={user?.email || ""} /></div>
+      <div><Label>Contact Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+
+      <div className="sm:col-span-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[11px] text-amber-900 dark:text-amber-300">
+        ⚠️ <strong>Food Safety Notice:</strong> Pesticide-use records alone must never be treated as proof that produce is residue-free or safe. Use laboratory certification or validated sensor screening for verified compliance.
+      </div>
+
+      <div className="sm:col-span-2"><Label>Description / Additional Batch Notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
+      <div className="sm:col-span-2"><Label className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Product Image</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></div>
+      <div className="sm:col-span-2"><Button type="submit" disabled={busy} className="w-full h-11 font-bold">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish Batch &amp; Supply Listing"}</Button></div>
     </form>
   );
 }
@@ -386,14 +431,19 @@ export default function MarketLink() {
       <OverviewCards totalSupply={m.totalSupply} totalDemand={m.totalDemand} activeContracts={m.activeContracts} balance={m.balance} />
 
       <Tabs defaultValue="supply" className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto p-1 gap-1">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 w-full h-auto p-1 gap-1">
           <TabsTrigger value="supply">Supply</TabsTrigger>
           <TabsTrigger value="order-listing">Order Listing</TabsTrigger>
+          <TabsTrigger value="produce-safety">Produce &amp; Safety</TabsTrigger>
           <TabsTrigger value="contracts">Contracts</TabsTrigger>
           <TabsTrigger value="prices">Prices</TabsTrigger>
           <TabsTrigger value="logistics-matcher">Logistics Matcher</TabsTrigger>
           <TabsTrigger value="agtrans">AGTrans</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="produce-safety" className="mt-3">
+          <ProduceSafety />
+        </TabsContent>
 
         <TabsContent value="logistics-matcher" className="mt-3">
           <LogisticsMatcherPanel />

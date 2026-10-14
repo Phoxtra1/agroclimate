@@ -23,7 +23,7 @@ interface Alert {
 
 const ALERT_CATEGORIES = [
   "Flood", "Weather", "Disaster", "Environment", "Crops",
-  "Livestock", "Aquaculture", "Fire", "Drought", "Storm",
+  "Livestock", "Fire", "Drought", "Storm",
   "Pest Outbreak", "Disease Alert",
 ];
 

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, CalendarDays, Bell, User, Fish, Menu, LogOut, Sprout, Bug, Bot, Plane, Leaf, BookOpen, Package, Users } from "lucide-react";
+import { Home, Cloud, Bell, User, Menu, LogOut, Bug, Plane, Leaf, BookOpen, Package, Users, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNewTag } from "@/hooks/useNewTag";
@@ -17,24 +17,21 @@ import { TestModeBanner } from "@/components/system/TestModeBanner";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
-  { to: "/dipa", icon: Bot, label: "Dipa", id: "dipa" },
   { to: "/weather", icon: Cloud, label: "Agro Forecast", id: "weather" },
-  { to: "/environment", icon: Leaf, label: "Environment", id: "environment" },
-  { to: "/crops", icon: Sprout, label: "Crops", id: "crops" },
-  { to: "/livestock", icon: Bug, label: "Livestock", id: "livestock", isNew: true },
-  { to: "/aquaculture", icon: Fish, label: "Aquaculture", id: "aquaculture", isNew: true },
+  { to: "/environment", icon: Leaf, label: "Agro & Climate Risk", id: "environment" },
+  { to: "/produce-safety", icon: ShieldCheck, label: "Produce & Safety", id: "produce-safety", isNew: true },
+  { to: "/livestock", icon: Bug, label: "Livestock", id: "livestock" },
   { to: "/inventory", icon: Package, label: "Agro Inventory", id: "inventory" },
   { to: "/flight-advisory", icon: Plane, label: "Flight Advisory", id: "flight-advisory" },
-  { to: "/calendar", icon: CalendarDays, label: "Calendar", id: "calendar" },
   { to: "/alerts", icon: Bell, label: "Alerts", id: "alerts" },
-  { to: "/handler-management", icon: Users, label: "Handler", id: "handler-management", isNew: true },
+  { to: "/handler-management", icon: Users, label: "Handler", id: "handler-management" },
   { to: "/profile", icon: User, label: "Profile", id: "profile" },
 ];
 
 const bottomNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
-  { to: "/dipa", icon: Bot, label: "Dipa" },
-  { to: "/weather", icon: Cloud, label: "Weather" },
+  { to: "/weather", icon: Cloud, label: "Forecast" },
+  { to: "/produce-safety", icon: ShieldCheck, label: "Safety" },
   { to: "/learning", icon: BookOpen, label: "Learn" },
   { to: "/alerts", icon: Bell, label: "Alerts" },
 ];

@@ -4,7 +4,7 @@ import { CropCalendarView } from "@/components/CropCalendarView";
 import { AdvisoryCard } from "@/components/AdvisoryCard";
 import { AgroClimateIntelligence, ForecastTimestamp } from "@/components/AgroClimateIntelligence";
 import { cropCalendars } from "@/data/mock-data";
-import { MapPin, ChevronRight, Wifi, WifiOff, Loader2, Fish, Package, ArrowRight, RefreshCw, Calendar, CloudSun } from "lucide-react";
+import { MapPin, ChevronRight, Wifi, WifiOff, Loader2, ShieldCheck, Package, ArrowRight, RefreshCw, Calendar, CloudSun } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useAuth } from "@/hooks/useAuth";
@@ -130,9 +130,6 @@ export default function Dashboard() {
               <Calendar className="h-4 w-4 text-primary" />
               Crop Calendar
             </h2>
-            <Link to="/calendar" className="text-xs text-primary font-medium flex items-center gap-0.5 hover:underline">
-              Full view <ChevronRight className="h-4 w-4" />
-            </Link>
           </div>
           <div className="pt-1">
             <CropCalendarView calendar={cropCalendars[0]} />
@@ -152,27 +149,27 @@ export default function Dashboard() {
           />
         </section>
 
-        {/* 2. Aquaculture & Agro Inventory */}
+        {/* 2. Produce & Safety & Agro Inventory */}
         <section className="space-y-4">
           <h2 className="font-bold text-base">⚡ Quick Hub Tools</h2>
           <div className="grid grid-cols-1 gap-4">
-            {/* Aquaculture */}
+            {/* Produce & Safety */}
             <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Fish className="h-4 w-4 text-primary" />
-                  <h3 className="font-bold text-sm">Aquaculture</h3>
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <h3 className="font-bold text-sm">Produce & Safety</h3>
                 </div>
-                <Link to="/aquaculture" className="text-xs text-primary font-medium hover:underline">
-                  View Ponds
+                <Link to="/produce-safety" className="text-xs text-primary font-medium hover:underline">
+                  Verify Batch
                 </Link>
               </div>
               <p className="text-[11px] text-muted-foreground mb-3">
-                Real-time water quality and feeding schedules.
+                Quality, residue & safety verification for produce batches.
               </p>
-              <Link to="/aquaculture">
+              <Link to="/produce-safety">
                 <Button size="sm" variant="outline" className="w-full text-xs h-8 border-primary/20">
-                  Pond Status
+                  Open Safety Hub <ArrowRight className="h-3 w-3 ml-2" />
                 </Button>
               </Link>
             </div>

@@ -1004,7 +1004,7 @@ export default function EnvironmentalMonitor() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2 tracking-tight">
-            Environment & AgroRisk Intelligence
+            Agro &amp; Climate Risk Intelligence
             {isAiLoading && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
           </h1>
           <p className="text-sm text-muted-foreground">{locationLabel}</p>

@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePostHarvest, computeRisk, uploadHarvestPhoto, type HarvestEntry, type RiskLevel } from "@/hooks/usePostHarvest";
 import { queueHarvest, getPendingCount, syncPendingHarvests, installOfflineSync } from "@/lib/offlineQueue";
+import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
@@ -280,27 +281,23 @@ function HarvestList({ entries, onAdvice, onDelete }: { entries: HarvestEntry[];
 }
 
 function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; open: boolean; onClose: () => void }) {
-  const navigate = useNavigate();
   if (!entry) return null;
   const risk = computeRisk(entry);
-  const prompt = `I have stored ${entry.quantity} ${entry.unit} of ${entry.crop_name} for ${risk.days} days using "${entry.storage_method || "unspecified storage"}" at "${entry.storage_location || "unspecified location"}". Current spoilage risk: ${risk.level}. Advise me on: 1) what to do now, 2) how to prevent spoilage, and 3) whether I should sell or continue storing.`;
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Get Dipa advice</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Post-Harvest Spoilage Guidance</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm">
           <p><b>Crop:</b> {entry.crop_name}</p>
           <p><b>Days stored:</b> {risk.days}</p>
           <p><b>Storage method:</b> {entry.storage_method || "N/A"}</p>
-          <p><b>Risk level:</b> {risk.level}</p>
-          <p className="text-muted-foreground text-xs">We'll send this context to Dipa for a detailed recommendation.</p>
+          <p><b>Risk level:</b> {riskBadge(risk.level)}</p>
+          <div className="p-3 bg-muted rounded-md text-xs leading-relaxed">
+            <strong>Dipa Background Intelligence:</strong> {risk.message} Store in a cool, hermetically sealed container. Check moisture levels before extended storage.
+          </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => {
-            try { sessionStorage.setItem("dipa-prefill", prompt); } catch {}
-            navigate("/dipa");
-          }}>Open Dipa</Button>
+          <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -383,9 +380,10 @@ export default function PostHarvestTracker() {
       <OverviewPanel entries={entries} />
 
       <Tabs defaultValue="log" className="w-full">
-        <TabsList className="grid grid-cols-2 w-full">
+        <TabsList className="grid grid-cols-3 w-full">
           <TabsTrigger value="log">Log harvest</TabsTrigger>
           <TabsTrigger value="list">Stored ({entries.length})</TabsTrigger>
+          <TabsTrigger value="produce-safety">Produce &amp; Safety</TabsTrigger>
         </TabsList>
         <TabsContent value="log" className="mt-3">
           <HarvestForm onAdded={() => { /* realtime refresh */ }} />
@@ -396,6 +394,9 @@ export default function PostHarvestTracker() {
           ) : (
             <HarvestList entries={entries} onAdvice={(e) => setAdviceEntry(e)} onDelete={handleDelete} />
           )}
+        </TabsContent>
+        <TabsContent value="produce-safety" className="mt-3">
+          <ProduceSafety />
         </TabsContent>
       </Tabs>
 
