@@ -327,7 +327,7 @@ export default function Satellite() {
     const { error: saveError } = await supabase.from("satellite_fields").insert({
       user_id: user.id,
       name,
-      field_geojson: geometry,
+      field_geojson: geometry as unknown as Database["public"]["Tables"]["satellite_fields"]["Insert"]["field_geojson"],
       area_hectares: fieldArea,
       monitoring_enabled: true,
       max_cloud_cover: Number(maxCloud),
