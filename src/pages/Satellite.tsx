@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { interpretFieldIndices, interpretVegetationAlert } from "@/services/satellite/interpretation";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -56,7 +57,10 @@ const nasaLayers: Record<string, string> = {
 
 function Recenter({ place }: { place: Place }) {
   const map = useMap();
-  useEffect(() => { map.flyTo([place.lat, place.lon], Math.max(8, map.getZoom()), { duration: 0.7 }); }, [map, place.lat, place.lon]);
+  useEffect(() => {
+    if (place.label === "Global overview") return;
+    map.flyTo([place.lat, place.lon], Math.max(8, map.getZoom()), { duration: 0.7 });
+  }, [map, place.lat, place.lon, place.label]);
   return null;
 }
 
@@ -84,7 +88,7 @@ function Stat({ label, value, help }: { label: string; value: string; help?: str
 }
 
 export default function Satellite() {
-  const [place, setPlace] = useState<Place>({ lat: 7.9465, lon: -1.0232, label: "Ghana" });
+  const [place, setPlace] = useState<Place>({ lat: 20, lon: 0, label: "Global overview" });
   const [query, setQuery] = useState("");
   const [layer, setLayer] = useState<ImageryLayer>("true-color");
   const [daysBack, setDaysBack] = useState("30");
@@ -107,11 +111,13 @@ export default function Satellite() {
   const [analysisError, setAnalysisError] = useState("");
   const { user } = useAuth();
   const [fieldName, setFieldName] = useState("");
+  const [cropType, setCropType] = useState("");
   const [savedFields, setSavedFields] = useState<SatelliteField[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
   const [savingField, setSavingField] = useState(false);
 
   const selectedScene = useMemo(() => scenes.find((scene) => scene.id === sceneId) ?? null, [scenes, sceneId]);
+  const isGlobalOverview = place.label === "Global overview";
   const isNasa = layer.startsWith("nasa-");
   const maxDate = fmtDate(new Date(Date.now() - 86400000));
   const fieldArea = useMemo(() => calculatePolygonAreaHectares(fieldPoints), [fieldPoints]);
@@ -141,6 +147,14 @@ export default function Satellite() {
   }, []);
 
   useEffect(() => {
+    if (isGlobalOverview) {
+      setSceneLoading(false);
+      setScenes([]);
+      setSceneId("");
+      setTileTemplate("");
+      setMapMessage("Global view: search for any location or choose My location to load nearby satellite observations. The catalogue is not limited to a particular country.");
+      return;
+    }
     const controller = new AbortController();
     setSceneLoading(true);
     setError("");
@@ -162,7 +176,7 @@ export default function Satellite() {
       if (!controller.signal.aborted) setSceneLoading(false);
     });
     return () => controller.abort();
-  }, [scenePoint, daysBack, maxCloud]);
+  }, [scenePoint, daysBack, maxCloud, isGlobalOverview]);
 
   useEffect(() => {
     if (!selectedScene || isNasa) {
@@ -247,7 +261,12 @@ export default function Satellite() {
   };
 
   const inspectPoint = async (point: GeoPoint) => {
-    if (!selectedScene || isNasa || drawing) return;
+    if (drawing) return;
+    if (!selectedScene) {
+      await resolvePlace(point, "Selected map location");
+      return;
+    }
+    if (isNasa) return;
     setSampleLoading(true);
     setSample({ point, values: {} });
     try {
@@ -327,6 +346,7 @@ export default function Satellite() {
     const { error: saveError } = await supabase.from("satellite_fields").insert({
       user_id: user.id,
       name,
+      crop_type: cropType.trim() || null,
       field_geojson: geometry as unknown as Database["public"]["Tables"]["satellite_fields"]["Insert"]["field_geojson"],
       area_hectares: fieldArea,
       monitoring_enabled: true,
@@ -338,6 +358,7 @@ export default function Satellite() {
     } else {
       toast.success(`${name} saved for satellite monitoring`);
       setFieldName("");
+      setCropType("");
       setFieldPoints([]);
       setDrawing(false);
       await refreshSavedFields();
@@ -349,8 +370,10 @@ export default function Satellite() {
     const geometry = field.field_geojson as unknown as GeoJSON.Polygon;
     const coordinates = geometry.coordinates?.[0];
     if (!Array.isArray(coordinates)) return;
-    setFieldPoints(coordinates.slice(0, -1).map((position) => ({ lat: position[1], lon: position[0] })));
-    setPlace((previous) => ({ ...previous, label: field.name }));
+    const vertices = coordinates.slice(0, -1);
+    setFieldPoints(vertices.map((position) => ({ lat: position[1], lon: position[0] })));
+    const center = vertices.reduce((sum, position) => ({ lat: sum.lat + position[1] / vertices.length, lon: sum.lon + position[0] / vertices.length }), { lat: 0, lon: 0 });
+    setPlace({ ...center, label: field.name });
     setFieldStats({});
     setAnalysisError("");
   };
@@ -380,6 +403,11 @@ export default function Satellite() {
 
   const ndviMean = fieldStats.ndvi?.mean ?? null;
   const ndmiMean = fieldStats.ndmi?.mean ?? null;
+  const fieldInterpretation = useMemo(() => interpretFieldIndices({
+    ndvi: fieldStats.ndvi?.mean ?? null,
+    ndmi: fieldStats.ndmi?.mean ?? null,
+    ndwi: fieldStats.ndwi?.mean ?? null,
+  }), [fieldStats]);
 
   return <div className="space-y-5 pb-8">
     <header className="flex flex-wrap items-center justify-between gap-3">
@@ -391,7 +419,7 @@ export default function Satellite() {
     </header>
 
     <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
-      <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search farm, town, district, region or coordinates…" className="h-11 pl-9" aria-label="Search location" /></div>
+      <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search anywhere in the world: farm, town, region or coordinates…" className="h-11 pl-9" aria-label="Search location" /></div>
       <Button disabled={busy || !query.trim()} className="h-11 gap-2">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search</Button>
       <Button type="button" variant="outline" onClick={locate} disabled={locating} className="h-11 gap-2">{locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />} My location</Button>
     </form>
@@ -400,7 +428,7 @@ export default function Satellite() {
 
     <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
       <div className="flex flex-col justify-between gap-3 border-b p-3 xl:flex-row xl:items-center">
-        <div className="min-w-0"><div className="flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-emerald-600" /><span className="truncate">{place.label}</span></div><p className="pl-6 text-xs text-muted-foreground">{place.lat.toFixed(5)}, {place.lon.toFixed(5)} · {selectedScene ? formatSceneDate(selectedScene.acquiredAt) : "Searching available imagery"}</p></div>
+        <div className="min-w-0"><div className="flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-emerald-600" /><span className="truncate">{place.label}</span></div><p className="pl-6 text-xs text-muted-foreground">{isGlobalOverview ? "Global map · search anywhere or select My location" : `${place.lat.toFixed(5)}, ${place.lon.toFixed(5)} · ${selectedScene ? formatSceneDate(selectedScene.acquiredAt) : "Searching available imagery"}`}</p></div>
         <div className="flex flex-wrap gap-2">
           <label className="flex h-9 items-center gap-2 rounded-md border px-2 text-xs"><Layers className="h-3.5 w-3.5" /><select aria-label="Imagery layer" value={layer} onChange={(event) => setLayer(event.target.value as ImageryLayer)} className="max-w-[220px] bg-transparent outline-none">{layerOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
           <label className="flex h-9 items-center gap-2 rounded-md border px-2 text-xs"><CalendarDays className="h-3.5 w-3.5" /><select aria-label="Scene date range" value={daysBack} onChange={(event) => setDaysBack(event.target.value)} className="bg-transparent outline-none"><option value="15">Last 15 days</option><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90">Last 90 days</option><option value="180">Last 180 days</option></select></label>
@@ -409,7 +437,7 @@ export default function Satellite() {
       </div>
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="relative h-[440px] w-full bg-slate-900 sm:h-[560px]">
-          <MapContainer center={[place.lat, place.lon]} zoom={8} scrollWheelZoom className="h-full w-full">
+          <MapContainer center={[place.lat, place.lon]} zoom={2} scrollWheelZoom className="h-full w-full">
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='Map data: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={19} />
             {isNasa ? <TileLayer key={nasaUrl} url={nasaUrl} maxZoom={9} attribution='Imagery: <a href="https://earthdata.nasa.gov/">NASA GIBS / Earthdata</a>' eventHandlers={{ tileerror: () => setMapMessage("Some NASA tiles failed to load. Try another fallback layer.") }} /> : tileTemplate ? <TileLayer key={tileTemplate} url={tileTemplate} maxZoom={18} attribution='Sentinel-2 data: <a href="https://registry.opendata.aws/sentinel-2/">AWS Open Data</a> · Rendering: <a href="https://titiler.xyz/">TiTiler</a>' eventHandlers={{ tileerror: () => setMapMessage("Some Sentinel-2 tiles failed to load. Try another scene or NASA context layer.") }} /> : null}
             <Recenter place={place} />
@@ -454,7 +482,7 @@ export default function Satellite() {
       {savedFields.length === 0 ? <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No monitored fields yet. Draw at least three boundary points on the map, enter a field name and save it to start building its satellite history.</p> : <div className="space-y-2">
         <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Your monitored fields</h3><span className="text-xs text-muted-foreground">{savedFields.filter((field) => field.monitoring_enabled).length} active</span></div>
         {savedFields.map((field) => <div key={field.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-          <div className="min-w-0"><p className="truncate text-sm font-medium">{field.name}</p><p className="text-xs text-muted-foreground">{Number(field.area_hectares || 0).toFixed(2)} ha · {field.monitoring_enabled ? "Monitoring active" : "Monitoring paused"} · {field.last_scene_at ? `Checked ${new Date(field.last_scene_at).toLocaleDateString()}` : "Building baseline"}</p></div>
+          <div className="min-w-0"><p className="truncate text-sm font-medium">{field.name}</p><p className="text-xs text-muted-foreground">{field.crop_type ? `${field.crop_type} · ` : ""}{Number(field.area_hectares || 0).toFixed(2)} ha · {field.monitoring_enabled ? "Monitoring active" : "Monitoring paused"} · {field.last_scene_at ? `Checked ${new Date(field.last_scene_at).toLocaleDateString()}` : "Building baseline"}</p></div>
           <div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => loadSavedBoundary(field)}>Show boundary</Button><Button type="button" size="sm" variant={field.monitoring_enabled ? "secondary" : "default"} onClick={() => void toggleFieldMonitoring(field)}>{field.monitoring_enabled ? "Pause" : "Resume"}</Button></div>
         </div>)}
       </div>}
@@ -463,6 +491,17 @@ export default function Satellite() {
         {savedAlerts.length === 0 ? <p className="text-xs text-muted-foreground">No vegetation anomalies detected yet. New fields need at least three valid historical observations before the system can establish a baseline and issue a change alert.</p> : savedAlerts.map((alert) => <div key={alert.id} className="rounded-lg border p-3">
           <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{alert.title}</p><Badge variant={alert.severity === "high" ? "destructive" : "secondary"}>{alert.severity}</Badge></div>
           <p className="mt-1 text-xs text-muted-foreground">{alert.message}</p>
+          <div className="mt-2 rounded-lg bg-muted/40 p-3 text-xs">
+            {(() => {
+              const interpretation = interpretVegetationAlert({
+                baselineNdvi: alert.baseline_ndvi,
+                currentNdvi: alert.current_ndvi,
+                baselineNdmi: alert.baseline_ndmi,
+                currentNdmi: alert.current_ndmi,
+              });
+              return <><p className="font-semibold">What this observation suggests</p><p className="mt-1">{interpretation.observedChange}</p><p className="mt-2">{interpretation.likelyMeaning}</p><p className="mt-2 font-semibold">What to check in the field</p><ul className="mt-1 list-disc space-y-1 pl-4">{interpretation.checks.map((step) => <li key={step}>{step}</li>)}</ul></>;
+            })()}
+          </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] text-muted-foreground">Evidence score (heuristic): {alert.confidence}% · {new Date(alert.captured_at).toLocaleDateString()} · Status: {alert.status}</span><div className="flex gap-2">{alert.status === "open" && <Button type="button" size="sm" variant="outline" onClick={() => void updateAlertStatus(alert, "acknowledged")}>Acknowledge</Button>}{alert.status !== "resolved" && <Button type="button" size="sm" variant="ghost" onClick={() => void updateAlertStatus(alert, "resolved")}>Resolve</Button>}</div></div>
         </div>)}
       </div>
@@ -476,13 +515,26 @@ export default function Satellite() {
         <Stat label="Mean NDMI" value={ndmiMean === null ? "—" : ndmiMean.toFixed(3)} help={describeNdmi(ndmiMean)} />
         <Stat label="Mean NDWI" value={fieldStats.ndwi?.mean == null ? "—" : fieldStats.ndwi.mean.toFixed(3)} help="Relative open-water / surface-water signal" />
       </div>
-      <p className="text-xs text-muted-foreground">These are spectral indicators, not crop diagnoses. NDVI is affected by crop type, growth stage, soil background and cloud/shadow contamination. NDMI is a canopy-moisture proxy, not a direct soil-moisture measurement. NDWI is not a substitute for field water-level observations.</p>
+      <div className="rounded-lg bg-muted/40 p-3">
+        <h3 className="text-sm font-semibold">How to interpret this field</h3>
+        <p className="mt-1 text-sm">{fieldInterpretation.combinedSignal}</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3 text-xs">
+          <div><p className="font-semibold">Vegetation (NDVI)</p><p className="mt-1 text-muted-foreground">{fieldInterpretation.vegetation}</p></div>
+          <div><p className="font-semibold">Canopy moisture (NDMI)</p><p className="mt-1 text-muted-foreground">{fieldInterpretation.canopyMoisture}</p></div>
+          <div><p className="font-semibold">Surface water (NDWI)</p><p className="mt-1 text-muted-foreground">{fieldInterpretation.surfaceWater}</p></div>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div><p className="text-xs font-semibold">Possible explanations to consider</p><ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground">{fieldInterpretation.possibleExplanations.map((item) => <li key={item}>{item}</li>)}</ul></div>
+          <div><p className="text-xs font-semibold">What to do next</p><ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">{fieldInterpretation.fieldChecks.map((item) => <li key={item}>{item}</li>)}</ol></div>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">Index ranges are broad explanatory guides, not universal crop-health thresholds. Interpret them using this field’s previous observations, crop type, planting date and growth stage. NDMI does not directly measure soil moisture; NDWI is a surface-water signal, not a crop-water diagnosis.</p>
     </section>}
 
     {sample && <section className="rounded-xl border bg-card p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Pixel inspection</h2>{sampleLoading && <Loader2 className="h-4 w-4 animate-spin" />}</div><p className="text-xs text-muted-foreground">{sample.point.lat.toFixed(5)}, {sample.point.lon.toFixed(5)} · Selected Sentinel scene</p><div className="mt-3 grid grid-cols-3 gap-2"><Stat label="NDVI" value={sample.values.ndvi == null ? "—" : sample.values.ndvi.toFixed(3)} /><Stat label="NDMI" value={sample.values.ndmi == null ? "—" : sample.values.ndmi.toFixed(3)} /><Stat label="NDWI" value={sample.values.ndwi == null ? "—" : sample.values.ndwi.toFixed(3)} /></div></section>}
 
     <div className="grid gap-3 md:grid-cols-2">
-      <div className="rounded-xl border bg-card p-4"><h2 className="mb-2 flex items-center gap-2 font-semibold"><Activity className="h-4 w-4 text-emerald-600" /> What the indices mean</h2><ul className="space-y-2 text-sm text-muted-foreground"><li><strong className="text-foreground">NDVI:</strong> vegetation greenness and canopy density signal; useful for comparing areas and tracking change.</li><li><strong className="text-foreground">NDMI:</strong> canopy water-content sensitivity using NIR and SWIR; it is not soil moisture.</li><li><strong className="text-foreground">NDWI:</strong> highlights open-water / surface-water features; interpretation depends on the selected formula.</li></ul></div>
+      <div className="rounded-xl border bg-card p-4"><h2 className="mb-2 flex items-center gap-2 font-semibold"><Activity className="h-4 w-4 text-emerald-600" /> Understanding satellite results</h2><ul className="space-y-2 text-sm text-muted-foreground"><li><strong className="text-foreground">NDVI:</strong> estimates vegetation greenness. Falling values over time can flag change, but planting, crop maturity and harvest also change NDVI.</li><li><strong className="text-foreground">NDMI:</strong> responds to canopy water content. A fall alongside NDVI can strengthen a possible water-stress signal, but it does not measure soil moisture.</li><li><strong className="text-foreground">NDWI:</strong> highlights open water or wet surfaces. It may help identify inundation, but is not a direct crop-health measure.</li></ul><p className="mt-3 text-xs text-muted-foreground">Start with the question: “What changed compared with this same field before?” Then check the field itself. Do not use one index or one image alone to decide to spray, fertilise or irrigate.</p></div>
       <div className="rounded-xl border bg-card p-4"><h2 className="mb-2 flex items-center gap-2 font-semibold"><Droplets className="h-4 w-4 text-sky-600" /> Data quality and limitations</h2><p className="text-sm text-muted-foreground">Sentinel-2 scenes are archived observations, not live imagery. The catalogue cloud percentage describes the whole scene, not necessarily your field. Clouds, haze, shadows, mixed pixels, terrain and acquisition dates can affect results. Compare multiple clear observations and ground-truth before making irrigation, fertilizer or crop-protection decisions.</p><p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><Waves className="h-3.5 w-3.5" /> Sentinel-2 visible/NIR bands: 10 m; SWIR: 20 m. MODIS fallback is much coarser.</p></div>
     </div>
     <p className="text-center text-[11px] text-muted-foreground">Sentinel-2 data: AWS Open Data / Element 84 Earth Search · Raster tiles and statistics: public TiTiler endpoint · Regional fallback: NASA GIBS · Map: Leaflet · Geocoding: OpenStreetMap Nominatim. Public endpoints are free to access but may impose fair-use limits or temporary availability restrictions.</p>
