@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import { Home, Cloud, Bell, User, Menu, LogOut, Bug, Plane, Leaf, BookOpen, Package, Users, ShieldCheck } from "lucide-react";
+import { Home, Satellite, Bell, User, Menu, LogOut, Bug, Plane, Leaf, BookOpen, Package, Users, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNewTag } from "@/hooks/useNewTag";
@@ -17,7 +17,7 @@ import { TestModeBanner } from "@/components/system/TestModeBanner";
 
 const navItems = [
   { to: "/dashboard", icon: Home, label: "Overview", id: "overview" },
-  { to: "/weather", icon: Cloud, label: "Agro Forecast", id: "weather" },
+  { to: "/weather", icon: Satellite, label: "Satellite", id: "satellite" },
   { to: "/environment", icon: Leaf, label: "Agro & Climate Risk", id: "environment" },
   { to: "/produce-safety", icon: ShieldCheck, label: "Produce & Safety", id: "produce-safety", isNew: true },
   { to: "/livestock", icon: Bug, label: "Livestock", id: "livestock" },
@@ -30,7 +30,7 @@ const navItems = [
 
 const bottomNavItems = [
   { to: "/dashboard", icon: Home, label: "Home" },
-  { to: "/weather", icon: Cloud, label: "Forecast" },
+  { to: "/weather", icon: Satellite, label: "Satellite" },
   { to: "/produce-safety", icon: ShieldCheck, label: "Safety" },
   { to: "/learning", icon: BookOpen, label: "Learn" },
   { to: "/alerts", icon: Bell, label: "Alerts" },

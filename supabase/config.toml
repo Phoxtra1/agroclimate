@@ -15,3 +15,6 @@ verify_jwt = false
 [functions.aih-gateway]
 verify_jwt = true
 
+
+[functions.satellite-field-monitor]
+verify_jwt = false

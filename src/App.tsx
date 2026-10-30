@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Landing from "./pages/Landing";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
-import Weather from "./pages/Weather";
+import Satellite from "./pages/Satellite";
 import Livestock from "./pages/Livestock";
 import Alerts from "./pages/Alerts";
 import Profile from "./pages/Profile";
@@ -289,7 +289,7 @@ function AppRoutes() {
       {/* Farmer/user routes */}
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-      <Route path="/weather" element={<ProtectedRoute><Weather /></ProtectedRoute>} />
+      <Route path="/weather" element={<ProtectedRoute><Satellite /></ProtectedRoute>} />
       <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
       <Route path="/crops" element={<Navigate to="/dashboard" replace />} />
       <Route path="/livestock" element={<ProtectedRoute><Livestock /></ProtectedRoute>} />
