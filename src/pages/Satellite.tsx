@@ -5,6 +5,9 @@ import { Activity, AlertCircle, CalendarDays, Cloud, Droplets, Layers, LocateFix
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   calculatePolygonAreaHectares,
   describeNdmi,
@@ -99,6 +102,11 @@ export default function Satellite() {
   const [sample, setSample] = useState<{ point: GeoPoint; values: Partial<Record<SpectralIndex, number | null>> } | null>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const { user } = useAuth();
+  const [fieldName, setFieldName] = useState("");
+  const [savedFields, setSavedFields] = useState<any[]>([]);
+  const [savedAlerts, setSavedAlerts] = useState<any[]>([]);
+  const [savingField, setSavingField] = useState(false);
 
   const selectedScene = useMemo(() => scenes.find((scene) => scene.id === sceneId) ?? null, [scenes, sceneId]);
   const isNasa = layer.startsWith("nasa-");
@@ -255,6 +263,116 @@ export default function Satellite() {
     setAnalysisError("");
   };
 
+
+  const refreshSavedFields = useCallback(async () => {
+    if (!user) return;
+    const { data, error: fieldsError } = await supabase
+      .from("satellite_fields" as any)
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    if (fieldsError) {
+      console.error("Could not load monitored fields:", fieldsError.message);
+      return;
+    }
+    const fields = (data ?? []) as any[];
+    setSavedFields(fields);
+    if (fields.length) {
+      const { data: alerts } = await supabase
+        .from("satellite_field_alerts" as any)
+        .select("*")
+        .in("field_id", fields.map((field) => field.id))
+        .order("created_at", { ascending: false })
+        .limit(20);
+      setSavedAlerts((alerts ?? []) as any[]);
+    } else {
+      setSavedAlerts([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void refreshSavedFields();
+  }, [refreshSavedFields]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`satellite-field-alerts-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "satellite_field_alerts" }, (payload) => {
+        const alert = payload.new as any;
+        setSavedAlerts((previous) => [alert, ...previous.filter((item) => item.id !== alert.id)].slice(0, 20));
+        toast(alert.title || "Satellite crop alert", { description: alert.message || "A change was detected in one of your monitored fields." });
+        void refreshSavedFields();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [user, refreshSavedFields]);
+
+  const saveFieldForMonitoring = async () => {
+    if (!user || fieldPoints.length < 3) return;
+    const name = fieldName.trim();
+    if (name.length < 2) {
+      toast.error("Enter a field name before saving.");
+      return;
+    }
+    setSavingField(true);
+    const geometry: GeoJSON.Polygon = {
+      type: "Polygon",
+      coordinates: [[...fieldPoints.map((point) => [point.lon, point.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]]],
+    };
+    const { error: saveError } = await supabase.from("satellite_fields" as any).insert({
+      user_id: user.id,
+      name,
+      field_geojson: geometry,
+      area_hectares: fieldArea,
+      monitoring_enabled: true,
+      max_cloud_cover: Number(maxCloud),
+      ndvi_drop_threshold: 0.15,
+    });
+    if (saveError) {
+      toast.error(`Could not save monitored field: ${saveError.message}`);
+    } else {
+      toast.success(`${name} saved for satellite monitoring`);
+      setFieldName("");
+      setFieldPoints([]);
+      setDrawing(false);
+      await refreshSavedFields();
+    }
+    setSavingField(false);
+  };
+
+  const loadSavedBoundary = (field: any) => {
+    const coordinates = field.field_geojson?.coordinates?.[0];
+    if (!Array.isArray(coordinates)) return;
+    setFieldPoints(coordinates.slice(0, -1).map(([lon, lat]: [number, number]) => ({ lat, lon })));
+    setPlace((previous) => ({ ...previous, label: field.name }));
+    setFieldStats({});
+    setAnalysisError("");
+  };
+
+  const toggleFieldMonitoring = async (field: any) => {
+    const next = !field.monitoring_enabled;
+    const { error: updateError } = await supabase
+      .from("satellite_fields" as any)
+      .update({ monitoring_enabled: next })
+      .eq("id", field.id)
+      .eq("user_id", user?.id);
+    if (updateError) toast.error(updateError.message);
+    else {
+      toast.success(next ? "Field monitoring enabled" : "Field monitoring paused");
+      await refreshSavedFields();
+    }
+  };
+
+  const updateAlertStatus = async (alert: any, status: "acknowledged" | "resolved") => {
+    const { error: updateError } = await supabase
+      .from("satellite_field_alerts" as any)
+      .update({ status })
+      .eq("id", alert.id);
+    if (updateError) toast.error(updateError.message);
+    else setSavedAlerts((previous) => previous.map((item) => item.id === alert.id ? { ...item, status } : item));
+  };
+
   const ndviMean = fieldStats.ndvi?.mean ?? null;
   const ndmiMean = fieldStats.ndmi?.mean ?? null;
 
@@ -292,6 +410,7 @@ export default function Satellite() {
             <MapInteraction drawing={drawing} onMapClick={addFieldPoint} onSample={(point) => void inspectPoint(point)} />
             <Marker position={[place.lat, place.lon]} icon={marker}><Popup>{place.label}<br />{place.lat.toFixed(5)}, {place.lon.toFixed(5)}</Popup></Marker>
             {selectedScene?.geometry && <GeoJSON key={selectedScene.id} data={selectedScene.geometry as GeoJSON.GeoJsonObject} style={{ color: "#38bdf8", weight: 1, fillOpacity: 0.04 }} />}
+            {savedFields.filter((field) => field.monitoring_enabled).map((field) => <GeoJSON key={field.id} data={field.field_geojson as GeoJSON.GeoJsonObject} style={{ color: "#a3e635", weight: 2, fillOpacity: 0.08, dashArray: "5 4" }} />)}
             {fieldPoints.length > 0 && <Polygon positions={fieldPoints.map((point) => [point.lat, point.lon] as [number, number])} pathOptions={{ color: "#f59e0b", weight: 3, fillOpacity: 0.15 }} />}
             {fieldPoints.map((point, index) => <Marker key={index} position={[point.lat, point.lon]}><Popup>Field boundary point {index + 1}</Popup></Marker>)}
           </MapContainer>
@@ -303,7 +422,7 @@ export default function Satellite() {
           {sceneLoading ? <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Searching open catalogue…</div> : scenes.length ? <div className="space-y-2">{scenes.slice(0, 8).map((scene) => <button key={scene.id} type="button" onClick={() => { setSceneId(scene.id); setFieldStats({}); setSample(null); }} className={`w-full rounded-lg border p-2 text-left text-xs transition hover:border-primary ${scene.id === sceneId ? "border-primary bg-primary/5" : ""}`}><div className="flex items-center justify-between gap-2"><span className="font-semibold">{formatSceneDate(scene.acquiredAt)}</span><Badge variant="outline">{scene.cloudCover === null ? "Cloud n/a" : `${scene.cloudCover.toFixed(0)}% cloud`}</Badge></div><p className="mt-1 truncate text-muted-foreground">{scene.id}</p></button>)}</div> : <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">No scenes matched. Widen the date range or cloud threshold. Use NASA layers for broader context.</p>}
           <div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">{selectedLabel}</p><p className="mt-1 text-xs text-muted-foreground">{isNasa ? "NASA MODIS is useful for regional trends, not individual field assessment." : "Sentinel-2 Level-2A surface reflectance. Visible/NIR bands are 10 m; SWIR moisture band is 20 m."}</p></div>
           <div className="space-y-2">
-            <Button type="button" variant={drawing ? "default" : "outline"} className="w-full gap-2" onClick={() => { setDrawing(!drawing); setFieldPoints([]); setFieldStats({}); setAnalysisError(""); }} disabled={!selectedScene || isNasa}><Ruler className="h-4 w-4" />{drawing ? "Stop drawing boundary" : "Draw field boundary"}</Button>
+            <Button type="button" variant={drawing ? "default" : "outline"} className="w-full gap-2" onClick={() => { setDrawing(!drawing); setFieldPoints([]); setFieldStats({}); setAnalysisError(""); }}><Ruler className="h-4 w-4" />{drawing ? "Stop drawing boundary" : "Draw field boundary"}</Button>
             {fieldPoints.length > 0 && <div className="flex items-center justify-between text-xs"><span>{fieldPoints.length} boundary points · {fieldArea.toFixed(2)} ha</span><button type="button" onClick={() => { setFieldPoints((points) => points.slice(0, -1)); setFieldStats({}); }} className="text-muted-foreground hover:text-foreground">Undo point</button></div>}
             <Button type="button" className="w-full gap-2" onClick={() => { setDrawing(false); void runFieldAnalysis(); }} disabled={!selectedScene || isNasa || fieldPoints.length < 3 || analysisLoading}>{analysisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />} Analyse field</Button>
             {fieldPoints.length > 0 && <Button type="button" variant="ghost" className="w-full gap-2" onClick={() => { setFieldPoints([]); setFieldStats({}); }}><X className="h-4 w-4" /> Clear boundary</Button>}
@@ -315,6 +434,34 @@ export default function Satellite() {
     </section>
 
     {mapMessage && <p className="text-xs text-muted-foreground">{mapMessage}</p>}
+
+
+    <section className="space-y-4 rounded-2xl border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div><h2 className="flex items-center gap-2 font-semibold"><Activity className="h-5 w-5 text-emerald-600" /> Automatic crop-stress monitoring</h2><p className="mt-1 text-xs text-muted-foreground">Save a field boundary once. AgroClimate checks new clear Sentinel-2 observations and alerts you when vegetation declines materially against that field’s own history.</p></div>
+        <Badge variant="outline">Scheduled monitoring</Badge>
+      </div>
+      {fieldPoints.length >= 3 && <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <Input value={fieldName} onChange={(event) => setFieldName(event.target.value)} placeholder="Name this field (e.g. North maize plot)" aria-label="Field name" />
+        <Button type="button" onClick={() => void saveFieldForMonitoring()} disabled={savingField || fieldName.trim().length < 2}>{savingField ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sprout className="mr-2 h-4 w-4" />}Save & monitor this field</Button>
+      </div>}
+      {savedFields.length === 0 ? <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No monitored fields yet. Draw at least three boundary points on the map, enter a field name and save it to start building its satellite history.</p> : <div className="space-y-2">
+        <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Your monitored fields</h3><span className="text-xs text-muted-foreground">{savedFields.filter((field) => field.monitoring_enabled).length} active</span></div>
+        {savedFields.map((field) => <div key={field.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+          <div className="min-w-0"><p className="truncate text-sm font-medium">{field.name}</p><p className="text-xs text-muted-foreground">{Number(field.area_hectares || 0).toFixed(2)} ha · {field.monitoring_enabled ? "Monitoring active" : "Monitoring paused"} · {field.last_scene_at ? `Checked ${new Date(field.last_scene_at).toLocaleDateString()}` : "Building baseline"}</p></div>
+          <div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => loadSavedBoundary(field)}>Show boundary</Button><Button type="button" size="sm" variant={field.monitoring_enabled ? "secondary" : "default"} onClick={() => void toggleFieldMonitoring(field)}>{field.monitoring_enabled ? "Pause" : "Resume"}</Button></div>
+        </div>)}
+      </div>}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Satellite change alerts</h3>
+        {savedAlerts.length === 0 ? <p className="text-xs text-muted-foreground">No vegetation anomalies detected yet. New fields need at least three valid historical observations before the system can establish a baseline and issue a change alert.</p> : savedAlerts.map((alert) => <div key={alert.id} className="rounded-lg border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{alert.title}</p><Badge variant={alert.severity === "high" ? "destructive" : "secondary"}>{alert.severity}</Badge></div>
+          <p className="mt-1 text-xs text-muted-foreground">{alert.message}</p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] text-muted-foreground">Confidence indicator: {alert.confidence}% · {new Date(alert.captured_at).toLocaleDateString()} · Status: {alert.status}</span><div className="flex gap-2">{alert.status === "open" && <Button type="button" size="sm" variant="outline" onClick={() => void updateAlertStatus(alert, "acknowledged")}>Acknowledge</Button>}{alert.status !== "resolved" && <Button type="button" size="sm" variant="ghost" onClick={() => void updateAlertStatus(alert, "resolved")}>Resolve</Button>}</div></div>
+        </div>)}
+      </div>
+      <p className="text-[11px] text-muted-foreground">Alerts indicate unusual spectral change, not a confirmed disease diagnosis. Cloud percentage is scene-level, and the current monitor does not yet apply pixel-level cloud/shadow masking. Verify in the field before applying treatments.</p>
+    </section>
 
     {fieldStats.ndvi && <section className="space-y-3 rounded-2xl border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="flex items-center gap-2 font-semibold"><Sprout className="h-5 w-5 text-emerald-600" /> Field spectral summary</h2><p className="text-xs text-muted-foreground">Computed from valid Sentinel-2 pixels within your drawn polygon</p></div><Badge variant="outline">{fieldArea.toFixed(2)} hectares (approx.)</Badge></div>
