@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,40 +9,40 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import { supabase } from "@/integrations/supabase/client";
-import Landing from "./pages/Landing";
-import AdminDashboard from "@/pages/admin/AdminDashboard";
-import Dashboard from "./pages/Dashboard";
-import Satellite from "./pages/Satellite";
-import Livestock from "./pages/Livestock";
-import Alerts from "./pages/Alerts";
-import Profile from "./pages/Profile";
-import DroneAdvisory from "./pages/DroneAdvisory";
-import AgroInventory from "./pages/AgroInventory";
-import EnvironmentalMonitor from "./pages/EnvironmentalMonitor";
-import AgroLearning from "./pages/AgroLearning";
-import VerifyEmail from "./pages/VerifyEmail";
-import ResetPassword from "./pages/ResetPassword";
-import ProduceSafetyPage from "./pages/ProduceSafety";
-import HandlerManagement from "./pages/HandlerManagement";
-import HandlerWorkspace from "./pages/HandlerWorkspace";
-import PostHarvestTracker from "./pages/PostHarvestTracker";
-import MarketLink from "./pages/MarketLink";
-import AGNav from "./pages/AGNav";
-import MarketplaceHome from "./pages/marketplace/MarketplaceHome";
-import MarketplaceSupplyPage from "./pages/marketplace/MarketplaceSupplyPage";
-import MarketplaceOrderForm from "./pages/marketplace/MarketplaceOrderForm";
-import MarketplaceOrderListing from "./pages/marketplace/MarketplaceOrderListing";
-import MarketplaceAuth from "./pages/marketplace/MarketplaceAuth";
-import MarketplaceInbox from "./pages/marketplace/MarketplaceInbox";
-import AGTransLayout from "./pages/agtrans-partner/AGTransLayout";
-import DriverOnboarding from "./pages/agtrans-partner/Onboarding";
-import DriverDashboard from "./pages/agtrans-partner/DriverDashboard";
-import TripPage from "./pages/agtrans-partner/TripPage";
-import PendingApproval from "./pages/agtrans-partner/PendingApproval";
-import LiveTracking from "./pages/LiveTracking";
-import Subscription from "./pages/Subscription";
-import SubscriptionVerify from "./pages/SubscriptionVerify";
-import Sikasem from "./pages/Sikasem";
+const Landing = lazy(() => import("./pages/Landing"));
+const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Satellite = lazy(() => import("./pages/Satellite"));
+const Livestock = lazy(() => import("./pages/Livestock"));
+const Alerts = lazy(() => import("./pages/Alerts"));
+const Profile = lazy(() => import("./pages/Profile"));
+const DroneAdvisory = lazy(() => import("./pages/DroneAdvisory"));
+const AgroInventory = lazy(() => import("./pages/AgroInventory"));
+const EnvironmentalMonitor = lazy(() => import("./pages/EnvironmentalMonitor"));
+const AgroLearning = lazy(() => import("./pages/AgroLearning"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ProduceSafetyPage = lazy(() => import("./pages/ProduceSafety"));
+const HandlerManagement = lazy(() => import("./pages/HandlerManagement"));
+const HandlerWorkspace = lazy(() => import("./pages/HandlerWorkspace"));
+const PostHarvestTracker = lazy(() => import("./pages/PostHarvestTracker"));
+const MarketLink = lazy(() => import("./pages/MarketLink"));
+const AGNav = lazy(() => import("./pages/AGNav"));
+const MarketplaceHome = lazy(() => import("./pages/marketplace/MarketplaceHome"));
+const MarketplaceSupplyPage = lazy(() => import("./pages/marketplace/MarketplaceSupplyPage"));
+const MarketplaceOrderForm = lazy(() => import("./pages/marketplace/MarketplaceOrderForm"));
+const MarketplaceOrderListing = lazy(() => import("./pages/marketplace/MarketplaceOrderListing"));
+const MarketplaceAuth = lazy(() => import("./pages/marketplace/MarketplaceAuth"));
+const MarketplaceInbox = lazy(() => import("./pages/marketplace/MarketplaceInbox"));
+const AGTransLayout = lazy(() => import("./pages/agtrans-partner/AGTransLayout"));
+const DriverOnboarding = lazy(() => import("./pages/agtrans-partner/Onboarding"));
+const DriverDashboard = lazy(() => import("./pages/agtrans-partner/DriverDashboard"));
+const TripPage = lazy(() => import("./pages/agtrans-partner/TripPage"));
+const PendingApproval = lazy(() => import("./pages/agtrans-partner/PendingApproval"));
+const LiveTracking = lazy(() => import("./pages/LiveTracking"));
+const Subscription = lazy(() => import("./pages/Subscription"));
+const SubscriptionVerify = lazy(() => import("./pages/SubscriptionVerify"));
+const Sikasem = lazy(() => import("./pages/Sikasem"));
 import { useDriverStatus } from "@/hooks/useDriverStatus";
 import { PremiumGate } from "@/components/subscription/PremiumGate";
 import { installOfflineSync } from "@/lib/offlineQueue";
@@ -256,6 +256,7 @@ function AppRoutes() {
   };
 
   return (
+    <Suspense fallback={<LoadingScreen />}>
     <Routes>
       <Route
         path="/"
@@ -324,6 +325,7 @@ function AppRoutes() {
         element={user || isPreview ? <Navigate to={getHomeRoute()} replace /> : <Navigate to="/" replace />}
       />
     </Routes>
+    </Suspense>
   );
 }
 
