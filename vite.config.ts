@@ -68,11 +68,44 @@ export default defineConfig(({ mode }) => ({
         // FIX: Increase default 2MB precache limit
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
 
+        // Keep lazy route chunks out of install-time precache. They are cached
+        // on first use, so initial install/download stays small.
         globPatterns: [
-          "**/*.{js,css,html,ico,png,svg,woff2}",
+          "**/*.{css,html,ico,png,svg,woff2}",
         ],
 
         runtimeCaching: [
+          {
+            // Lazy-loaded application chunks are cached after first visit,
+            // rather than downloaded eagerly during PWA installation.
+            urlPattern: /\/assets\/.*\.js$/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "agroclimate-app-chunks",
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Reuse map imagery between visits; tile URLs are immutable for a
+            // given scene/layer/zoom and expire after a week.
+            urlPattern: /^https:\/\/titiler\.xyz\/stac\/.*\/(?:tiles|tile)\//i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "satellite-imagery-tiles",
+              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/gibs\.earthdata\.nasa\.gov\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "nasa-gibs-imagery",
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/api\.openweathermap\.org\/.*/i,
             handler: "NetworkFirst",
@@ -208,6 +241,9 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks: {
           react: ["react", "react-dom"],
+          maps: ["leaflet", "react-leaflet"],
+          charts: ["recharts"],
+          supabase: ["@supabase/supabase-js"],
         },
       },
     },
