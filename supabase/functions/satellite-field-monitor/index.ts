@@ -88,7 +88,6 @@ async function fetchScenes(field: Field): Promise<Scene[]> {
         ? item.properties["eo:cloud_cover"] : null,
     }))
     .filter((scene: Scene) => scene.capturedAt && (!field.last_scene_at || Date.parse(scene.capturedAt) > Date.parse(field.last_scene_at)))
-    .sort((a: Scene, b: Scene) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt))
     .sort((a: Scene, b: Scene) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
 
   // Overlapping Sentinel tiles can intersect one farm on the same acquisition day.
