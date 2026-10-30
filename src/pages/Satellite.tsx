@@ -410,6 +410,7 @@ export default function Satellite() {
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="relative h-[440px] w-full bg-slate-900 sm:h-[560px]">
           <MapContainer center={[place.lat, place.lon]} zoom={8} scrollWheelZoom className="h-full w-full">
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='Map data: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={19} />
             {isNasa ? <TileLayer key={nasaUrl} url={nasaUrl} maxZoom={9} attribution='Imagery: <a href="https://earthdata.nasa.gov/">NASA GIBS / Earthdata</a>' eventHandlers={{ tileerror: () => setMapMessage("Some NASA tiles failed to load. Try another fallback layer.") }} /> : tileTemplate ? <TileLayer key={tileTemplate} url={tileTemplate} maxZoom={18} attribution='Sentinel-2 data: <a href="https://registry.opendata.aws/sentinel-2/">AWS Open Data</a> · Rendering: <a href="https://titiler.xyz/">TiTiler</a>' eventHandlers={{ tileerror: () => setMapMessage("Some Sentinel-2 tiles failed to load. Try another scene or NASA context layer.") }} /> : null}
             <Recenter place={place} />
             <MapInteraction drawing={drawing} onMapClick={addFieldPoint} onSample={(point) => void inspectPoint(point)} />
