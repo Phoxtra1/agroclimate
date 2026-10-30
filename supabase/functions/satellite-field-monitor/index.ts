@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assessVegetationChange, median } from "../_shared/satellite-anomaly.ts";
 
 const EARTH_SEARCH = "https://earth-search.aws.element84.com/v1";
 const TITILER = "https://titiler.xyz";
@@ -7,12 +8,17 @@ const COLLECTION = "sentinel-2-c1-l2a";
 const MAX_SCENES_PER_FIELD = 8;
 const BASELINE_SCENES = 3;
 
+type FieldGeometry = {
+  type: "Polygon" | "MultiPolygon";
+  coordinates: number[][][] | number[][][][];
+};
+
 type Field = {
   id: string;
   user_id: string;
   name: string;
   crop_type: string | null;
-  field_geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  field_geojson: FieldGeometry;
   max_cloud_cover: number;
   ndvi_drop_threshold: number;
   last_scene_at: string | null;
@@ -111,12 +117,6 @@ async function getIndexStats(scene: Scene, geometry: Field["field_geojson"], ind
   };
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: { "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-satellite-monitor-secret" } });
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
@@ -201,14 +201,21 @@ serve(async (req) => {
           const baselineNdvi = median(prior.map((row: any) => Number(row.mean_ndvi)));
           const baselineNdmiValues = prior.map((row: any) => Number(row.mean_ndmi)).filter(Number.isFinite);
           const baselineNdmi = baselineNdmiValues.length ? median(baselineNdmiValues) : null;
-          const drop = baselineNdvi - ndvi.mean;
-          const percentDrop = baselineNdvi > 0 ? (drop / baselineNdvi) * 100 : 0;
-          const ndmiDrop = baselineNdmi === null ? null : baselineNdmi - ndmi.mean;
-          const meaningfulDrop = drop >= field.ndvi_drop_threshold && percentDrop >= 20;
-          if (meaningfulDrop) {
-            const corroborated = ndmiDrop !== null && ndmiDrop >= 0.08;
-            const severity = drop >= 0.25 || (corroborated && drop >= 0.18) ? "high" : "moderate";
-            const confidence = Math.min(92, 60 + (corroborated ? 20 : 0) + (scene.cloudCover !== null && scene.cloudCover <= 15 ? 10 : 0));
+          const assessment = assessVegetationChange({
+            baselineNdvi,
+            currentNdvi: ndvi.mean,
+            baselineNdmi,
+            currentNdmi: ndmi.mean,
+            minimumDrop: field.ndvi_drop_threshold,
+            cloudCover: scene.cloudCover,
+          });
+          if (assessment.isAnomaly && assessment.severity) {
+            const drop = assessment.ndviDrop;
+            const percentDrop = assessment.ndviDropPercent;
+            const ndmiDrop = assessment.ndmiDrop;
+            const corroborated = assessment.corroboratedByNdmi;
+            const severity = assessment.severity;
+            const confidence = assessment.confidence;
             const title = severity === "high" ? "Significant vegetation decline detected" : "Possible crop stress detected";
             const message = `${field.name}: mean NDVI fell from ${baselineNdvi.toFixed(2)} to ${ndvi.mean.toFixed(2)} (${percentDrop.toFixed(0)}% decline) in the latest clear satellite observation. ${corroborated ? "NDMI also indicates a canopy-moisture decline. " : ""}Inspect the field for water stress, pests, disease, harvest activity or other changes before taking action.`;
             const { data: alert, error: alertError } = await supabase.from("satellite_field_alerts").upsert({
