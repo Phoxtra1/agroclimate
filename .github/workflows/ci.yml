@@ -51,7 +51,7 @@ jobs:
       # pre-existing findings in unrelated files and generated dev-dist output.
       # Gate this feature on lint for every source file changed by the PR.
       - name: Lint Satellite feature files
-        run: npx eslint src/pages/Satellite.tsx src/App.tsx src/components/AppLayout.tsx src/services/satellite/sentinel.ts src/test/satelliteSentinel.test.ts
+        run: npx eslint src/pages/Satellite.tsx src/App.tsx src/components/AppLayout.tsx src/services/satellite/sentinel.ts src/test/satelliteSentinel.test.ts src/test/satelliteAnomaly.test.ts supabase/functions/_shared/satellite-anomaly.ts
 
       - name: Unit tests
         run: npm test -- --reporter=dot
