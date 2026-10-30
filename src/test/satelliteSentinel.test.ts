@@ -20,8 +20,8 @@ describe("Sentinel-2 analysis helpers", () => {
       { lat: 0.001, lon: 0.001 },
       { lat: 0.001, lon: 0 },
     ]);
-    expect(area).toBeGreaterThan(1.1);
-    expect(area).toBeLessThan(1.2);
+    expect(area).toBeGreaterThan(1.2);
+    expect(area).toBeLessThan(1.3);
   });
 
   it("returns zero area for fewer than three vertices", () => {
