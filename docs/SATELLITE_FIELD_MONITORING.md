@@ -1,6 +1,6 @@
-# Satellite field monitoring
+# Global satellite field monitoring
 
-AgroClimate can monitor farmer-saved field polygons and create in-app alerts when a new Sentinel-2 observation shows an unusual vegetation decline.
+AgroClimate is designed for fields anywhere in the world. Its default map is a neutral global overview, not a Ghana-only view. Farmers can search for any place or coordinates, select My location with browser permission, or draw a field boundary directly on the map. Sentinel-2 scene discovery is driven by the saved field geometry, not by a fixed country setting. AgroClimate can monitor farmer-saved field polygons and create in-app alerts when a new Sentinel-2 observation shows an unusual vegetation decline.
 
 ## What the monitor does
 
@@ -87,3 +87,10 @@ Farmers open Satellite, draw a field boundary, enter a field name and select **S
 ## Free-service considerations
 
 Earth Search and TiTiler are public services. There is no paid satellite API key in this implementation, but public endpoints can enforce fair-use limits, rate limits or availability restrictions. Monitor Edge Function errors and do not represent a missed scheduled run as a healthy field.
+
+
+## How AgroClimate explains the results
+
+The Satellite page provides plain-language interpretation for field NDVI, NDMI and NDWI readings and for automated alerts. It explains what changed, what the indices can and cannot indicate, alternative explanations such as crop stage, harvest, cloud/shadow and field activity, and practical checks a farmer can carry out.
+
+Interpretations are deliberately cautious. A spectral signal cannot confirm a specific disease, nutrient deficiency or irrigation requirement. A single scene should not trigger pesticide, fertiliser or irrigation treatment without field verification. The interpretation thresholds are broad educational guides, not crop- and region-specific agronomic thresholds. Future upgrades can add crop calendars, local weather, crop-specific models and stronger pixel-level quality controls.
