@@ -10,7 +10,7 @@ AgroClimate can monitor farmer-saved field polygons and create in-app alerts whe
 4. Calculates field-mean NDVI (NIR/red) and NDMI (NIR/SWIR) using the public TiTiler STAC statistics endpoint.
 5. Stores observations in `satellite_field_observations`.
 6. Requires three previous valid observations before comparing a new scene against the median baseline.
-7. Creates a deduplicated `satellite_field_alerts` record when NDVI drops by at least the field's configured absolute threshold and at least 20% relative to its baseline. NDMI decline is corroborating evidence and increases the confidence indicator.
+7. Creates a deduplicated `satellite_field_alerts` record when NDVI drops by at least the field's configured absolute threshold and at least 20% relative to its baseline. NDMI decline is corroborating evidence and increases the heuristic evidence score.
 8. Adds an in-app notification to the farmer's existing notification stream.
 
 The detector identifies unusual spectral change, not a crop disease. It does not currently perform pixel-level cloud/shadow masking, crop-specific growth-stage modelling, or automated causal diagnosis. Scene cloud percentage is a scene-wide value and does not guarantee that a particular field is clear. Farmers should inspect the field before applying treatments.
