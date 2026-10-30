@@ -437,9 +437,9 @@ export default function Satellite() {
       </div>
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="relative h-[440px] w-full bg-slate-900 sm:h-[560px]">
-          <MapContainer center={[place.lat, place.lon]} zoom={2} scrollWheelZoom className="h-full w-full">
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='Map data: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={19} />
-            {isNasa ? <TileLayer key={nasaUrl} url={nasaUrl} maxZoom={9} attribution='Imagery: <a href="https://earthdata.nasa.gov/">NASA GIBS / Earthdata</a>' eventHandlers={{ tileerror: () => setMapMessage("Some NASA tiles failed to load. Try another fallback layer.") }} /> : tileTemplate ? <TileLayer key={tileTemplate} url={tileTemplate} maxZoom={18} attribution='Sentinel-2 data: <a href="https://registry.opendata.aws/sentinel-2/">AWS Open Data</a> · Rendering: <a href="https://titiler.xyz/">TiTiler</a>' eventHandlers={{ tileerror: () => setMapMessage("Some Sentinel-2 tiles failed to load. Try another scene or NASA context layer.") }} /> : null}
+          <MapContainer center={[place.lat, place.lon]} zoom={2} scrollWheelZoom preferCanvas className="h-full w-full">
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='Map data: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={19} updateWhenIdle updateWhenZooming={false} keepBuffer={2} />
+            {isNasa ? <TileLayer key={nasaUrl} url={nasaUrl} maxZoom={9} updateWhenIdle updateWhenZooming={false} keepBuffer={2} attribution='Imagery: <a href="https://earthdata.nasa.gov/">NASA GIBS / Earthdata</a>' eventHandlers={{ loading: () => setTileLoading(true), load: () => setTileLoading(false), tileerror: () => { setTileLoading(false); setMapMessage("Some NASA tiles failed to load. Try another fallback layer."); } }} /> : tileTemplate ? <TileLayer key={tileTemplate} url={tileTemplate} maxZoom={18} updateWhenIdle updateWhenZooming={false} keepBuffer={2} attribution='Sentinel-2 data: <a href="https://registry.opendata.aws/sentinel-2/">AWS Open Data</a> · Rendering: <a href="https://titiler.xyz/">TiTiler</a>' eventHandlers={{ loading: () => setTileLoading(true), load: () => setTileLoading(false), tileerror: () => { setTileLoading(false); setMapMessage("Some Sentinel-2 tiles failed to load. Try another scene or NASA context layer."); } }} /> : null}
             <Recenter place={place} />
             <MapInteraction drawing={drawing} onMapClick={addFieldPoint} onSample={(point) => void inspectPoint(point)} />
             <Marker position={[place.lat, place.lon]} icon={marker}><Popup>{place.label}<br />{place.lat.toFixed(5)}, {place.lon.toFixed(5)}</Popup></Marker>
@@ -448,7 +448,7 @@ export default function Satellite() {
             {fieldPoints.length > 0 && <Polygon positions={fieldPoints.map((point) => [point.lat, point.lon] as [number, number])} pathOptions={{ color: "#f59e0b", weight: 3, fillOpacity: 0.15 }} />}
             {fieldPoints.map((point, index) => <Marker key={index} position={[point.lat, point.lon]}><Popup>Field boundary point {index + 1}</Popup></Marker>)}
           </MapContainer>
-          {(sceneLoading || tileLoading) && <div className="absolute left-3 top-3 z-[500] flex items-center gap-2 rounded-lg bg-background/95 px-3 py-2 text-xs shadow"><Loader2 className="h-3.5 w-3.5 animate-spin" />{sceneLoading ? "Searching Sentinel scenes…" : "Preparing imagery tiles…"}</div>}
+          {(sceneLoading || tileLoading) && <div className="absolute left-3 top-3 z-[500] flex items-center gap-2 rounded-lg bg-background/95 px-3 py-2 text-xs shadow"><Loader2 className="h-3.5 w-3.5 animate-spin" />{sceneLoading ? "Searching Sentinel scenes…" : "Loading satellite map tiles…"}</div>}
           {drawing && <div className="absolute bottom-3 left-3 right-3 z-[500] rounded-lg bg-background/95 p-2 text-xs shadow">Field boundary drawing is active. Click at least 3 corners on the map, then select “Analyse field”.</div>}
         </div>
         <aside className="space-y-4 border-t p-3 lg:border-l lg:border-t-0">
