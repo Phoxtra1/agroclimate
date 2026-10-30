@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main, "feature/agroclimate-satellite"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,21 +17,41 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Type-check
-        run: npx tsc --noEmit
+      # Avoid external marketplace actions: use the runner's Git and Node.js.
+      - name: Check out the exact event revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c http.extraheader="AUTHORIZATION: basic $auth" clone --no-checkout --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" .
+          git -c http.extraheader="AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          git rev-parse HEAD
+
+      - name: Verify Node.js and npm
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+          node -e "if (Number(process.versions.node.split('.')[0]) < 20) process.exit(1)"
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check application
+        run: npx tsc --project tsconfig.app.json --noEmit --pretty false
+
+      - name: Type-check build configuration
+        run: npx tsc --project tsconfig.node.json --noEmit --pretty false
+
       - name: Lint
         run: npm run lint
+
       - name: Unit tests
-        run: npm test
+        run: npm test -- --reporter=dot
+
       - name: Production build
         run: npm run build
