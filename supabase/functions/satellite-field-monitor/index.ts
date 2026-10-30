@@ -77,7 +77,7 @@ async function fetchScenes(field: Field): Promise<Scene[]> {
   });
   if (!response.ok) throw new Error(`Earth Search failed with ${response.status}`);
   const payload = await response.json();
-  return (payload.features ?? [])
+  const candidates = (payload.features ?? [])
     .filter((item: any) => item.id && item.geometry)
     .map((item: any) => ({
       id: item.id,
@@ -89,7 +89,17 @@ async function fetchScenes(field: Field): Promise<Scene[]> {
     }))
     .filter((scene: Scene) => scene.capturedAt && (!field.last_scene_at || Date.parse(scene.capturedAt) > Date.parse(field.last_scene_at)))
     .sort((a: Scene, b: Scene) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt))
-    .slice(-MAX_SCENES_PER_FIELD);
+    .sort((a: Scene, b: Scene) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+
+  // Overlapping Sentinel tiles can intersect one farm on the same acquisition day.
+  // Keep the least-cloudy scene per day to avoid treating one pass as multiple observations.
+  const byDay = new Map<string, Scene>();
+  for (const scene of candidates) {
+    const day = scene.capturedAt.slice(0, 10);
+    const existing = byDay.get(day);
+    if (!existing || (scene.cloudCover ?? 100) < (existing.cloudCover ?? 100)) byDay.set(day, scene);
+  }
+  return [...byDay.values()].slice(-MAX_SCENES_PER_FIELD);
 }
 
 async function getIndexStats(scene: Scene, geometry: Field["field_geojson"], index: "ndvi" | "ndmi"): Promise<Stats> {
