@@ -156,7 +156,9 @@ serve(async (req) => {
         .limit(12);
       if (historyError) throw historyError;
 
-      const known = new Set((history ?? []).map((row: any) => row.scene_id));
+      const fieldHistory: any[] = [...(history ?? [])];
+      const known = new Set(fieldHistory.map((row: any) => row.scene_id));
+      let lastProcessedAt = field.last_scene_at;
       for (const scene of scenes) {
         if (known.has(scene.id)) continue;
         const [ndvi, ndmi] = await Promise.all([
@@ -182,11 +184,15 @@ serve(async (req) => {
         }, { onConflict: "field_id,scene_id", ignoreDuplicates: true });
         if (insertError) throw insertError;
 
-        const prior = [
-          ...(history ?? []).filter((row: any) => row.mean_ndvi !== null && row.scene_id !== scene.id),
-          ...scenes.filter((candidate) => candidate.id !== scene.id && Date.parse(candidate.capturedAt) < Date.parse(scene.capturedAt))
-            .map((candidate) => null).filter(Boolean),
-        ].filter((row: any) => row.mean_ndvi !== null)
+        const observation = {
+          scene_id: scene.id,
+          captured_at: scene.capturedAt,
+          mean_ndvi: ndvi.mean,
+          mean_ndmi: ndmi.mean,
+          valid_pixel_count: ndvi.count,
+        };
+        const prior = fieldHistory
+          .filter((row: any) => row.mean_ndvi !== null && Date.parse(row.captured_at) < Date.parse(scene.capturedAt))
           .sort((a: any, b: any) => Date.parse(b.captured_at) - Date.parse(a.captured_at))
           .slice(0, BASELINE_SCENES);
 
@@ -248,11 +254,15 @@ serve(async (req) => {
           }
         }
 
+        fieldHistory.push(observation);
+        known.add(scene.id);
+        lastProcessedAt = scene.capturedAt;
         result.scenesProcessed += 1;
       }
 
-      const latest = scenes[scenes.length - 1];
-      await supabase.from("satellite_fields").update({ last_scene_at: latest.capturedAt }).eq("id", field.id);
+      if (lastProcessedAt && lastProcessedAt !== field.last_scene_at) {
+        await supabase.from("satellite_fields").update({ last_scene_at: lastProcessedAt }).eq("id", field.id);
+      }
     } catch (error) {
       result.errors.push(`${field.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
