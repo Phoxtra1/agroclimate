@@ -28,6 +28,6 @@ describe("farmer-friendly satellite interpretation", () => {
       baselineNdmi: null,
       currentNdmi: null,
     });
-    expect(result.likelyMeaning).toContain("verify");
+    expect(result.likelyMeaning).toContain("verification");
   });
 });
