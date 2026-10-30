@@ -2233,6 +2233,165 @@ export type Database = {
         }
         Relationships: []
       }
+      satellite_fields: {
+        Row: {
+          area_hectares: number
+          created_at: string
+          crop_type: string | null
+          field_geojson: Json
+          id: string
+          last_scene_at: string | null
+          max_cloud_cover: number
+          monitoring_enabled: boolean
+          name: string
+          ndvi_drop_threshold: number
+          planted_on: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          area_hectares?: number
+          created_at?: string
+          crop_type?: string | null
+          field_geojson: Json
+          id?: string
+          last_scene_at?: string | null
+          max_cloud_cover?: number
+          monitoring_enabled?: boolean
+          name: string
+          ndvi_drop_threshold?: number
+          planted_on?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          area_hectares?: number
+          created_at?: string
+          crop_type?: string | null
+          field_geojson?: Json
+          id?: string
+          last_scene_at?: string | null
+          max_cloud_cover?: number
+          monitoring_enabled?: boolean
+          name?: string
+          ndvi_drop_threshold?: number
+          planted_on?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      satellite_field_observations: {
+        Row: {
+          captured_at: string
+          cloud_cover: number | null
+          created_at: string
+          field_id: string
+          id: string
+          max_ndvi: number | null
+          mean_ndmi: number | null
+          mean_ndvi: number | null
+          min_ndvi: number | null
+          scene_id: string
+          valid_pixel_count: number
+        }
+        Insert: {
+          captured_at: string
+          cloud_cover?: number | null
+          created_at?: string
+          field_id: string
+          id?: string
+          max_ndvi?: number | null
+          mean_ndmi?: number | null
+          mean_ndvi?: number | null
+          min_ndvi?: number | null
+          scene_id: string
+          valid_pixel_count?: number
+        }
+        Update: {
+          captured_at?: string
+          cloud_cover?: number | null
+          created_at?: string
+          field_id?: string
+          id?: string
+          max_ndvi?: number | null
+          mean_ndmi?: number | null
+          mean_ndvi?: number | null
+          min_ndvi?: number | null
+          scene_id?: string
+          valid_pixel_count?: number
+        }
+        Relationships: []
+      }
+      satellite_field_alerts: {
+        Row: {
+          alert_kind: string
+          baseline_ndmi: number | null
+          baseline_ndvi: number | null
+          captured_at: string
+          cloud_cover: number | null
+          confidence: number
+          created_at: string
+          current_ndmi: number | null
+          current_ndvi: number | null
+          field_id: string
+          id: string
+          message: string
+          ndmi_drop: number | null
+          ndvi_drop: number | null
+          ndvi_drop_percent: number | null
+          scene_id: string
+          severity: string
+          status: string
+          title: string
+          valid_pixel_count: number
+        }
+        Insert: {
+          alert_kind?: string
+          baseline_ndmi?: number | null
+          baseline_ndvi?: number | null
+          captured_at: string
+          cloud_cover?: number | null
+          confidence?: number
+          created_at?: string
+          current_ndmi?: number | null
+          current_ndvi?: number | null
+          field_id: string
+          id?: string
+          message: string
+          ndmi_drop?: number | null
+          ndvi_drop?: number | null
+          ndvi_drop_percent?: number | null
+          scene_id: string
+          severity: string
+          status?: string
+          title: string
+          valid_pixel_count?: number
+        }
+        Update: {
+          alert_kind?: string
+          baseline_ndmi?: number | null
+          baseline_ndvi?: number | null
+          captured_at?: string
+          cloud_cover?: number | null
+          confidence?: number
+          created_at?: string
+          current_ndmi?: number | null
+          current_ndvi?: number | null
+          field_id?: string
+          id?: string
+          message?: string
+          ndmi_drop?: number | null
+          ndvi_drop?: number | null
+          ndvi_drop_percent?: number | null
+          scene_id?: string
+          severity?: string
+          status?: string
+          title?: string
+          valid_pixel_count?: number
+        }
+        Relationships: []
+      }
       sales_records: {
         Row: {
           buyer_name: string | null
