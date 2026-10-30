@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Satellite as SatelliteIcon, Search, MapPin, Layers, CalendarDays, LocateFixed, Info, ExternalLink, Loader2, AlertCircle } from "lucide-react";
@@ -15,7 +15,7 @@ const layers = [
 ];
 const marker = L.divIcon({ className: "satellite-marker", html: '<div style="width:18px;height:18px;border:3px solid white;border-radius:50%;background:#16a34a;box-shadow:0 1px 8px #0008"></div>', iconSize: [18,18], iconAnchor: [9,9] });
 const fmtDate = (d: Date) => [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");
-function Recenter({ place }: { place: Place }) { const map=useMap(); map.flyTo([place.lat,place.lon],Math.max(7,map.getZoom()),{duration:.7}); return null; }
+function Recenter({ place }: { place: Place }) { const map=useMap(); useEffect(()=>{ map.flyTo([place.lat,place.lon],Math.max(7,map.getZoom()),{duration:.7}); },[map,place.lat,place.lon]); return null; }
 function ClickToSelect({ onSelect }: { onSelect:(p:Place)=>void }) { useMapEvents({click:e=>onSelect({lat:e.latlng.lat,lon:e.latlng.lng,label:"Selected coordinates"})}); return null; }
 
 export default function Satellite() {
