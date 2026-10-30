@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import {
   calculatePolygonAreaHectares,
   describeNdmi,
@@ -24,6 +25,8 @@ import {
 import "leaflet/dist/leaflet.css";
 
 type Place = GeoPoint & { label: string };
+type SatelliteField = Database["public"]["Tables"]["satellite_fields"]["Row"];
+type SatelliteAlert = Database["public"]["Tables"]["satellite_field_alerts"]["Row"];
 type ImageryLayer = "true-color" | "false-color" | SpectralIndex | "nasa-true" | "nasa-false" | "nasa-ndvi";
 
 const layerOptions: { id: ImageryLayer; label: string; group: string }[] = [
@@ -104,14 +107,15 @@ export default function Satellite() {
   const [analysisError, setAnalysisError] = useState("");
   const { user } = useAuth();
   const [fieldName, setFieldName] = useState("");
-  const [savedFields, setSavedFields] = useState<any[]>([]);
-  const [savedAlerts, setSavedAlerts] = useState<any[]>([]);
+  const [savedFields, setSavedFields] = useState<SatelliteField[]>([]);
+  const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
   const [savingField, setSavingField] = useState(false);
 
   const selectedScene = useMemo(() => scenes.find((scene) => scene.id === sceneId) ?? null, [scenes, sceneId]);
   const isNasa = layer.startsWith("nasa-");
   const maxDate = fmtDate(new Date(Date.now() - 86400000));
   const fieldArea = useMemo(() => calculatePolygonAreaHectares(fieldPoints), [fieldPoints]);
+  const scenePoint = useMemo(() => ({ lat: place.lat, lon: place.lon }), [place.lat, place.lon]);
   const selectedLabel = layerOptions.find((option) => option.id === layer)?.label ?? "Satellite imagery";
   const nasaUrl = isNasa
     ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${nasaLayers[layer]}/default/${maxDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
@@ -144,7 +148,7 @@ export default function Satellite() {
     setSceneId("");
     setTileTemplate("");
     searchSentinelScenes({
-      point: place,
+      point: scenePoint,
       daysBack: Number(daysBack),
       maxCloudCover: Number(maxCloud),
       signal: controller.signal,
@@ -158,7 +162,7 @@ export default function Satellite() {
       if (!controller.signal.aborted) setSceneLoading(false);
     });
     return () => controller.abort();
-  }, [place.lat, place.lon, daysBack, maxCloud]);
+  }, [scenePoint, daysBack, maxCloud]);
 
   useEffect(() => {
     if (!selectedScene || isNasa) {
@@ -267,7 +271,7 @@ export default function Satellite() {
   const refreshSavedFields = useCallback(async () => {
     if (!user) return;
     const { data, error: fieldsError } = await supabase
-      .from("satellite_fields" as any)
+      .from("satellite_fields")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
@@ -275,16 +279,16 @@ export default function Satellite() {
       console.error("Could not load monitored fields:", fieldsError.message);
       return;
     }
-    const fields = (data ?? []) as any[];
+    const fields = data ?? [];
     setSavedFields(fields);
     if (fields.length) {
       const { data: alerts } = await supabase
-        .from("satellite_field_alerts" as any)
+        .from("satellite_field_alerts")
         .select("*")
         .in("field_id", fields.map((field) => field.id))
         .order("created_at", { ascending: false })
         .limit(20);
-      setSavedAlerts((alerts ?? []) as any[]);
+      setSavedAlerts(alerts ?? []);
     } else {
       setSavedAlerts([]);
     }
@@ -299,7 +303,7 @@ export default function Satellite() {
     const channel = supabase
       .channel(`satellite-field-alerts-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "satellite_field_alerts" }, (payload) => {
-        const alert = payload.new as any;
+        const alert = payload.new as SatelliteAlert;
         setSavedAlerts((previous) => [alert, ...previous.filter((item) => item.id !== alert.id)].slice(0, 20));
         toast(alert.title || "Satellite crop alert", { description: alert.message || "A change was detected in one of your monitored fields." });
         void refreshSavedFields();
@@ -320,7 +324,7 @@ export default function Satellite() {
       type: "Polygon",
       coordinates: [[...fieldPoints.map((point) => [point.lon, point.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]]],
     };
-    const { error: saveError } = await supabase.from("satellite_fields" as any).insert({
+    const { error: saveError } = await supabase.from("satellite_fields").insert({
       user_id: user.id,
       name,
       field_geojson: geometry,
@@ -341,19 +345,20 @@ export default function Satellite() {
     setSavingField(false);
   };
 
-  const loadSavedBoundary = (field: any) => {
-    const coordinates = field.field_geojson?.coordinates?.[0];
+  const loadSavedBoundary = (field: SatelliteField) => {
+    const geometry = field.field_geojson as unknown as GeoJSON.Polygon;
+    const coordinates = geometry.coordinates?.[0];
     if (!Array.isArray(coordinates)) return;
-    setFieldPoints(coordinates.slice(0, -1).map(([lon, lat]: [number, number]) => ({ lat, lon })));
+    setFieldPoints(coordinates.slice(0, -1).map((position) => ({ lat: position[1], lon: position[0] })));
     setPlace((previous) => ({ ...previous, label: field.name }));
     setFieldStats({});
     setAnalysisError("");
   };
 
-  const toggleFieldMonitoring = async (field: any) => {
+  const toggleFieldMonitoring = async (field: SatelliteField) => {
     const next = !field.monitoring_enabled;
     const { error: updateError } = await supabase
-      .from("satellite_fields" as any)
+      .from("satellite_fields")
       .update({ monitoring_enabled: next })
       .eq("id", field.id)
       .eq("user_id", user?.id);
@@ -364,9 +369,9 @@ export default function Satellite() {
     }
   };
 
-  const updateAlertStatus = async (alert: any, status: "acknowledged" | "resolved") => {
+  const updateAlertStatus = async (alert: SatelliteAlert, status: "acknowledged" | "resolved") => {
     const { error: updateError } = await supabase
-      .from("satellite_field_alerts" as any)
+      .from("satellite_field_alerts")
       .update({ status })
       .eq("id", alert.id);
     if (updateError) toast.error(updateError.message);
@@ -410,7 +415,7 @@ export default function Satellite() {
             <MapInteraction drawing={drawing} onMapClick={addFieldPoint} onSample={(point) => void inspectPoint(point)} />
             <Marker position={[place.lat, place.lon]} icon={marker}><Popup>{place.label}<br />{place.lat.toFixed(5)}, {place.lon.toFixed(5)}</Popup></Marker>
             {selectedScene?.geometry && <GeoJSON key={selectedScene.id} data={selectedScene.geometry as GeoJSON.GeoJsonObject} style={{ color: "#38bdf8", weight: 1, fillOpacity: 0.04 }} />}
-            {savedFields.filter((field) => field.monitoring_enabled).map((field) => <GeoJSON key={field.id} data={field.field_geojson as GeoJSON.GeoJsonObject} style={{ color: "#a3e635", weight: 2, fillOpacity: 0.08, dashArray: "5 4" }} />)}
+            {savedFields.filter((field) => field.monitoring_enabled).map((field) => <GeoJSON key={field.id} data={field.field_geojson as unknown as GeoJSON.GeoJsonObject} style={{ color: "#a3e635", weight: 2, fillOpacity: 0.08, dashArray: "5 4" }} />)}
             {fieldPoints.length > 0 && <Polygon positions={fieldPoints.map((point) => [point.lat, point.lon] as [number, number])} pathOptions={{ color: "#f59e0b", weight: 3, fillOpacity: 0.15 }} />}
             {fieldPoints.map((point, index) => <Marker key={index} position={[point.lat, point.lon]}><Popup>Field boundary point {index + 1}</Popup></Marker>)}
           </MapContainer>
