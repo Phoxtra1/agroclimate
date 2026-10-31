@@ -3,6 +3,7 @@ import { CircleMarker, GeoJSON, MapContainer, Marker, Polygon, Popup, TileLayer,
 import L from "leaflet";
 import {
   Activity,
+  Anchor,
   AlertCircle,
   Bell,
   Calendar,
