@@ -163,10 +163,14 @@ export interface TrackingSession {
   route?: any;
   eta?: string;
   distance_m?: number;
-  current_lat?: number;
-  current_lon?: number;
-  speed_kn?: number;
-  heading?: number;
+  current_lat?: number | null;
+  current_lon?: number | null;
+  speed_kn?: number | null;
+  heading?: number | null;
+  last_location_at?: string | null;
+  location_accuracy_m?: number | null;
+  location_source?: "unverified" | "device_gps" | "network_gps" | "simulated";
+  is_simulated?: boolean;
   status: string;
   created_at: string;
   updated_at: string;
@@ -792,12 +796,18 @@ export function useAGTrans() {
         pickup_location: request.pickup_location,
         destination: request.delivery_location,
         status: "active",
-        current_lat: request.pickup_lat || 5.6037,
-        current_lon: request.pickup_lon || -0.1870,
-        speed_kn: 0,
-        heading: 0,
-        eta: "Calculating...",
-        distance_m: 0,
+        // A pickup pin is not the truck's GPS position. Vehicle coordinates
+        // remain empty until the driver explicitly shares a real GPS fix.
+        current_lat: null,
+        current_lon: null,
+        speed_kn: null,
+        heading: null,
+        last_location_at: null,
+        location_accuracy_m: null,
+        location_source: "unverified",
+        is_simulated: false,
+        eta: null,
+        distance_m: null,
       } as any);
 
     // Decrement remaining capacity
@@ -854,22 +864,46 @@ export function useAGTrans() {
     }
   };
 
-  const updateTrackingSessionLocation = async (jobId: string, locationData: { lat: number; lon: number; speed_kn?: number; heading?: number; eta?: string; distance_m?: number; route?: any }) => {
+  const updateTrackingSessionLocation = async (jobId: string, locationData: {
+    lat: number;
+    lon: number;
+    speed_kn?: number;
+    heading?: number;
+    accuracyM: number;
+    source: "device_gps" | "network_gps";
+    capturedAt: string;
+    eta?: string;
+    distance_m?: number;
+    route?: any;
+  }) => {
+    if (!Number.isFinite(locationData.lat) || locationData.lat < -90 || locationData.lat > 90
+      || !Number.isFinite(locationData.lon) || locationData.lon < -180 || locationData.lon > 180) {
+      throw new Error("The supplied driver GPS coordinates are invalid.");
+    }
+    if (!Number.isFinite(locationData.accuracyM) || locationData.accuracyM <= 0 || locationData.accuracyM > 100) {
+      throw new Error("GPS accuracy is too low to publish this vehicle position.");
+    }
     const { error } = await supabase
       .from("tracking_sessions")
       .update({
         current_lat: locationData.lat,
         current_lon: locationData.lon,
-        speed_kn: locationData.speed_kn || 0,
-        heading: locationData.heading || 0,
+        speed_kn: locationData.speed_kn ?? null,
+        heading: locationData.heading ?? null,
+        last_location_at: locationData.capturedAt,
+        location_accuracy_m: locationData.accuracyM,
+        location_source: locationData.source,
+        is_simulated: false,
         eta: locationData.eta,
         distance_m: locationData.distance_m,
         route: locationData.route,
       } as any)
-      .eq("delivery_job_id", jobId);
+      .eq("delivery_job_id", jobId)
+      .eq("driver_id", user?.id);
 
     if (error) {
       console.error("Error updating live location:", error);
+      throw new Error(error.message || "Could not update the vehicle GPS position.");
     }
   };
 
