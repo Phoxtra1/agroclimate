@@ -141,7 +141,7 @@ serve(async (req) => {
       // SMS fan-out is deliberately opt-in. Without an approved SMS account and
       // sender policy, the app sends an in-app realtime broadcast only.
       const smsEnabled = Deno.env.get("MARITIME_SMS_ENABLED") === "true";
-      let smsQueued = 0;
+      let smsDispatchesAccepted = 0;
       if (smsEnabled && Deno.env.get("AFRICASTALKING_API_KEY")) {
         const smsTargets = [
           ...(notifiedVessels || []).map((v) => ({ phone: (vessels || []).find((r) => r.id === v!.vessel_id)?.phone_number })),
@@ -156,7 +156,7 @@ serve(async (req) => {
                 message: `AGROCLIMATE MARITIME SOS: ${body.message || "Emergency assistance requested"}. Coordinates ${body.location.lat.toFixed(5)}, ${body.location.lon.toFixed(5)}. Event ${event.id}.`,
               },
             });
-            if (!error) smsQueued += 1;
+            if (!error) smsDispatchesAccepted += 1;
           } catch (error) {
             console.warn("Optional maritime SMS dispatch failed:", error);
           }
@@ -168,7 +168,7 @@ serve(async (req) => {
         notified_vessels: notifiedVessels,
         notified_responders: (responders || []).map((r) => ({ id: r.id, name: r.name, agency: r.agency, region: r.region })),
         sms_enabled: smsEnabled,
-        sms_sent_count: smsQueued,
+        sms_dispatches_accepted: smsDispatchesAccepted,
         location_freshness_minutes: 15,
       });
     }
