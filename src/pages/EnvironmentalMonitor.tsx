@@ -627,7 +627,7 @@ export default function EnvironmentalMonitor() {
     setLoadingFarms(true);
     try {
       // 1. Try DB
-      const dbFarms = await dbListFarms(position.locationName); // uses user info or location
+      const dbFarms = await dbListFarms(); // Row-level security limits this to the signed-in user's own saved farm records.
       const mappedDb = dbFarms.map((f: any) => ({
         id: f.id,
         name: f.name,
