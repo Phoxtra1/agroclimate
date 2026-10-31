@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Anchor, AlertTriangle, CheckCircle2, Clock, LifeBuoy, Loader2, MapPin, MessageSquare, Navigation, Radio, Send, ShieldAlert, Ship, WifiOff } from "lucide-react";
+import { Anchor, LifeBuoy, Loader2, MapPin, MessageSquare, Radio, Send, Ship, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -390,7 +390,7 @@ export function MaritimeSafetyPanel({ onInspectLocation, onMapDataChange }: Prop
           {events.map((event) => {
             const isMine = event.vessel_id === selectedVesselId;
             const canAccept = event.status === "BROADCAST" && !isMine && selectedVesselId
-              && event.notified_vessels.some((item) => item.vessel_id === selectedVesselId);
+              && (event.notified_vessels ?? []).some((item) => item.vessel_id === selectedVesselId);
             const isAcceptedByMe = event.accepted_by_vessel_id === selectedVesselId;
             return (
               <div key={event.id} className="rounded-lg border border-slate-700 bg-slate-900/70 p-2.5">
