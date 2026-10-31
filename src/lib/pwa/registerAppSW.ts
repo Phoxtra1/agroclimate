@@ -25,40 +25,35 @@ async function unregisterAppSW() {
   const registrations = await navigator.serviceWorker.getRegistrations();
   await Promise.allSettled(
     registrations
-      .filter((r) => (r.active?.scriptURL || r.waiting?.scriptURL || "").includes(SW_URL))
-      .map((r) => r.unregister()),
+      .filter((registration) =>
+        (registration.active?.scriptURL || registration.waiting?.scriptURL || "").includes(SW_URL)
+      )
+      .map((registration) => registration.unregister()),
   );
 }
 
-/**
- * Registers the Agyenkwa service worker and prompts the user whenever a new
- * version has been deployed from the main web app.
- */
+/** Register the application worker without making it a prerequisite for React startup. */
 export async function registerAppSW() {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
-  if (isPreviewContext()) {
-    await unregisterAppSW();
-    return;
+  try {
+    if (isPreviewContext()) {
+      await unregisterAppSW();
+      return;
+    }
+
+    const { registerSW } = await import("virtual:pwa-register");
+    registerSW({
+      immediate: true,
+      onOfflineReady() {
+        toast.success("AgroClimate is ready to work offline");
+      },
+      onRegisterError(error) {
+        console.error("AgroClimate service worker registration failed:", error);
+      },
+    });
+  } catch (error) {
+    // PWA support is an enhancement; a worker failure must not interrupt React startup.
+    console.error("AgroClimate PWA initialization failed:", error);
   }
-
-  const { registerSW } = await import("virtual:pwa-register");
-
-  const updateSW = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      toast("A new version of Agyenkwa is available", {
-        description: "Update now to get the latest features and fixes.",
-        duration: Infinity,
-        action: {
-          label: "Update",
-          onClick: () => updateSW(true),
-        },
-        cancel: { label: "Later", onClick: () => undefined },
-      });
-    },
-    onOfflineReady() {
-      toast.success("Agyenkwa is ready to work offline");
-    },
-  });
 }
