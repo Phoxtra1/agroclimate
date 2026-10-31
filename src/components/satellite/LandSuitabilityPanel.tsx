@@ -118,7 +118,7 @@ export function LandSuitabilityPanel({ point, pointLabel, fieldGeometry, fieldAr
         </SelectContent>
       </Select>
       <Button size="sm" onClick={() => void run()} disabled={loading} className="w-full h-8 bg-emerald-700 hover:bg-emerald-600 text-xs">
-        {loading ? "Loading verified climate data…" : <><Activity className="mr-2 h-3.5 w-3.5" /> Screen crop climate</>}
+        {loading ? "Loading NASA POWER climate normals…" : <><Activity className="mr-2 h-3.5 w-3.5" /> Screen crop climate</>}
       </Button>
       {error && <div className="rounded border border-rose-800/50 bg-rose-950/30 p-2 text-[10px] text-rose-200">{error}</div>}
       {assessment && (
