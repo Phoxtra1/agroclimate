@@ -200,12 +200,35 @@ create table if not exists public.vessel_locations (
   lat double precision not null check (lat between -90 and 90),
   lon double precision not null check (lon between -180 and 180),
   geom extensions.geometry(Point, 4326),
+  accuracy_m numeric,
+  captured_at timestamptz not null default now(),
+  location_source text not null default 'unverified',
   speed_kn numeric,
   heading numeric,
   risk_level text,
   created_at timestamptz not null default now()
 );
 alter table public.vessel_locations add column if not exists geom extensions.geometry(Point, 4326);
+alter table public.vessel_locations add column if not exists accuracy_m numeric;
+alter table public.vessel_locations add column if not exists captured_at timestamptz;
+alter table public.vessel_locations add column if not exists location_source text;
+update public.vessel_locations
+set captured_at = coalesce(captured_at, created_at),
+    location_source = coalesce(location_source, 'unverified')
+where captured_at is null or location_source is null;
+alter table public.vessel_locations alter column captured_at set default now();
+alter table public.vessel_locations alter column captured_at set not null;
+alter table public.vessel_locations alter column location_source set default 'unverified';
+alter table public.vessel_locations alter column location_source set not null;
+do $
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.vessel_locations'::regclass and conname = 'vessel_locations_accuracy_check') then
+    alter table public.vessel_locations add constraint vessel_locations_accuracy_check check (accuracy_m is null or accuracy_m between 0.1 and 100);
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.vessel_locations'::regclass and conname = 'vessel_locations_source_check') then
+    alter table public.vessel_locations add constraint vessel_locations_source_check check (location_source in ('unverified','device_gps'));
+  end if;
+end $;
 create index if not exists vessel_locations_vessel_idx on public.vessel_locations (vessel_id, created_at desc);
 create index if not exists vessel_locations_geom_gix on public.vessel_locations using gist (geom);
 
@@ -330,11 +353,11 @@ create policy geo_features_read on public.geo_features for select to authenticat
 using (visibility = 'public' or owner_id = auth.uid() or public.is_agroclimate_admin());
 drop policy if exists geo_features_insert on public.geo_features;
 create policy geo_features_insert on public.geo_features for insert to authenticated
-with check (owner_id = auth.uid() or public.is_agroclimate_admin());
+with check ((owner_id = auth.uid() and visibility = 'private') or public.is_agroclimate_admin());
 drop policy if exists geo_features_update on public.geo_features;
 create policy geo_features_update on public.geo_features for update to authenticated
 using (owner_id = auth.uid() or public.is_agroclimate_admin())
-with check (owner_id = auth.uid() or public.is_agroclimate_admin());
+with check ((owner_id = auth.uid() and visibility = 'private') or public.is_agroclimate_admin());
 drop policy if exists geo_features_delete on public.geo_features;
 create policy geo_features_delete on public.geo_features for delete to authenticated
 using (owner_id = auth.uid() or public.is_agroclimate_admin());
@@ -392,9 +415,14 @@ using (
 );
 drop policy if exists vessel_locations_insert on public.vessel_locations;
 create policy vessel_locations_insert on public.vessel_locations for insert to authenticated
-with check (user_id = auth.uid() and exists (
-  select 1 from public.vessels v where v.id = vessel_id and v.owner_id = auth.uid()
-));
+with check (
+  user_id = auth.uid()
+  and location_source = 'device_gps'
+  and accuracy_m between 0.1 and 100
+  and captured_at >= now() - interval '90 seconds'
+  and captured_at <= now() + interval '15 seconds'
+  and exists (select 1 from public.vessels v where v.id = vessel_id and v.owner_id = auth.uid())
+);
 
 drop policy if exists farms_owner on public.farms;
 create policy farms_owner on public.farms for all to authenticated
@@ -408,7 +436,7 @@ with check (user_id = auth.uid() or public.is_agroclimate_admin());
 
 drop policy if exists responders_read on public.external_responders;
 create policy responders_read on public.external_responders for select to authenticated
-using (active = true or public.is_agroclimate_admin());
+using (public.is_agroclimate_admin());
 drop policy if exists responders_admin_write on public.external_responders;
 create policy responders_admin_write on public.external_responders for all to authenticated
 using (public.is_agroclimate_admin()) with check (public.is_agroclimate_admin());
@@ -427,27 +455,9 @@ using (
   )
 );
 drop policy if exists sos_events_insert_owner on public.sos_events;
-create policy sos_events_insert_owner on public.sos_events for insert to authenticated
-with check (user_id = auth.uid() and exists (
-  select 1 from public.vessels v where v.id = vessel_id and v.owner_id = auth.uid()
-));
+-- SOS and rescue message writes are mediated by the authenticated Edge Function
+-- so clients cannot set status, acceptance or resolution fields directly.
 drop policy if exists sos_events_update_participant on public.sos_events;
-create policy sos_events_update_participant on public.sos_events for update to authenticated
-using (
-  public.is_agroclimate_admin()
-  or user_id = auth.uid()
-  or exists (select 1 from public.vessels v where v.owner_id = auth.uid() and v.id = accepted_by_vessel_id)
-  or exists (
-    select 1 from jsonb_array_elements(coalesce(notified_vessels,'[]'::jsonb)) nv
-    join public.vessels v on v.id = nv->>'vessel_id'
-    where v.owner_id = auth.uid()
-  )
-)
-with check (
-  public.is_agroclimate_admin()
-  or user_id = auth.uid()
-  or exists (select 1 from public.vessels v where v.owner_id = auth.uid() and v.id = accepted_by_vessel_id)
-);
 
 drop policy if exists vessel_messages_read_participant on public.vessel_messages;
 create policy vessel_messages_read_participant on public.vessel_messages for select to authenticated
@@ -456,15 +466,6 @@ using (
   or public.is_agroclimate_admin()
 );
 drop policy if exists vessel_messages_insert_participant on public.vessel_messages;
-create policy vessel_messages_insert_participant on public.vessel_messages for insert to authenticated
-with check (
-  exists (select 1 from public.vessels v where v.owner_id = auth.uid() and v.id = from_vessel_id)
-  and exists (
-    select 1 from public.sos_events e
-    where e.id = sos_event_id
-      and (e.vessel_id in (from_vessel_id, to_vessel_id) or e.accepted_by_vessel_id in (from_vessel_id, to_vessel_id))
-  )
-);
 
 -- Explicit grants complement row-level security. No operational vessel,
 -- location, emergency or private route data is available to anon.
@@ -482,8 +483,9 @@ grant select, insert on public.vessel_locations to authenticated;
 grant select, insert, update, delete on public.farms to authenticated;
 grant select, insert, update, delete on public.nav_routes to authenticated;
 grant select, insert, update, delete on public.external_responders to authenticated;
-grant select, insert, update, delete on public.sos_events to authenticated;
-grant select, insert, update, delete on public.vessel_messages to authenticated;
+grant select on public.sos_events to authenticated;
+grant select on public.vessel_messages to authenticated;
+revoke insert, update, delete on public.sos_events, public.vessel_messages from authenticated;
 
 -- Enable realtime for live operational layers without making data public.
 do $$
