@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sprout, AlertTriangle, Package, Camera, Sparkles, Trash2, Search, Loader2, CloudOff, RefreshCw } from "lucide-react";
+import { Sprout, AlertTriangle, Package, Camera, Sparkles, Trash2, Search, Loader2, CloudOff, RefreshCw, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +16,7 @@ import { usePostHarvest, computeRisk, uploadHarvestPhoto, type HarvestEntry, typ
 import { queueHarvest, getPendingCount, syncPendingHarvests, installOfflineSync } from "@/lib/offlineQueue";
 import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
+import { createGeoFeature } from "@/services/satellite/geospatial";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
@@ -200,7 +201,7 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
   );
 }
 
-function HarvestList({ entries, onAdvice, onDelete }: { entries: HarvestEntry[]; onAdvice: (e: HarvestEntry) => void; onDelete: (id: string) => void }) {
+function HarvestList({ entries, onAdvice, onDelete, onCaptureLocation, capturingEntryId }: { entries: HarvestEntry[]; onAdvice: (e: HarvestEntry) => void; onDelete: (id: string) => void; onCaptureLocation: (entry: HarvestEntry) => void; capturingEntryId: string | null }) {
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskLevel | "all">("all");
 
@@ -263,6 +264,12 @@ function HarvestList({ entries, onAdvice, onDelete }: { entries: HarvestEntry[];
                       )}
                     </div>
                     <div className="flex flex-col gap-1 shrink-0">
+                      {e.storage_location?.trim() && (
+                        <Button size="sm" variant="outline" onClick={() => onCaptureLocation(e)} disabled={capturingEntryId === e.id}>
+                          {capturingEntryId === e.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <MapPin className="h-3 w-3 mr-1" />}
+                          Capture GPS
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => onAdvice(e)}>
                         <Sparkles className="h-3 w-3 mr-1" /> Advice
                       </Button>
@@ -311,6 +318,7 @@ export default function PostHarvestTracker() {
   const [pending, setPending] = useState(getPendingCount());
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [syncing, setSyncing] = useState(false);
+  const [capturingEntryId, setCapturingEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     installOfflineSync();
@@ -338,6 +346,64 @@ export default function PostHarvestTracker() {
     toast.success("Entry deleted");
   };
 
+  const captureStorageLocation = async (entry: HarvestEntry) => {
+    if (!entry.storage_location?.trim()) return;
+    if (!navigator.geolocation) {
+      toast.error("This device/browser does not provide GPS location.");
+      return;
+    }
+
+    setCapturingEntryId(entry.id);
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 20000,
+        });
+      });
+      const accuracyM = position.coords.accuracy;
+      const ageMs = Date.now() - position.timestamp;
+      if (!Number.isFinite(accuracyM) || accuracyM < 0.1 || accuracyM > 100) {
+        throw new Error("GPS accuracy must be 100 m or better. Move to an area with a clearer GPS signal and try again.");
+      }
+      if (!Number.isFinite(position.timestamp) || ageMs > 30000 || ageMs < -15000) {
+        throw new Error("The device returned an old GPS fix. Try again to capture a current position.");
+      }
+
+      await createGeoFeature({
+        featureType: "other",
+        name: entry.storage_location.trim(),
+        description: "User-captured device GPS position for a post-harvest storage location. The GPS fix identifies the device position; the facility identity and boundary are not independently verified.",
+        visibility: "private",
+        geometry: {
+          type: "Point",
+          coordinates: [position.coords.longitude, position.coords.latitude],
+        },
+        properties: {
+          category: "post_harvest_storage",
+          post_harvest_entry_id: entry.id,
+          crop_name: entry.crop_name,
+          storage_method: entry.storage_method,
+          gps_accuracy_m: accuracyM,
+          captured_at: new Date(position.timestamp).toISOString(),
+        },
+        sourceName: "Browser device GPS · user opt-in",
+        acquisitionDate: new Date(position.timestamp).toISOString(),
+        dataQuality: "observed",
+      });
+      toast.success("Storage GPS point saved to the shared Satellite map", {
+        description: "Device accuracy ±" + Math.round(accuracyM) + " m. Facility identity remains user-provided.",
+      });
+    } catch (error) {
+      toast.error("Could not capture storage location", {
+        description: error instanceof Error ? error.message : "Device GPS or map storage failed.",
+      });
+    } finally {
+      setCapturingEntryId(null);
+    }
+  };
+
   const runSync = async () => {
     setSyncing(true);
     const r = await syncPendingHarvests();
@@ -353,9 +419,9 @@ export default function PostHarvestTracker() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Sprout className="h-6 w-6 text-primary" /> Post-Harvest Tracker</h1>
-          <p className="text-sm text-muted-foreground">Track stored crops, monitor spoilage risk and get AI guidance.</p>
+          <p className="text-sm text-muted-foreground">Track stored crops, monitor spoilage risk and map storage points using opt-in device GPS.</p>
         </div>
-        {latestMappedStorage && <OpenInSatelliteButton query={latestMappedStorage} label="Post-harvest storage location" zoom={16}>View storage location</OpenInSatelliteButton>}
+        {latestMappedStorage && <OpenInSatelliteButton query={latestMappedStorage} label="Search the storage location name (may be approximate)" zoom={16}>Find storage name</OpenInSatelliteButton>}
       </div>
 
       {(pending > 0 || !online) && (
@@ -397,7 +463,7 @@ export default function PostHarvestTracker() {
           {loading ? (
             <div className="text-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline" /></div>
           ) : (
-            <HarvestList entries={entries} onAdvice={(e) => setAdviceEntry(e)} onDelete={handleDelete} />
+            <HarvestList entries={entries} onAdvice={(e) => setAdviceEntry(e)} onDelete={handleDelete} onCaptureLocation={(entry) => void captureStorageLocation(entry)} capturingEntryId={capturingEntryId} />
           )}
         </TabsContent>
         <TabsContent value="produce-safety" className="mt-3">

@@ -18,6 +18,7 @@ import {
   DollarSign, Package, Clock, Eye, Navigation, RotateCcw, History,
 } from "lucide-react";
 import { toast } from "sonner";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
 const VEHICLE_FEATURES = [
   "Refrigerated",
@@ -403,6 +404,18 @@ export function AGTransSupplierPanel() {
                   <div className="col-span-2"><div className="text-[10px] text-muted-foreground uppercase">Planned</div><div>{offer.planned_route}</div></div>
                   <div><div className="text-[10px] text-muted-foreground uppercase">Departure</div><div>{offer.departure_date} {offer.departure_time}</div></div>
                   <div><div className="text-[10px] text-muted-foreground uppercase">ETA</div><div>{offer.estimated_arrival}</div></div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {offer.current_location_text && (
+                    <OpenInSatelliteButton query={offer.current_location_text} label={`Driver stated starting area · ${offer.full_name}`} zoom={14}>
+                      Map starting area
+                    </OpenInSatelliteButton>
+                  )}
+                  {offer.destination && (
+                    <OpenInSatelliteButton query={offer.destination} label={`Driver stated destination · ${offer.full_name}`} zoom={14}>
+                      Map destination
+                    </OpenInSatelliteButton>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {(offer.cargo_types_accepted || []).slice(0, 5).map((c) => <Badge key={c} variant="secondary" className="text-[10px]">{c}</Badge>)}

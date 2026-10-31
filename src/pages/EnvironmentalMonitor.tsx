@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { getActiveProvider } from "@/lib/aiProviders/registry";
 import { AIAgroRiskAssessment, AIEnvironmentalAssessment, RiskLevel } from "@/lib/aiProviders/index";
 import { calculateAgroRiskLocal, LocalAgroRiskResult } from "@/lib/riskEngine";
-import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/pages/admin/AGNavEngine";
+import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/services/satellite/geospatial";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -626,7 +627,7 @@ export default function EnvironmentalMonitor() {
     setLoadingFarms(true);
     try {
       // 1. Try DB
-      const dbFarms = await dbListFarms(position.locationName); // uses user info or location
+      const dbFarms = await dbListFarms(); // Row-level security limits this to the signed-in user's own saved farm records.
       const mappedDb = dbFarms.map((f: any) => ({
         id: f.id,
         name: f.name,
@@ -677,7 +678,7 @@ export default function EnvironmentalMonitor() {
         const data = await res.json();
         return data.display_name ? data.display_name.split(",").slice(0, 3).join(",") : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
       }
-    } catch {}
+    } catch { /* Fall back to raw coordinates when reverse geocoding is unavailable. */ }
     return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   };
 
@@ -1010,6 +1011,11 @@ export default function EnvironmentalMonitor() {
           <p className="text-sm text-muted-foreground">{locationLabel}</p>
         </div>
         <div className="flex items-center gap-3">
+          {clickPoint && (
+            <OpenInSatelliteButton lat={clickPoint[0]} lon={clickPoint[1]} label={clickLocationName || "AgroRisk selected location"} zoom={16}>
+              Open selected risk location in Satellite
+            </OpenInSatelliteButton>
+          )}
           {/* Tabs switch */}
           <div className="bg-muted p-1 rounded-lg flex items-center border border-border">
             <button

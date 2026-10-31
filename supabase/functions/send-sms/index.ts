@@ -15,6 +15,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const authorization = req.headers.get("Authorization") || "";
+  if (!serviceRoleKey || authorization !== `Bearer ${serviceRoleKey}`) {
+    return new Response(
+      JSON.stringify({ error: "This endpoint is restricted to trusted server-side callers." }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
     const API_KEY = Deno.env.get("AFRICASTALKING_API_KEY");
     if (!API_KEY) {

@@ -3,7 +3,7 @@ import { useDroneState } from "@/hooks/useDroneState";
 import { LiveFlightView } from "./LiveFlightView";
 import { TelemetryDashboard } from "./TelemetryDashboard";
 import { DroneConnectionCenter } from "./DroneConnectionCenter";
-import { AgNavDroneMap } from "./AgNavDroneMap";
+import { DroneMissionLocationPanel } from "./DroneMissionLocationPanel";
 import { DipaAiAdvisory } from "./DipaAiAdvisory";
 import { DipaVision } from "./DipaVision";
 import { MissionPlanning } from "./MissionPlanning";
@@ -23,7 +23,6 @@ export function DroneOperationsConsole() {
   const [activeTab, setActiveTab] = useState("mission-control");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const isFlying = ["flying", "returning", "paused"].includes(droneState.status);
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(!!document.fullscreenElement);
@@ -81,7 +80,7 @@ export function DroneOperationsConsole() {
                   <LiveFlightView telemetry={droneState.telemetry} status={droneState.status} missionId={droneState.missionId} />
                 </div>
                 <div>
-                  <AgNavDroneMap telemetry={droneState.telemetry} isFlying={isFlying} />
+                  <DroneMissionLocationPanel telemetry={droneState.telemetry} protocol={droneState.protocol} status={droneState.status} lastTelemetryAt={droneState.lastTelemetryAt} droneName={droneState.droneName} />
                 </div>
               </div>
               <TelemetryDashboard telemetry={droneState.telemetry as any} environment={droneState.environment} />
