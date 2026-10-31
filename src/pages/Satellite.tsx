@@ -459,7 +459,7 @@ export default function Satellite() {
     setOfflineRouteInfo(null);
     const routeType = travelMode === "walking" ? "walking" : travelMode === "tractor" ? "tractor" : travelMode === "freight" ? "freight" : "road";
 
-    const useCachedRoute = async () => {
+    const loadCachedRoute = async () => {
       const cached = await getCachedNavigationRoute(navStartPoint, navEndPoint, travelMode);
       if (!cached) throw new Error("No saved route is available for these exact endpoints and travel mode.");
       setRouteData(cached.route);
@@ -474,7 +474,7 @@ export default function Satellite() {
 
     try {
       if (!navigator.onLine) {
-        await useCachedRoute();
+        await loadCachedRoute();
         return;
       }
       const route = await calculateRoute(navStartPoint, navEndPoint, travelMode);
@@ -512,7 +512,7 @@ export default function Satellite() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to calculate navigation route.";
       try {
-        await useCachedRoute();
+        await loadCachedRoute();
       } catch (cacheError) {
         const cacheMessage = cacheError instanceof Error ? cacheError.message : "";
         setRoutingError(`${message} ${cacheMessage}`.trim());
