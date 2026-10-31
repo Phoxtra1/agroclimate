@@ -25,6 +25,8 @@ interface PositionRow {
   lat: number;
   lon: number;
   accuracy_m?: number | null;
+  location_source: string;
+  captured_at: string;
   created_at: string;
 }
 interface EventRow {
@@ -66,7 +68,7 @@ export function MaritimeOperationsPanel() {
     try {
       const [vesselResult, locationResult, eventResult, responderResult] = await Promise.all([
         (supabase.from("vessels" as any) as any).select("*").order("created_at", { ascending: false }).limit(300),
-        (supabase.from("vessel_locations" as any) as any).select("*").order("created_at", { ascending: false }).limit(1000),
+        (supabase.from("vessel_locations" as any) as any).select("*").eq("location_source", "device_gps").lte("accuracy_m", 100).order("captured_at", { ascending: false }).limit(1000),
         (supabase.from("sos_events" as any) as any).select("*").order("created_at", { ascending: false }).limit(200),
         (supabase.from("external_responders" as any) as any).select("*").order("name"),
       ]);
@@ -98,6 +100,7 @@ export function MaritimeOperationsPanel() {
   const latestPositions = useMemo(() => {
     const seen = new Set<string>();
     return positions.filter((position) => {
+      if (position.location_source !== "device_gps" || !Number.isFinite(position.accuracy_m) || (position.accuracy_m ?? Infinity) > 100) return false;
       if (seen.has(position.vessel_id)) return false;
       seen.add(position.vessel_id);
       return true;
@@ -199,7 +202,7 @@ export function MaritimeOperationsPanel() {
                 <div>
                   <div className="text-sm font-semibold">{vessel.vessel_name || vessel.id}</div>
                   <div className="text-xs text-muted-foreground">{vessel.id} · {vessel.operator_name || "Operator not recorded"} · {vessel.status}</div>
-                  {position && <div className="mt-1 text-[10px] text-muted-foreground">GPS recorded {new Date(position.created_at).toLocaleString()}</div>}
+                  {position && <div className="mt-1 text-[10px] text-muted-foreground">Device GPS fix {new Date(position.captured_at).toLocaleString()} · ±{Math.round(position.accuracy_m ?? 0)} m</div>}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">{vessel.has_rescue_capability ? "Rescue capable" : "Not marked rescue capable"}</Badge>
