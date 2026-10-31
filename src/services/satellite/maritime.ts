@@ -82,7 +82,8 @@ export async function setMyVesselStatus(vesselId: string, status: VesselStatus) 
 export async function saveMyVesselLocation(input: {
   vesselId: string;
   point: GeoPoint;
-  accuracyM: number | null;
+  accuracyM: number;
+  capturedAt: string;
   speedMps?: number | null;
   headingDeg?: number | null;
 }) {
@@ -92,15 +93,26 @@ export async function saveMyVesselLocation(input: {
     || input.point.lat < -90 || input.point.lat > 90 || input.point.lon < -180 || input.point.lon > 180) {
     throw new Error("Invalid GPS coordinates.");
   }
+  if (!Number.isFinite(input.accuracyM) || input.accuracyM < 0.1 || input.accuracyM > 100) {
+    throw new Error("Only a device GPS fix with accuracy of 100 m or better can be shared.");
+  }
+  const capturedAtMs = Date.parse(input.capturedAt);
+  const ageMs = Date.now() - capturedAtMs;
+  if (!Number.isFinite(capturedAtMs) || ageMs > 90000 || ageMs < -15000) {
+    throw new Error("The vessel GPS fix is stale or has an invalid capture time.");
+  }
   const { data, error } = await (supabase.from("vessel_locations" as any) as any).insert({
     vessel_id: input.vesselId,
     user_id: userData.user.id,
     lat: input.point.lat,
     lon: input.point.lon,
+    accuracy_m: input.accuracyM,
+    captured_at: input.capturedAt,
+    location_source: "device_gps",
     speed_kn: input.speedMps == null ? null : Number((input.speedMps * 1.943844).toFixed(1)),
     heading: input.headingDeg ?? null,
     risk_level: null,
-  }).select("id,vessel_id,lat,lon,speed_kn,heading,created_at").single();
+  }).select("id,vessel_id,lat,lon,accuracy_m,captured_at,location_source,speed_kn,heading,created_at").single();
   if (error) throw new Error(error.message || "Could not store GPS position.");
   return { ...data, accuracy_m: input.accuracyM };
 }
