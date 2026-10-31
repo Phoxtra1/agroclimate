@@ -32,6 +32,24 @@ function distanceKm(a: LatLng, b: LatLng): number {
   return 2 * radius * Math.asin(Math.sqrt(h));
 }
 
+async function hasFreshVesselFix(adminClient: any, vesselId: string, userId: string, point: LatLng): Promise<boolean> {
+  const { data, error } = await adminClient
+    .from("vessel_locations")
+    .select("lat,lon,accuracy_m,captured_at,location_source")
+    .eq("vessel_id", vesselId)
+    .eq("user_id", userId)
+    .eq("location_source", "device_gps")
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data || !Number.isFinite(data.accuracy_m) || data.accuracy_m < 0.1 || data.accuracy_m > 100) return false;
+  const capturedAt = Date.parse(data.captured_at);
+  const ageMs = Date.now() - capturedAt;
+  if (!Number.isFinite(capturedAt) || ageMs > 30000 || ageMs < -15000) return false;
+  const separationM = distanceKm(point, { lat: data.lat, lon: data.lon }) * 1000;
+  return Number.isFinite(separationM) && separationM <= Math.max(75, data.accuracy_m + 50);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "POST required" }, 405);
@@ -71,11 +89,14 @@ serve(async (req) => {
         .from("vessels").select("id,status,owner_id").eq("id", vesselId).eq("owner_id", user.id).maybeSingle();
       if (vesselError || !vessel) return json({ error: "This vessel is not registered to your account" }, 403);
       if (vessel.status === "OFFLINE") return json({ error: "Set the vessel to active before broadcasting an emergency" }, 409);
+      if (!await hasFreshVesselFix(adminClient, vesselId, user.id, body.location)) {
+        return json({ error: "No matching, accurate and recent device GPS fix is recorded for this vessel. Refresh location sharing before broadcasting." }, 409);
+      }
 
       const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       const [{ data: vessels, error: vesselsError }, { data: locations, error: locationsError }, { data: responders, error: respondersError }] = await Promise.all([
         adminClient.from("vessels").select("id,vessel_name,phone_number,has_rescue_capability,status").eq("status", "ACTIVE").neq("id", vesselId),
-        adminClient.from("vessel_locations").select("vessel_id,lat,lon,created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(1000),
+        adminClient.from("vessel_locations").select("vessel_id,lat,lon,captured_at,accuracy_m,location_source").eq("location_source", "device_gps").gte("captured_at", since).lte("accuracy_m", 100).order("captured_at", { ascending: false }).limit(1000),
         adminClient.from("external_responders").select("id,name,agency,phone_number,region").eq("active", true),
       ]);
       if (vesselsError || locationsError || respondersError) return json({ error: "Could not retrieve current responder availability" }, 502);
@@ -83,7 +104,7 @@ serve(async (req) => {
       const latestByVessel = new Map<string, { lat: number; lon: number; at: string }>();
       for (const point of locations || []) {
         if (!latestByVessel.has(point.vessel_id)) {
-          latestByVessel.set(point.vessel_id, { lat: point.lat, lon: point.lon, at: point.created_at });
+          latestByVessel.set(point.vessel_id, { lat: point.lat, lon: point.lon, at: point.captured_at });
         }
       }
 
@@ -153,6 +174,9 @@ serve(async (req) => {
       if (!eventId || !vesselId || !validPoint(body.location)) return json({ error: "Event, registered vessel and current GPS coordinates are required" }, 400);
       const { data: vessel } = await adminClient.from("vessels").select("id,owner_id").eq("id", vesselId).eq("owner_id", user.id).maybeSingle();
       if (!vessel) return json({ error: "This vessel is not registered to your account" }, 403);
+      if (!await hasFreshVesselFix(adminClient, vesselId, user.id, body.location)) {
+        return json({ error: "A matching, accurate and recent device GPS fix is required to accept a rescue." }, 409);
+      }
 
       const { data: event } = await adminClient.from("sos_events").select("*").eq("id", eventId).eq("status", "BROADCAST").maybeSingle();
       if (!event) return json({ error: "This emergency has already been accepted or resolved" }, 409);
