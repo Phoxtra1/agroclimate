@@ -50,8 +50,39 @@ jobs:
       # The repository-wide lint command currently fails on hundreds of
       # pre-existing findings in unrelated files and generated dev-dist output.
       # Gate this feature on lint for every source file changed by the PR.
-      - name: Lint Satellite feature files
-        run: npx eslint src/pages/Satellite.tsx src/App.tsx src/components/AppLayout.tsx src/services/satellite/sentinel.ts src/test/satelliteSentinel.test.ts src/test/satelliteAnomaly.test.ts src/test/satelliteInterpretation.test.ts src/services/satellite/interpretation.ts supabase/functions/_shared/satellite-anomaly.ts
+      - name: Lint Satellite and shared geospatial integrations
+        run: >-
+          npx eslint
+          src/App.tsx
+          src/components/admin/MaritimeOperationsPanel.tsx
+          src/components/drone/DroneMissionLocationPanel.tsx
+          src/components/drone/DroneOperationsConsole.tsx
+          src/components/market/AGTransSupplierPanel.tsx
+          src/components/market/PotentialBuyersPanel.tsx
+          src/components/satellite/GeoFeaturesMapLayer.tsx
+          src/components/satellite/LandSuitabilityPanel.tsx
+          src/components/satellite/MaritimeSafetyPanel.tsx
+          src/components/satellite/PortsMapLayer.tsx
+          src/hooks/useDroneState.ts
+          src/hooks/useTransport.ts
+          src/pages/AgroInventory.tsx
+          src/pages/EnvironmentalMonitor.tsx
+          src/pages/LiveTracking.tsx
+          src/pages/Satellite.tsx
+          src/pages/admin/AdminDashboard.tsx
+          src/pages/agtrans-partner/TripPage.tsx
+          src/services/satellite/geospatial.ts
+          src/services/satellite/landSuitability.ts
+          src/services/satellite/maritime.ts
+          src/services/satellite/offlineNavigation.ts
+          src/services/satellite/ports.ts
+          src/services/satellite/sentinel.ts
+          src/services/satellite/interpretation.ts
+          src/test/satelliteSentinel.test.ts
+          src/test/satelliteAnomaly.test.ts
+          src/test/satelliteInterpretation.test.ts
+          src/test/satelliteAdvanced.test.ts
+          supabase/functions/_shared/satellite-anomaly.ts
 
       - name: Unit tests
         run: npm test -- --reporter=dot
