@@ -61,7 +61,6 @@ jobs:
           src/components/satellite/LandSuitabilityPanel.tsx
           src/components/satellite/PortsMapLayer.tsx
           src/pages/agtrans-partner/TripPage.tsx
-          src/services/satellite/navigation.ts
           src/services/satellite/offlineNavigation.ts
           src/services/satellite/ports.ts
           src/services/satellite/sentinel.ts
