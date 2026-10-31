@@ -60,11 +60,10 @@ Only after the Africa's Talking account, approved sender, recipients and operati
 
 ```sh
 supabase secrets set MARITIME_SMS_ENABLED=false
-supabase secrets set AFRICASTALKING_API_KEY=<provider-api-key>
-supabase secrets set AFRICASTALKING_USERNAME=<sandbox-or-approved-live-username>
+supabase secrets set AFRICASTALKING_API_KEY="YOUR_PROVIDER_API_KEY" AFRICASTALKING_USERNAME="sandbox"
 ```
 
-Keep `MARITIME_SMS_ENABLED=false` until the provider credentials and production sender are verified. Use `sandbox` for provider sandbox testing; use the actual approved Africa's Talking username for a live account. The username is passed explicitly to the SMS function so live requests do not accidentally use the sandbox identity.
+Keep `MARITIME_SMS_ENABLED=false` until the provider credentials and production sender are verified. Use `sandbox` for provider sandbox testing; use the actual approved Africa's Talking username for a live account. The username is passed explicitly to the SMS function so live requests do not accidentally use the sandbox identity. Only then enable SMS with `supabase secrets set MARITIME_SMS_ENABLED=true`.
 
 ## 5. Staging smoke tests
 
