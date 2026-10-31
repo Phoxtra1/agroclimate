@@ -356,9 +356,10 @@ export default function Satellite() {
       toast.success("Navigation route calculated", {
         description: `${route.distanceKm} km · approx. ${route.durationMinutes} min`,
       });
-    } catch (err: any) {
-      setRoutingError(err.message || "Failed to calculate navigation route.");
-      toast.error("Routing error: " + (err.message || "Unknown error"));
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to calculate navigation route.";
+      setRoutingError(errorMessage);
+      toast.error("Routing error: " + errorMessage);
     } finally {
       setRoutingLoading(false);
     }
@@ -471,9 +472,10 @@ export default function Satellite() {
       toast.success("Field spectral analysis completed", {
         description: `NDVI: ${ndvi.mean?.toFixed(3) ?? "—"} | NDMI: ${ndmi.mean?.toFixed(3) ?? "—"}`,
       });
-    } catch (err: any) {
-      setAnalysisError(err.message || "Field analysis could not be completed.");
-      toast.error("Spectral analysis failed: " + (err.message || "Unknown"));
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Field analysis could not be completed.";
+      setAnalysisError(errorMessage);
+      toast.error("Spectral analysis failed: " + errorMessage);
     } finally {
       setAnalysisLoading(false);
     }
@@ -495,7 +497,8 @@ export default function Satellite() {
         indices.map(async (index) => [index, await getIndexAtPoint(selectedScene.itemUrl, point, index)] as const)
       );
       setSample({ point, values: Object.fromEntries(entries) });
-    } catch {
+    } catch (err) {
+      console.warn("Failed to inspect point indices:", err);
     } finally {
       setSampleLoading(false);
     }
