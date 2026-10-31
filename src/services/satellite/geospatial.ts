@@ -161,3 +161,32 @@ export function toPointGeometry(point: GeoPoint): GeoJSON.Point {
   }
   return { type: "Point", coordinates: [point.lon, point.lat] };
 }
+
+export async function saveFarm(input: {
+  name: string;
+  location: GeoPoint;
+  user_id?: string;
+}) {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) throw new Error("Sign in to save a farm location.");
+  if (input.user_id && input.user_id !== userData.user.id) {
+    throw new Error("You can only save a farm location under your own account.");
+  }
+  const point = toPointGeometry(input.location);
+  const { data, error } = await (supabase.from("farms" as any) as any).insert({
+    user_id: userData.user.id,
+    name: input.name.trim(),
+    lat: point.coordinates[1],
+    lon: point.coordinates[0],
+  }).select("*").single();
+  if (error) throw new Error(error.message || "Could not save farm location.");
+  return data;
+}
+
+export async function listFarms(userId?: string) {
+  let query = (supabase.from("farms" as any) as any).select("*").order("created_at", { ascending: false });
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message || "Could not load farm locations.");
+  return data ?? [];
+}
