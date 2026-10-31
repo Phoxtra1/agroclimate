@@ -291,6 +291,7 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/weather" element={<ProtectedRoute><Satellite /></ProtectedRoute>} />
+      <Route path="/satellite" element={<ProtectedRoute><Satellite /></ProtectedRoute>} />
       <Route path="/calendar" element={<Navigate to="/dashboard" replace />} />
       <Route path="/crops" element={<Navigate to="/dashboard" replace />} />
       <Route path="/livestock" element={<ProtectedRoute><Livestock /></ProtectedRoute>} />

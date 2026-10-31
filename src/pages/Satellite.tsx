@@ -1,7 +1,54 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GeoJSON, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { Activity, AlertCircle, CalendarDays, Cloud, Droplets, Layers, LocateFixed, Loader2, MapPin, Ruler, Satellite as SatelliteIcon, Search, Sprout, Waves, X } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  Bell,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  Crosshair,
+  Droplets,
+  Eye,
+  Globe,
+  Layers,
+  ListFilter,
+  LocateFixed,
+  Loader2,
+  Maximize2,
+  MapPin,
+  Minus,
+  Navigation,
+  Play,
+  Plus,
+  RefreshCw,
+  Ruler,
+  Satellite as SatelliteIcon,
+  Search,
+  Sliders,
+  Sparkles,
+  Sprout,
+  Truck,
+  Volume2,
+  Waves,
+  Wind,
+  X,
+  Zap,
+} from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,74 +70,169 @@ import {
   type SentinelScene,
   type SpectralIndex,
 } from "@/services/satellite/sentinel";
+import {
+  STRATEGIC_BOARDS,
+  type StationNode,
+  type StrategicBoard,
+  type TelemetryPoint,
+} from "@/services/satellite/stations";
+import {
+  calculateRoute,
+  reverseGeocode,
+  searchPlaces,
+  type RouteData,
+  type RouteStep,
+  type SearchResult,
+  type TravelMode,
+} from "@/services/satellite/navigation";
+import {
+  MapCameraController,
+  NavigationRouteOverlay,
+  RouteBoundsController,
+  StrategicCorridorOverlay,
+} from "@/components/satellite/SatelliteMapHUD";
 import "leaflet/dist/leaflet.css";
 
 type Place = GeoPoint & { label: string };
 type SatelliteField = Database["public"]["Tables"]["satellite_fields"]["Row"];
 type SatelliteAlert = Database["public"]["Tables"]["satellite_field_alerts"]["Row"];
 type ImageryLayer = "true-color" | "false-color" | SpectralIndex | "nasa-true" | "nasa-false" | "nasa-ndvi";
+type BasemapStyle = "esri-satellite" | "tactical-dark" | "sentinel" | "hybrid" | "osm";
 
-const layerOptions: { id: ImageryLayer; label: string; group: string }[] = [
-  { id: "true-color", label: "Sentinel natural colour", group: "Sentinel-2 · 10 m" },
-  { id: "false-color", label: "Sentinel vegetation false colour", group: "Sentinel-2 · 10 m" },
-  { id: "ndvi", label: "NDVI · vegetation greenness", group: "Sentinel-2 · 10 m" },
-  { id: "ndmi", label: "NDMI · canopy moisture signal", group: "Sentinel-2 · 20 m" },
-  { id: "ndwi", label: "NDWI · surface water signal", group: "Sentinel-2 · 10 m" },
-  { id: "nasa-true", label: "NASA natural colour (fallback)", group: "MODIS · broad scale" },
-  { id: "nasa-false", label: "NASA false colour (fallback)", group: "MODIS · broad scale" },
-  { id: "nasa-ndvi", label: "NASA NDVI (fallback)", group: "MODIS · 8-day composite" },
-];
+const BASEMAP_TILES: Record<BasemapStyle, { url: string; attribution: string; maxZoom: number }> = {
+  "esri-satellite": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, USDA, USGS",
+    maxZoom: 19,
+  },
+  "tactical-dark": {
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    maxZoom: 19,
+  },
+  "hybrid": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Imagery &copy; Esri, Earthstar Geographics",
+    maxZoom: 19,
+  },
+  "sentinel": {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  },
+  "osm": {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  },
+};
 
-const marker = L.divIcon({
-  className: "satellite-marker",
-  html: '<div style="width:18px;height:18px;border:3px solid white;border-radius:50%;background:#16a34a;box-shadow:0 1px 8px #0008"></div>',
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-});
-const fmtDate = (date: Date) => [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
-const formatSceneDate = (value: string) => value ? new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Date unavailable";
 const nasaLayers: Record<string, string> = {
   "nasa-true": "MODIS_Terra_CorrectedReflectance_TrueColor",
   "nasa-false": "MODIS_Terra_CorrectedReflectance_Bands721",
   "nasa-ndvi": "MODIS_Terra_NDVI_8Day",
 };
 
-function Recenter({ place }: { place: Place }) {
-  const map = useMap();
-  useEffect(() => {
-    if (place.label === "Global overview") return;
-    map.flyTo([place.lat, place.lon], Math.max(8, map.getZoom()), { duration: 0.7 });
-  }, [map, place.lat, place.lon, place.label]);
-  return null;
-}
+const fmtDate = (date: Date) =>
+  [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 
-function MapInteraction({
+function MapEventsHandler({
   drawing,
+  navPickMode,
   onMapClick,
   onSample,
+  onPickNavPoint,
 }: {
   drawing: boolean;
+  navPickMode: "start" | "end" | null;
   onMapClick: (point: GeoPoint) => void;
   onSample: (point: GeoPoint) => void;
+  onPickNavPoint: (point: GeoPoint) => void;
 }) {
   useMapEvents({
     click(event) {
       const point = { lat: event.latlng.lat, lon: event.latlng.lng };
-      if (drawing) onMapClick(point);
-      else onSample(point);
+      if (navPickMode) {
+        onPickNavPoint(point);
+      } else if (drawing) {
+        onMapClick(point);
+      } else {
+        onSample(point);
+      }
     },
   });
   return null;
 }
 
-function Stat({ label, value, help }: { label: string; value: string; help?: string }) {
-  return <div className="rounded-lg bg-muted/50 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>{help && <p className="mt-1 text-[11px] text-muted-foreground">{help}</p>}</div>;
-}
-
 export default function Satellite() {
-  const [place, setPlace] = useState<Place>({ lat: 20, lon: 0, label: "Global overview" });
-  const [query, setQuery] = useState("");
-  const [layer, setLayer] = useState<ImageryLayer>("true-color");
+  const { user } = useAuth();
+
+  // Mode: TRACK (intelligence boards) vs QUERY (search & navigation)
+  const [activeMode, setActiveMode] = useState<"TRACK" | "QUERY">("TRACK");
+  const [activeCategory, setActiveCategory] = useState<string>("ALL");
+
+  // Selected Strategic Board & Station
+  const [selectedBoardId, setSelectedBoardId] = useState<string>("bab-el-mandeb");
+  const activeBoard = useMemo(
+    () => STRATEGIC_BOARDS.find((b) => b.id === selectedBoardId) || STRATEGIC_BOARDS[0],
+    [selectedBoardId]
+  );
+  const [selectedStationId, setSelectedStationId] = useState<string>(activeBoard.primaryStationId);
+  const selectedStation = useMemo(
+    () => activeBoard.stations.find((s) => s.id === selectedStationId) || activeBoard.stations[0],
+    [activeBoard, selectedStationId]
+  );
+
+  // Time Series Range for Chart: "30d" | "90d" | "1y"
+  const [chartRange, setChartRange] = useState<"30d" | "90d" | "1y">("90d");
+  const chartData = useMemo(() => {
+    if (chartRange === "30d") return activeBoard.history30d;
+    if (chartRange === "1y") return activeBoard.history1y;
+    return activeBoard.history90d;
+  }, [activeBoard, chartRange]);
+
+  // Basemap style & imagery
+  const [basemap, setBasemap] = useState<BasemapStyle>("esri-satellite");
+  const [imageryOverlay, setImageryOverlay] = useState<ImageryLayer>("true-color");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [telemetryOpen, setTelemetryOpen] = useState(true);
+  const [fullBoardModal, setFullBoardModal] = useState(false);
+
+  // Map Camera Center & Zoom
+  const [mapCenter, setMapCenter] = useState<[number, number]>(activeBoard.center);
+  const [mapZoom, setMapZoom] = useState<number>(activeBoard.zoom);
+
+  // Google Earth Place Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
+
+  // Real-time Navigation / Directions state
+  const [navOpen, setNavOpen] = useState(false);
+  const [navStartText, setNavStartText] = useState("");
+  const [navEndText, setNavEndText] = useState("");
+  const [navStartPoint, setNavStartPoint] = useState<GeoPoint | null>(null);
+  const [navEndPoint, setNavEndPoint] = useState<GeoPoint | null>(null);
+  const [travelMode, setTravelMode] = useState<TravelMode>("freight");
+  const [navPickMode, setNavPickMode] = useState<"start" | "end" | null>(null);
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [routingError, setRoutingError] = useState("");
+
+  // Simulated Live Turn-by-Turn Navigation
+  const [isSimulatingNav, setIsSimulatingNav] = useState(false);
+  const [simStepIndex, setSimStepIndex] = useState(0);
+  const [simulatedVehiclePos, setSimulatedVehiclePos] = useState<[number, number] | null>(null);
+  const [simulatedSpeedKmh, setSimulatedSpeedKmh] = useState(48);
+
+  // Sentinel-2 Live Scene & Polygon Field Drawing states
+  const [currentLocation, setCurrentLocation] = useState<Place>({
+    lat: activeBoard.center[0],
+    lon: activeBoard.center[1],
+    label: activeBoard.title,
+  });
   const [daysBack, setDaysBack] = useState("30");
   const [maxCloud, setMaxCloud] = useState("40");
   const [scenes, setScenes] = useState<SentinelScene[]>([]);
@@ -98,153 +240,226 @@ export default function Satellite() {
   const [tileTemplate, setTileTemplate] = useState("");
   const [sceneLoading, setSceneLoading] = useState(false);
   const [tileLoading, setTileLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [locating, setLocating] = useState(false);
-  const [error, setError] = useState("");
-  const [mapMessage, setMapMessage] = useState("");
   const [drawing, setDrawing] = useState(false);
   const [fieldPoints, setFieldPoints] = useState<GeoPoint[]>([]);
   const [fieldStats, setFieldStats] = useState<Partial<Record<SpectralIndex, FieldIndexStatistics>>>({});
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
   const [sample, setSample] = useState<{ point: GeoPoint; values: Partial<Record<SpectralIndex, number | null>> } | null>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
-  const [analysisError, setAnalysisError] = useState("");
-  const { user } = useAuth();
-  const [fieldName, setFieldName] = useState("");
-  const [cropType, setCropType] = useState("");
+
+  // Saved Fields & Alerts from Supabase
   const [savedFields, setSavedFields] = useState<SatelliteField[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
-  const [savingField, setSavingField] = useState(false);
+  const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
 
-  const selectedScene = useMemo(() => scenes.find((scene) => scene.id === sceneId) ?? null, [scenes, sceneId]);
-  const isGlobalOverview = place.label === "Global overview";
-  const isNasa = layer.startsWith("nasa-");
+  const selectedScene = useMemo(() => scenes.find((s) => s.id === sceneId) ?? null, [scenes, sceneId]);
+  const isNasa = imageryOverlay.startsWith("nasa-");
   const maxDate = fmtDate(new Date(Date.now() - 86400000));
-  const fieldArea = useMemo(() => calculatePolygonAreaHectares(fieldPoints), [fieldPoints]);
-  const scenePoint = useMemo(() => ({ lat: place.lat, lon: place.lon }), [place.lat, place.lon]);
-  const selectedLabel = layerOptions.find((option) => option.id === layer)?.label ?? "Satellite imagery";
   const nasaUrl = isNasa
-    ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${nasaLayers[layer]}/default/${maxDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+    ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${nasaLayers[imageryOverlay]}/default/${maxDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
     : "";
+  const fieldArea = useMemo(() => calculatePolygonAreaHectares(fieldPoints), [fieldPoints]);
 
-  const resolvePlace = useCallback(async (point: GeoPoint, label = "Selected coordinates") => {
-    setPlace({ ...point, label });
-    setMapMessage("");
-    setFieldPoints([]);
-    setFieldStats({});
-    setSample(null);
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${point.lat}&lon=${point.lon}`);
-      if (response.ok) {
-        const data = await response.json();
-        const address = data.address ?? {};
-        const name = data.name || [address.suburb, address.town, address.city, address.county, address.state, address.country].filter(Boolean).slice(0, 3).join(", ");
-        if (name) setPlace({ ...point, label: name });
-      }
-    } catch {
-      setMapMessage("Place-name lookup failed; the selected coordinates are still usable.");
-    }
-  }, []);
+  // Sync board change with camera and stations
+  const handleSelectBoard = (board: StrategicBoard) => {
+    setSelectedBoardId(board.id);
+    setSelectedStationId(board.primaryStationId);
+    setMapCenter(board.center);
+    setMapZoom(board.zoom);
+    setCurrentLocation({ lat: board.center[0], lon: board.center[1], label: board.title });
+  };
 
+  const handleSelectStation = (station: StationNode) => {
+    setSelectedStationId(station.id);
+    setMapCenter([station.lat, station.lon]);
+  };
+
+  // Google Earth Live Search debounce
   useEffect(() => {
-    if (isGlobalOverview) {
-      setSceneLoading(false);
-      setScenes([]);
-      setSceneId("");
-      setTileTemplate("");
-      setMapMessage("Global view: search for any location or choose My location to load nearby satellite observations. The catalogue is not limited to a particular country.");
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
       return;
     }
+
+    if (searchAbortRef.current) searchAbortRef.current.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
+    setSearching(true);
+    const timeout = setTimeout(async () => {
+      const results = await searchPlaces(searchQuery, controller.signal);
+      if (!controller.signal.aborted) {
+        setSearchResults(results);
+        setShowSearchResults(results.length > 0);
+        setSearching(false);
+      }
+    }, 320);
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [searchQuery]);
+
+  const handleSelectSearchResult = (result: SearchResult) => {
+    setShowSearchResults(false);
+    setSearchQuery(result.name);
+    setMapCenter([result.lat, result.lon]);
+    setMapZoom(13);
+    setCurrentLocation({ lat: result.lat, lon: result.lon, label: result.displayName });
+    toast.success(`Flying to ${result.name}`, {
+      description: `${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`,
+    });
+  };
+
+  // Locate User
+  const locateMe = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not supported by your browser");
+      return;
+    }
+    toast.loading("Acquiring GPS fix…", { id: "gps" });
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        toast.dismiss("gps");
+        const pt = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        const label = await reverseGeocode(pt);
+        setCurrentLocation({ ...pt, label });
+        setMapCenter([pt.lat, pt.lon]);
+        setMapZoom(14);
+        toast.success("Location acquired", { description: label });
+      },
+      (err) => {
+        toast.dismiss("gps");
+        toast.error("Could not obtain GPS location: " + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // Compute Navigation Route
+  const handleCalculateRoute = async () => {
+    if (!navStartPoint || !navEndPoint) {
+      toast.error("Please specify both origin and destination points.");
+      return;
+    }
+    setRoutingLoading(true);
+    setRoutingError("");
+    try {
+      const route = await calculateRoute(navStartPoint, navEndPoint, travelMode);
+      setRouteData(route);
+      setSimStepIndex(0);
+      setIsSimulatingNav(false);
+      setSimulatedVehiclePos(route.geometry[0] || null);
+      toast.success("Navigation route calculated", {
+        description: `${route.distanceKm} km · approx. ${route.durationMinutes} min`,
+      });
+    } catch (err: any) {
+      setRoutingError(err.message || "Failed to calculate navigation route.");
+      toast.error("Routing error: " + (err.message || "Unknown error"));
+    } finally {
+      setRoutingLoading(false);
+    }
+  };
+
+  // Simulated Navigation Playback
+  useEffect(() => {
+    if (!isSimulatingNav || !routeData || !routeData.geometry.length) return;
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      currentIndex += 1;
+      if (currentIndex >= routeData.geometry.length) {
+        setIsSimulatingNav(false);
+        toast.success("Arrived at destination!");
+        clearInterval(interval);
+        return;
+      }
+      const pos = routeData.geometry[currentIndex];
+      setSimulatedVehiclePos(pos);
+      setMapCenter(pos);
+
+      // Estimate current step
+      const stepIdx = Math.min(
+        routeData.steps.length - 1,
+        Math.floor((currentIndex / routeData.geometry.length) * routeData.steps.length)
+      );
+      setSimStepIndex(stepIdx);
+      setSimulatedSpeedKmh(Math.round(45 + Math.sin(currentIndex * 0.2) * 12));
+    }, 800);
+
+    return () => clearInterval(interval);
+  }, [isSimulatingNav, routeData]);
+
+  // Handle map click for picking navigation points
+  const handlePickNavPoint = async (point: GeoPoint) => {
+    const address = await reverseGeocode(point);
+    if (navPickMode === "start") {
+      setNavStartPoint(point);
+      setNavStartText(address);
+      setNavPickMode(null);
+      toast.success("Origin set: " + address);
+    } else if (navPickMode === "end") {
+      setNavEndPoint(point);
+      setNavEndText(address);
+      setNavPickMode(null);
+      toast.success("Destination set: " + address);
+    }
+  };
+
+  // Sentinel Scene Search on location change
+  useEffect(() => {
+    if (basemap !== "sentinel") return;
     const controller = new AbortController();
     setSceneLoading(true);
-    setError("");
-    setScenes([]);
-    setSceneId("");
-    setTileTemplate("");
     searchSentinelScenes({
-      point: scenePoint,
+      point: { lat: mapCenter[0], lon: mapCenter[1] },
       daysBack: Number(daysBack),
       maxCloudCover: Number(maxCloud),
       signal: controller.signal,
-    }).then((results) => {
-      setScenes(results);
-      setSceneId(results[0]?.id ?? "");
-      if (!results.length) setMapMessage("No Sentinel-2 scene matched this point, date window and cloud filter. Try a longer date range or a higher cloud threshold; NASA layers remain available for regional context.");
-    }).catch((reason: unknown) => {
-      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Sentinel scene search failed.");
-    }).finally(() => {
-      if (!controller.signal.aborted) setSceneLoading(false);
-    });
+    })
+      .then((results) => {
+        setScenes(results);
+        setSceneId(results[0]?.id ?? "");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setSceneLoading(false);
+      });
     return () => controller.abort();
-  }, [scenePoint, daysBack, maxCloud, isGlobalOverview]);
+  }, [mapCenter, daysBack, maxCloud, basemap]);
 
+  // Sentinel Tile Layer URL
   useEffect(() => {
-    if (!selectedScene || isNasa) {
+    if (!selectedScene || isNasa || basemap !== "sentinel") {
       setTileTemplate("");
       return;
     }
     const controller = new AbortController();
     setTileLoading(true);
-    setError("");
-    getSentinelTileTemplate(selectedScene.itemUrl, layer as "true-color" | "false-color" | SpectralIndex, controller.signal)
+    getSentinelTileTemplate(
+      selectedScene.itemUrl,
+      imageryOverlay as "true-color" | "false-color" | SpectralIndex,
+      controller.signal
+    )
       .then(setTileTemplate)
-      .catch((reason: unknown) => {
-        if (!controller.signal.aborted) {
-          setTileTemplate("");
-          setError(reason instanceof Error ? reason.message : "Could not load Sentinel imagery.");
-        }
-      })
-      .finally(() => { if (!controller.signal.aborted) setTileLoading(false); });
+      .catch(() => setTileTemplate(""))
+      .finally(() => {
+        if (!controller.signal.aborted) setTileLoading(false);
+      });
     return () => controller.abort();
-  }, [selectedScene, layer, isNasa]);
+  }, [selectedScene, imageryOverlay, isNasa, basemap]);
 
-  const search = async (event: FormEvent) => {
-    event.preventDefault();
-    const value = query.trim();
-    if (!value) return;
-    setError("");
-    const coordinates = value.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
-    if (coordinates) {
-      const lat = Number(coordinates[1]);
-      const lon = Number(coordinates[2]);
-      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-        await resolvePlace({ lat, lon }, "Coordinate search");
-        setQuery("");
-        return;
-      }
-    }
-    setBusy(true);
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(value)}`);
-      if (!response.ok) throw new Error("Location search is temporarily unavailable.");
-      const results = await response.json();
-      if (!results.length) throw new Error("No matching place found. Try a town, district, region or coordinates.");
-      await resolvePlace({ lat: Number(results[0].lat), lon: Number(results[0].lon) }, results[0].display_name);
-      setQuery("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Location search failed.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const locate = () => {
-    if (!navigator.geolocation) { setError("Geolocation is not supported by this browser."); return; }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => { void resolvePlace({ lat: position.coords.latitude, lon: position.coords.longitude }, "Your location"); setLocating(false); },
-      () => { setError("Could not access your location. Check browser permission or search for a place."); setLocating(false); },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
-    );
-  };
-
+  // Field Analysis
   const runFieldAnalysis = async () => {
     if (!selectedScene || fieldPoints.length < 3) return;
     setAnalysisLoading(true);
     setAnalysisError("");
     const geometry: GeoJSON.Polygon = {
       type: "Polygon",
-      coordinates: [[...fieldPoints.map((point) => [point.lon, point.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]]],
+      coordinates: [[...fieldPoints.map((p) => [p.lon, p.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]]],
     };
     try {
       const [ndvi, ndmi, ndwi] = await Promise.all([
@@ -253,17 +468,22 @@ export default function Satellite() {
         getFieldIndexStatistics(selectedScene.itemUrl, geometry, "ndwi"),
       ]);
       setFieldStats({ ndvi, ndmi, ndwi });
-    } catch (reason) {
-      setAnalysisError(reason instanceof Error ? reason.message : "Field analysis could not be completed.");
+      toast.success("Field spectral analysis completed", {
+        description: `NDVI: ${ndvi.mean?.toFixed(3) ?? "—"} | NDMI: ${ndmi.mean?.toFixed(3) ?? "—"}`,
+      });
+    } catch (err: any) {
+      setAnalysisError(err.message || "Field analysis could not be completed.");
+      toast.error("Spectral analysis failed: " + (err.message || "Unknown"));
     } finally {
       setAnalysisLoading(false);
     }
   };
 
   const inspectPoint = async (point: GeoPoint) => {
-    if (drawing) return;
+    if (drawing || navPickMode) return;
     if (!selectedScene) {
-      await resolvePlace(point, "Selected map location");
+      const address = await reverseGeocode(point);
+      setCurrentLocation({ ...point, label: address });
       return;
     }
     if (isNasa) return;
@@ -271,45 +491,33 @@ export default function Satellite() {
     setSample({ point, values: {} });
     try {
       const indices: SpectralIndex[] = ["ndvi", "ndmi", "ndwi"];
-      const entries = await Promise.all(indices.map(async (index) => [index, await getIndexAtPoint(selectedScene.itemUrl, point, index)] as const));
+      const entries = await Promise.all(
+        indices.map(async (index) => [index, await getIndexAtPoint(selectedScene.itemUrl, point, index)] as const)
+      );
       setSample({ point, values: Object.fromEntries(entries) });
-    } catch (reason) {
-      setAnalysisError(reason instanceof Error ? reason.message : "Pixel sampling failed.");
+    } catch {
     } finally {
       setSampleLoading(false);
     }
   };
 
-  const addFieldPoint = (point: GeoPoint) => {
-    setFieldPoints((previous) => [...previous, point]);
-    setFieldStats({});
-    setAnalysisError("");
-  };
-
-
+  // Supabase Monitored Fields & Alerts Loading
   const refreshSavedFields = useCallback(async () => {
     if (!user) return;
-    const { data, error: fieldsError } = await supabase
+    const { data: fields } = await supabase
       .from("satellite_fields")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
-    if (fieldsError) {
-      console.error("Could not load monitored fields:", fieldsError.message);
-      return;
-    }
-    const fields = data ?? [];
-    setSavedFields(fields);
-    if (fields.length) {
+    setSavedFields(fields ?? []);
+    if (fields?.length) {
       const { data: alerts } = await supabase
         .from("satellite_field_alerts")
         .select("*")
-        .in("field_id", fields.map((field) => field.id))
+        .in("field_id", fields.map((f) => f.id))
         .order("created_at", { ascending: false })
         .limit(20);
       setSavedAlerts(alerts ?? []);
-    } else {
-      setSavedAlerts([]);
     }
   }, [user]);
 
@@ -317,226 +525,1078 @@ export default function Satellite() {
     void refreshSavedFields();
   }, [refreshSavedFields]);
 
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel(`satellite-field-alerts-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "satellite_field_alerts" }, (payload) => {
-        const alert = payload.new as SatelliteAlert;
-        setSavedAlerts((previous) => [alert, ...previous.filter((item) => item.id !== alert.id)].slice(0, 20));
-        toast(alert.title || "Satellite crop alert", { description: alert.message || "A change was detected in one of your monitored fields." });
-        void refreshSavedFields();
-      })
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [user, refreshSavedFields]);
+  // Filtered Boards by Category
+  const filteredBoards = useMemo(() => {
+    if (activeCategory === "ALL") return STRATEGIC_BOARDS;
+    return STRATEGIC_BOARDS.filter((b) => b.category === activeCategory);
+  }, [activeCategory]);
 
-  const saveFieldForMonitoring = async () => {
-    if (!user || fieldPoints.length < 3) return;
-    const name = fieldName.trim();
-    if (name.length < 2) {
-      toast.error("Enter a field name before saving.");
-      return;
-    }
-    setSavingField(true);
-    const geometry: GeoJSON.Polygon = {
-      type: "Polygon",
-      coordinates: [[...fieldPoints.map((point) => [point.lon, point.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]]],
-    };
-    const { error: saveError } = await supabase.from("satellite_fields").insert({
-      user_id: user.id,
-      name,
-      crop_type: cropType.trim() || null,
-      field_geojson: geometry as unknown as Database["public"]["Tables"]["satellite_fields"]["Insert"]["field_geojson"],
-      area_hectares: fieldArea,
-      monitoring_enabled: true,
-      max_cloud_cover: Number(maxCloud),
-      ndvi_drop_threshold: 0.15,
-    });
-    if (saveError) {
-      toast.error(`Could not save monitored field: ${saveError.message}`);
-    } else {
-      toast.success(`${name} saved for satellite monitoring`);
-      setFieldName("");
-      setCropType("");
-      setFieldPoints([]);
-      setDrawing(false);
-      await refreshSavedFields();
-    }
-    setSavingField(false);
-  };
-
-  const loadSavedBoundary = (field: SatelliteField) => {
-    const geometry = field.field_geojson as unknown as GeoJSON.Polygon;
-    const coordinates = geometry.coordinates?.[0];
-    if (!Array.isArray(coordinates)) return;
-    const vertices = coordinates.slice(0, -1);
-    setFieldPoints(vertices.map((position) => ({ lat: position[1], lon: position[0] })));
-    const center = vertices.reduce((sum, position) => ({ lat: sum.lat + position[1] / vertices.length, lon: sum.lon + position[0] / vertices.length }), { lat: 0, lon: 0 });
-    setPlace({ ...center, label: field.name });
-    setFieldStats({});
-    setAnalysisError("");
-  };
-
-  const toggleFieldMonitoring = async (field: SatelliteField) => {
-    const next = !field.monitoring_enabled;
-    const { error: updateError } = await supabase
-      .from("satellite_fields")
-      .update({ monitoring_enabled: next })
-      .eq("id", field.id)
-      .eq("user_id", user?.id);
-    if (updateError) toast.error(updateError.message);
-    else {
-      toast.success(next ? "Field monitoring enabled" : "Field monitoring paused");
-      await refreshSavedFields();
-    }
-  };
-
-  const updateAlertStatus = async (alert: SatelliteAlert, status: "acknowledged" | "resolved") => {
-    const { error: updateError } = await supabase
-      .from("satellite_field_alerts")
-      .update({ status })
-      .eq("id", alert.id);
-    if (updateError) toast.error(updateError.message);
-    else setSavedAlerts((previous) => previous.map((item) => item.id === alert.id ? { ...item, status } : item));
-  };
-
-  const ndviMean = fieldStats.ndvi?.mean ?? null;
-  const ndmiMean = fieldStats.ndmi?.mean ?? null;
-  const fieldInterpretation = useMemo(() => interpretFieldIndices({
-    ndvi: fieldStats.ndvi?.mean ?? null,
-    ndmi: fieldStats.ndmi?.mean ?? null,
-    ndwi: fieldStats.ndwi?.mean ?? null,
-  }), [fieldStats]);
-
-  return <div className="space-y-5 pb-8">
-    <header className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-emerald-100 p-2 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"><SatelliteIcon className="h-6 w-6" /></div>
-        <div><h1 className="text-2xl font-bold">Satellite</h1><p className="text-sm text-muted-foreground">Sentinel-2 crop observation and field-level spectral analysis</p></div>
-      </div>
-      <div className="flex flex-wrap gap-2"><Badge variant="outline">Free / open data</Badge><Badge variant="secondary">Sentinel-2 · 10–20 m</Badge></div>
-    </header>
-
-    <form onSubmit={search} className="flex flex-col gap-2 sm:flex-row">
-      <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search anywhere in the world: farm, town, region or coordinates…" className="h-11 pl-9" aria-label="Search location" /></div>
-      <Button disabled={busy || !query.trim()} className="h-11 gap-2">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Search</Button>
-      <Button type="button" variant="outline" onClick={locate} disabled={locating} className="h-11 gap-2">{locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />} My location</Button>
-    </form>
-
-    {error && <div role="alert" className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
-
-    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="flex flex-col justify-between gap-3 border-b p-3 xl:flex-row xl:items-center">
-        <div className="min-w-0"><div className="flex items-center gap-2 text-sm font-semibold"><MapPin className="h-4 w-4 text-emerald-600" /><span className="truncate">{place.label}</span></div><p className="pl-6 text-xs text-muted-foreground">{isGlobalOverview ? "Global map · search anywhere or select My location" : `${place.lat.toFixed(5)}, ${place.lon.toFixed(5)} · ${selectedScene ? formatSceneDate(selectedScene.acquiredAt) : "Searching available imagery"}`}</p></div>
-        <div className="flex flex-wrap gap-2">
-          <label className="flex h-9 items-center gap-2 rounded-md border px-2 text-xs"><Layers className="h-3.5 w-3.5" /><select aria-label="Imagery layer" value={layer} onChange={(event) => setLayer(event.target.value as ImageryLayer)} className="max-w-[220px] bg-transparent outline-none">{layerOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
-          <label className="flex h-9 items-center gap-2 rounded-md border px-2 text-xs"><CalendarDays className="h-3.5 w-3.5" /><select aria-label="Scene date range" value={daysBack} onChange={(event) => setDaysBack(event.target.value)} className="bg-transparent outline-none"><option value="15">Last 15 days</option><option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90">Last 90 days</option><option value="180">Last 180 days</option></select></label>
-          <label className="flex h-9 items-center gap-2 rounded-md border px-2 text-xs"><Cloud className="h-3.5 w-3.5" /><select aria-label="Maximum cloud cover" value={maxCloud} onChange={(event) => setMaxCloud(event.target.value)} className="bg-transparent outline-none"><option value="10">Cloud ≤10%</option><option value="20">Cloud ≤20%</option><option value="40">Cloud ≤40%</option><option value="60">Cloud ≤60%</option><option value="80">Cloud ≤80%</option><option value="100">Any cloud cover</option></select></label>
-        </div>
-      </div>
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="relative h-[440px] w-full bg-slate-900 sm:h-[560px]">
-          <MapContainer center={[place.lat, place.lon]} zoom={2} scrollWheelZoom preferCanvas className="h-full w-full">
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='Map data: <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={19} updateWhenIdle updateWhenZooming={false} keepBuffer={2} />
-            {isNasa ? <TileLayer key={nasaUrl} url={nasaUrl} maxZoom={9} updateWhenIdle updateWhenZooming={false} keepBuffer={2} attribution='Imagery: <a href="https://earthdata.nasa.gov/">NASA GIBS / Earthdata</a>' eventHandlers={{ loading: () => setTileLoading(true), load: () => setTileLoading(false), tileerror: () => { setTileLoading(false); setMapMessage("Some NASA tiles failed to load. Try another fallback layer."); } }} /> : tileTemplate ? <TileLayer key={tileTemplate} url={tileTemplate} maxZoom={18} updateWhenIdle updateWhenZooming={false} keepBuffer={2} attribution='Sentinel-2 data: <a href="https://registry.opendata.aws/sentinel-2/">AWS Open Data</a> · Rendering: <a href="https://titiler.xyz/">TiTiler</a>' eventHandlers={{ loading: () => setTileLoading(true), load: () => setTileLoading(false), tileerror: () => { setTileLoading(false); setMapMessage("Some Sentinel-2 tiles failed to load. Try another scene or NASA context layer."); } }} /> : null}
-            <Recenter place={place} />
-            <MapInteraction drawing={drawing} onMapClick={addFieldPoint} onSample={(point) => void inspectPoint(point)} />
-            <Marker position={[place.lat, place.lon]} icon={marker}><Popup>{place.label}<br />{place.lat.toFixed(5)}, {place.lon.toFixed(5)}</Popup></Marker>
-            {selectedScene?.geometry && <GeoJSON key={selectedScene.id} data={selectedScene.geometry as GeoJSON.GeoJsonObject} style={{ color: "#38bdf8", weight: 1, fillOpacity: 0.04 }} />}
-            {savedFields.filter((field) => field.monitoring_enabled).map((field) => <GeoJSON key={field.id} data={field.field_geojson as unknown as GeoJSON.GeoJsonObject} style={{ color: "#a3e635", weight: 2, fillOpacity: 0.08, dashArray: "5 4" }} />)}
-            {fieldPoints.length > 0 && <Polygon positions={fieldPoints.map((point) => [point.lat, point.lon] as [number, number])} pathOptions={{ color: "#f59e0b", weight: 3, fillOpacity: 0.15 }} />}
-            {fieldPoints.map((point, index) => <Marker key={index} position={[point.lat, point.lon]}><Popup>Field boundary point {index + 1}</Popup></Marker>)}
-          </MapContainer>
-          {(sceneLoading || tileLoading) && <div className="absolute left-3 top-3 z-[500] flex items-center gap-2 rounded-lg bg-background/95 px-3 py-2 text-xs shadow"><Loader2 className="h-3.5 w-3.5 animate-spin" />{sceneLoading ? "Searching Sentinel scenes…" : "Loading satellite map tiles…"}</div>}
-          {drawing && <div className="absolute bottom-3 left-3 right-3 z-[500] rounded-lg bg-background/95 p-2 text-xs shadow">Field boundary drawing is active. Click at least 3 corners on the map, then select “Analyse field”.</div>}
-        </div>
-        <aside className="space-y-4 border-t p-3 lg:border-l lg:border-t-0">
-          <div><h2 className="flex items-center gap-2 text-sm font-semibold"><Layers className="h-4 w-4" /> Available Sentinel scenes</h2><p className="mt-1 text-xs text-muted-foreground">Cloud-filtered scenes intersecting the selected point</p></div>
-          {sceneLoading ? <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Searching open catalogue…</div> : scenes.length ? <div className="space-y-2">{scenes.slice(0, 8).map((scene) => <button key={scene.id} type="button" onClick={() => { setSceneId(scene.id); setFieldStats({}); setSample(null); }} className={`w-full rounded-lg border p-2 text-left text-xs transition hover:border-primary ${scene.id === sceneId ? "border-primary bg-primary/5" : ""}`}><div className="flex items-center justify-between gap-2"><span className="font-semibold">{formatSceneDate(scene.acquiredAt)}</span><Badge variant="outline">{scene.cloudCover === null ? "Cloud n/a" : `${scene.cloudCover.toFixed(0)}% cloud`}</Badge></div><p className="mt-1 truncate text-muted-foreground">{scene.id}</p></button>)}</div> : <p className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">No scenes matched. Widen the date range or cloud threshold. Use NASA layers for broader context.</p>}
-          <div className="rounded-lg bg-muted/40 p-3"><p className="text-xs font-semibold">{selectedLabel}</p><p className="mt-1 text-xs text-muted-foreground">{isNasa ? "NASA MODIS is useful for regional trends, not individual field assessment." : "Sentinel-2 Level-2A surface reflectance. Visible/NIR bands are 10 m; SWIR moisture band is 20 m."}</p></div>
-          <div className="space-y-2">
-            <Button type="button" variant={drawing ? "default" : "outline"} className="w-full gap-2" onClick={() => { setDrawing(!drawing); setFieldPoints([]); setFieldStats({}); setAnalysisError(""); }}><Ruler className="h-4 w-4" />{drawing ? "Stop drawing boundary" : "Draw field boundary"}</Button>
-            {fieldPoints.length > 0 && <div className="flex items-center justify-between text-xs"><span>{fieldPoints.length} boundary points · {fieldArea.toFixed(2)} ha</span><button type="button" onClick={() => { setFieldPoints((points) => points.slice(0, -1)); setFieldStats({}); }} className="text-muted-foreground hover:text-foreground">Undo point</button></div>}
-            <Button type="button" className="w-full gap-2" onClick={() => { setDrawing(false); void runFieldAnalysis(); }} disabled={!selectedScene || isNasa || fieldPoints.length < 3 || analysisLoading}>{analysisLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />} Analyse field</Button>
-            {fieldPoints.length > 0 && <Button type="button" variant="ghost" className="w-full gap-2" onClick={() => { setFieldPoints([]); setFieldStats({}); }}><X className="h-4 w-4" /> Clear boundary</Button>}
+  return (
+    <div className="relative flex h-[calc(100vh-4rem)] w-full flex-col overflow-hidden bg-[#070b14] text-slate-100 font-sans selection:bg-amber-500 selection:text-black">
+      {/* ─────────────────────────────────────────────────────────────
+          TOP COMMAND & TELEMETRY BAR (Matching Attached Screenshot)
+      ───────────────────────────────────────────────────────────── */}
+      <header className="z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-800/80 bg-[#0a101f]/95 px-3 backdrop-blur-md">
+        {/* Left: Mode Tabs & Back */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg bg-slate-900/90 p-0.5 border border-slate-800">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode("QUERY");
+                setNavOpen(true);
+              }}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-mono font-bold tracking-wider transition ${
+                activeMode === "QUERY"
+                  ? "bg-sky-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              &lt; QUERY
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMode("TRACK");
+              }}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-mono font-bold tracking-wider transition ${
+                activeMode === "TRACK"
+                  ? "bg-amber-500 text-slate-950 font-extrabold shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              TRACK
+            </button>
           </div>
-          {analysisError && <p role="alert" className="text-xs text-destructive">{analysisError}</p>}
+
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900/60 px-2.5 py-1.5 text-xs font-mono text-slate-300 hover:bg-slate-800"
+            title="Toggle Boards Dossier"
+          >
+            <span>BOARDS {STRATEGIC_BOARDS.length}</span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${sidebarOpen ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+
+        {/* Center: Strategic Layers Pill Bar */}
+        <div className="hidden items-center gap-1.5 md:flex">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400 mr-1">LAYERS</span>
+          {[
+            { id: "ALL", label: "ALL", color: "bg-slate-400" },
+            { id: "maritime", label: "maritime", color: "bg-sky-400" },
+            { id: "commodity", label: "commodity", color: "bg-amber-400" },
+            { id: "energy", label: "energy", color: "bg-rose-400" },
+            { id: "battery", label: "battery", color: "bg-purple-400" },
+            { id: "agriculture", label: "agriculture", color: "bg-emerald-400" },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono transition border ${
+                activeCategory === cat.id
+                  ? "border-slate-500 bg-slate-800 text-white shadow-sm"
+                  : "border-transparent bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${cat.color}`} />
+              <span>{cat.label}</span>
+            </button>
+          ))}
+
+          {/* Other Layers Basemap & Spectral Index Dropdown */}
+          <div className="relative group ml-1">
+            <button className="flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-[11px] font-mono text-slate-300 hover:border-slate-700">
+              <span>OTHER LAYERS</span>
+              <ChevronDown className="h-3 w-3 text-slate-400" />
+            </button>
+            <div className="absolute right-0 top-full mt-1 hidden w-56 rounded-lg border border-slate-800 bg-[#0b1325] p-2 shadow-2xl group-hover:block z-50">
+              <div className="text-[10px] font-mono uppercase text-slate-400 px-2 py-1">Basemap Imagery</div>
+              <button
+                onClick={() => setBasemap("esri-satellite")}
+                className={`w-full text-left px-2 py-1 text-xs rounded font-mono ${
+                  basemap === "esri-satellite" ? "text-amber-400 bg-slate-800/80" : "text-slate-300 hover:bg-slate-800/40"
+                }`}
+              >
+                Esri High-Res Satellite
+              </button>
+              <button
+                onClick={() => setBasemap("tactical-dark")}
+                className={`w-full text-left px-2 py-1 text-xs rounded font-mono ${
+                  basemap === "tactical-dark" ? "text-amber-400 bg-slate-800/80" : "text-slate-300 hover:bg-slate-800/40"
+                }`}
+              >
+                Tactical Deep Dark (AIS/SAR)
+              </button>
+              <button
+                onClick={() => setBasemap("sentinel")}
+                className={`w-full text-left px-2 py-1 text-xs rounded font-mono ${
+                  basemap === "sentinel" ? "text-amber-400 bg-slate-800/80" : "text-slate-300 hover:bg-slate-800/40"
+                }`}
+              >
+                Sentinel-2 STAC 10m
+              </button>
+
+              <div className="my-1 border-t border-slate-800" />
+              <div className="text-[10px] font-mono uppercase text-slate-400 px-2 py-1">Spectral Indices</div>
+              <button
+                onClick={() => setImageryOverlay("ndvi")}
+                className="w-full text-left px-2 py-1 text-xs rounded font-mono text-slate-300 hover:bg-slate-800/40 flex items-center justify-between"
+              >
+                <span>NDVI Crop Greenness</span>
+                <span className="text-[10px] text-emerald-400">10m</span>
+              </button>
+              <button
+                onClick={() => setImageryOverlay("ndmi")}
+                className="w-full text-left px-2 py-1 text-xs rounded font-mono text-slate-300 hover:bg-slate-800/40 flex items-center justify-between"
+              >
+                <span>NDMI Canopy Moisture</span>
+                <span className="text-[10px] text-sky-400">20m</span>
+              </button>
+              <button
+                onClick={() => setImageryOverlay("ndwi")}
+                className="w-full text-left px-2 py-1 text-xs rounded font-mono text-slate-300 hover:bg-slate-800/40 flex items-center justify-between"
+              >
+                <span>NDWI Surface Water</span>
+                <span className="text-[10px] text-cyan-400">10m</span>
+              </button>
+              <button
+                onClick={() => setImageryOverlay("nasa-true")}
+                className="w-full text-left px-2 py-1 text-xs rounded font-mono text-slate-300 hover:bg-slate-800/40 flex items-center justify-between"
+              >
+                <span>NASA GIBS Global Day</span>
+                <span className="text-[10px] text-slate-400">MODIS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Feed Status, Full Board, and Tools */}
+        <div className="flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-2 font-mono text-[11px] text-slate-400">
+            <span className="flex items-center gap-1 text-sky-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+              query
+            </span>
+            <span>&bull;</span>
+            <span className="flex items-center gap-1 text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              active
+            </span>
+            <span className="text-slate-500">9.4x</span>
+            <span className="rounded bg-slate-800/80 px-1.5 py-0.5 text-slate-300">
+              FEED 2026-07-31
+            </span>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setFullBoardModal(true)}
+            className="hidden sm:flex h-8 gap-1 border-slate-700 bg-slate-900 text-xs font-mono text-slate-200 hover:bg-slate-800"
+          >
+            <Maximize2 className="h-3.5 w-3.5 text-amber-400" />
+            <span>FULL BOARD VIEW</span>
+          </Button>
+
+          {/* Navigation Route Toggle Button */}
+          <Button
+            size="sm"
+            variant={navOpen ? "default" : "outline"}
+            onClick={() => setNavOpen(!navOpen)}
+            className={`h-8 gap-1.5 text-xs font-mono ${
+              navOpen ? "bg-sky-600 text-white" : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+            }`}
+          >
+            <Navigation className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Directions</span>
+          </Button>
+
+          {/* Field Boundary Drawing Toggle */}
+          <Button
+            size="sm"
+            variant={drawing ? "destructive" : "outline"}
+            onClick={() => {
+              setDrawing(!drawing);
+              setNavPickMode(null);
+            }}
+            className="h-8 gap-1 text-xs font-mono border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+          >
+            <Ruler className="h-3.5 w-3.5 text-amber-400" />
+            <span className="hidden sm:inline">{drawing ? "Stop" : "Draw field"}</span>
+          </Button>
+
+          {/* Alerts Bell */}
+          <button
+            type="button"
+            onClick={() => setAlertsDrawerOpen(true)}
+            className="relative rounded-md border border-slate-800 bg-slate-900/80 p-2 text-slate-300 hover:text-white hover:bg-slate-800"
+            title="Satellite Alerts"
+          >
+            <Bell className="h-4 w-4" />
+            {savedAlerts.length > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
+                {savedAlerts.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* ─────────────────────────────────────────────────────────────
+          MAIN WORKSPACE GRID (Left Dossier, Center Map, Right HUD)
+      ───────────────────────────────────────────────────────────── */}
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* ── LEFT INTELLIGENCE DOSSIER DRAWER (Collapsible) ── */}
+        <aside
+          className={`z-20 flex h-full flex-col border-r border-slate-800/80 bg-[#080d1a]/95 backdrop-blur-md transition-all duration-300 ${
+            sidebarOpen ? "w-80 lg:w-96" : "w-0 -translate-x-full border-r-0 overflow-hidden"
+          }`}
+        >
+          {/* Top Board Title & Esc */}
+          <div className="border-b border-slate-800/80 p-3.5">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span>GLOBAL VIEW ESC</span>
+              </button>
+              {activeBoard.beta && (
+                <Badge variant="outline" className="border-amber-500/50 bg-amber-500/10 text-[10px] text-amber-400 font-mono">
+                  BETA
+                </Badge>
+              )}
+            </div>
+
+            <h1 className="mt-2 font-mono text-sm font-bold text-amber-400 leading-snug">
+              {activeBoard.title}
+            </h1>
+            <p className="mt-1.5 text-xs text-slate-300 leading-relaxed font-sans line-clamp-3">
+              {activeBoard.summary}
+            </p>
+
+            <div className="mt-3 rounded-md bg-slate-900/80 p-2.5 border border-slate-800 text-[11px] leading-relaxed">
+              <div className="flex items-center justify-between text-slate-400 font-mono text-[10px] uppercase">
+                <span>REGIONAL READ &mdash; DESCRIPTIVE, NOT A FORECAST</span>
+                {activeBoard.staleDays && (
+                  <span className="text-amber-500 font-bold">STALE {activeBoard.staleDays}d</span>
+                )}
+              </div>
+              <p className="mt-1 text-slate-300">{activeBoard.regionalRead}</p>
+            </div>
+
+            {/* Badges */}
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {activeBoard.statusBadges.map((badge, idx) => (
+                <span
+                  key={idx}
+                  className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[10px] text-slate-300"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Monitored Corridors & Boards List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+            <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+              Active Corridors ({filteredBoards.length})
+            </div>
+            {filteredBoards.map((board) => {
+              const isSelected = board.id === selectedBoardId;
+              return (
+                <button
+                  key={board.id}
+                  type="button"
+                  onClick={() => handleSelectBoard(board)}
+                  className={`w-full rounded-lg border p-2.5 text-left transition ${
+                    isSelected
+                      ? "border-amber-500/80 bg-amber-500/10 shadow-sm"
+                      : "border-slate-800/80 bg-slate-900/40 hover:bg-slate-800/50 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-xs font-semibold text-slate-200 line-clamp-1">
+                      {board.title.split("—")[0]}
+                    </span>
+                    <span className="shrink-0 font-mono text-xs font-bold text-amber-400 tabular-nums">
+                      {board.currentStatMetric} {board.currentStatValue.split(" ")[0]}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                    <span className="capitalize">{board.category}</span>
+                    <span>{board.stations.length} stations</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bottom GPS Location Strip */}
+          <div className="border-t border-slate-800/80 p-3 bg-slate-950/60 flex items-center justify-between text-xs font-mono">
+            <div className="truncate text-slate-400">
+              <span className="text-slate-500">Center:</span> {mapCenter[0].toFixed(3)}, {mapCenter[1].toFixed(3)}
+            </div>
+            <button
+              onClick={locateMe}
+              className="flex items-center gap-1 text-sky-400 hover:text-sky-300"
+              title="My current location"
+            >
+              <LocateFixed className="h-3.5 w-3.5" />
+              <span>GPS</span>
+            </button>
+          </div>
         </aside>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/30 p-3"><div><p className="text-sm font-medium">{selectedLabel}</p><p className="text-xs text-muted-foreground">{selectedScene ? `${selectedScene.platform} · ${selectedScene.cloudCover === null ? "Cloud cover unavailable" : `${selectedScene.cloudCover.toFixed(1)}% scene cloud`}` : "Waiting for scene discovery"}</p></div><p className="text-xs text-muted-foreground">{isNasa ? "NASA GIBS context imagery" : selectedScene ? `Scene: ${selectedScene.id}` : "Sentinel-2 archive"}</p></div>
-    </section>
 
-    {mapMessage && <p className="text-xs text-muted-foreground">{mapMessage}</p>}
+        {/* ── CENTER MAP VIEWPORT (Satellite, Intel HUD, Google Earth Search & Navigation) ── */}
+        <main className="relative flex-1 h-full w-full bg-[#050913]">
+          {/* Map Container */}
+          <MapContainer
+            center={mapCenter}
+            zoom={mapZoom}
+            scrollWheelZoom
+            preferCanvas
+            zoomControl={false}
+            className="h-full w-full"
+          >
+            {/* Basemap Tiles */}
+            <TileLayer
+              key={basemap}
+              url={BASEMAP_TILES[basemap].url}
+              attribution={BASEMAP_TILES[basemap].attribution}
+              maxZoom={BASEMAP_TILES[basemap].maxZoom}
+              updateWhenIdle
+              keepBuffer={3}
+            />
 
+            {/* Hybrid Labels/Roads Overlay if Hybrid selected */}
+            {basemap === "hybrid" && (
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png"
+                attribution="&copy; OpenStreetMap &copy; CARTO"
+                maxZoom={19}
+              />
+            )}
 
-    <section className="space-y-4 rounded-2xl border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div><h2 className="flex items-center gap-2 font-semibold"><Activity className="h-5 w-5 text-emerald-600" /> Automatic crop-stress monitoring</h2><p className="mt-1 text-xs text-muted-foreground">Save a field boundary once. AgroClimate checks new clear Sentinel-2 observations and alerts you when vegetation declines materially against that field’s own history.</p></div>
-        <Badge variant="outline">Scheduled monitoring</Badge>
-      </div>
-      {fieldPoints.length >= 3 && <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <Input value={fieldName} onChange={(event) => setFieldName(event.target.value)} placeholder="Name this field (e.g. North maize plot)" aria-label="Field name" />
-        <Button type="button" onClick={() => void saveFieldForMonitoring()} disabled={savingField || fieldName.trim().length < 2}>{savingField ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sprout className="mr-2 h-4 w-4" />}Save & monitor this field</Button>
-      </div>}
-      {savedFields.length === 0 ? <p className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">No monitored fields yet. Draw at least three boundary points on the map, enter a field name and save it to start building its satellite history.</p> : <div className="space-y-2">
-        <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Your monitored fields</h3><span className="text-xs text-muted-foreground">{savedFields.filter((field) => field.monitoring_enabled).length} active</span></div>
-        {savedFields.map((field) => <div key={field.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-          <div className="min-w-0"><p className="truncate text-sm font-medium">{field.name}</p><p className="text-xs text-muted-foreground">{field.crop_type ? `${field.crop_type} · ` : ""}{Number(field.area_hectares || 0).toFixed(2)} ha · {field.monitoring_enabled ? "Monitoring active" : "Monitoring paused"} · {field.last_scene_at ? `Checked ${new Date(field.last_scene_at).toLocaleDateString()}` : "Building baseline"}</p></div>
-          <div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => loadSavedBoundary(field)}>Show boundary</Button><Button type="button" size="sm" variant={field.monitoring_enabled ? "secondary" : "default"} onClick={() => void toggleFieldMonitoring(field)}>{field.monitoring_enabled ? "Pause" : "Resume"}</Button></div>
-        </div>)}
-      </div>}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold">Satellite change alerts</h3>
-        {savedAlerts.length === 0 ? <p className="text-xs text-muted-foreground">No vegetation anomalies detected yet. New fields need at least three valid historical observations before the system can establish a baseline and issue a change alert.</p> : savedAlerts.map((alert) => <div key={alert.id} className="rounded-lg border p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold">{alert.title}</p><Badge variant={alert.severity === "high" ? "destructive" : "secondary"}>{alert.severity}</Badge></div>
-          <p className="mt-1 text-xs text-muted-foreground">{alert.message}</p>
-          <div className="mt-2 rounded-lg bg-muted/40 p-3 text-xs">
-            {(() => {
-              const interpretation = interpretVegetationAlert({
-                baselineNdvi: alert.baseline_ndvi,
-                currentNdvi: alert.current_ndvi,
-                baselineNdmi: alert.baseline_ndmi,
-                currentNdmi: alert.current_ndmi,
-              });
-              return <><p className="font-semibold">What this observation suggests</p><p className="mt-1">{interpretation.observedChange}</p><p className="mt-2">{interpretation.likelyMeaning}</p><p className="mt-2 font-semibold">What to check in the field</p><ul className="mt-1 list-disc space-y-1 pl-4">{interpretation.checks.map((step) => <li key={step}>{step}</li>)}</ul></>;
-            })()}
+            {/* NASA GIBS Context Layer if active */}
+            {isNasa && (
+              <TileLayer
+                key={nasaUrl}
+                url={nasaUrl}
+                maxZoom={9}
+                attribution='Imagery: &copy; <a href="https://earthdata.nasa.gov/">NASA GIBS / Earthdata</a>'
+              />
+            )}
+
+            {/* Sentinel-2 TiTiler Real Tile Overlay */}
+            {basemap === "sentinel" && tileTemplate && (
+              <TileLayer
+                key={tileTemplate}
+                url={tileTemplate}
+                maxZoom={18}
+                attribution='Sentinel-2 data: AWS Open Data / TiTiler'
+              />
+            )}
+
+            {/* Map Camera Controller */}
+            <MapCameraController center={mapCenter} zoom={mapZoom} />
+
+            {/* Route Bounds Controller */}
+            <RouteBoundsController route={routeData} />
+
+            {/* Map Interaction Events */}
+            <MapEventsHandler
+              drawing={drawing}
+              navPickMode={navPickMode}
+              onMapClick={(point) => {
+                setFieldPoints((prev) => [...prev, point]);
+                setFieldStats({});
+              }}
+              onSample={(point) => void inspectPoint(point)}
+              onPickNavPoint={(point) => void handlePickNavPoint(point)}
+            />
+
+            {/* Strategic Corridor & Stations Overlay (Attached Image) */}
+            <StrategicCorridorOverlay
+              corridorLine={activeBoard.corridorLine}
+              stations={activeBoard.stations}
+              selectedStationId={selectedStationId}
+              onSelectStation={handleSelectStation}
+            />
+
+            {/* Real-time Navigation Route Overlay */}
+            <NavigationRouteOverlay
+              route={routeData}
+              startPoint={navStartPoint ? [navStartPoint.lat, navStartPoint.lon] : null}
+              endPoint={navEndPoint ? [navEndPoint.lat, navEndPoint.lon] : null}
+              simulatedPosition={simulatedVehiclePos}
+              simulatedHeading={simStepIndex * 45}
+            />
+
+            {/* Drawn Field Boundaries */}
+            {fieldPoints.length > 0 && (
+              <Polygon
+                positions={fieldPoints.map((pt) => [pt.lat, pt.lon])}
+                pathOptions={{
+                  color: "#f59e0b",
+                  fillColor: "#f59e0b",
+                  weight: 2,
+                  fillOpacity: 0.2,
+                  dashArray: "4 4",
+                }}
+              />
+            )}
+            {fieldPoints.map((pt, idx) => (
+              <Marker
+                key={`field-pt-${idx}`}
+                position={[pt.lat, pt.lon]}
+                icon={L.divIcon({
+                  className: "field-corner-pin",
+                  html: `<div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;border:2px solid white;box-shadow:0 0 6px #f59e0b;"></div>`,
+                  iconSize: [10, 10],
+                  iconAnchor: [5, 5],
+                })}
+              />
+            ))}
+
+            {/* Monitored Saved Fields Boundaries from Database */}
+            {savedFields
+              .filter((f) => f.monitoring_enabled)
+              .map((field) => (
+                <GeoJSON
+                  key={field.id}
+                  data={field.field_geojson as unknown as GeoJSON.GeoJsonObject}
+                  style={{ color: "#10b981", weight: 2, fillOpacity: 0.12, dashArray: "5 4" }}
+                />
+              ))}
+          </MapContainer>
+
+          {/* ── GOOGLE EARTH SEARCH BAR (Floating Top-Left) ── */}
+          <div className="absolute left-4 top-4 z-[400] w-80 sm:w-96">
+            <div className="relative flex items-center rounded-lg border border-slate-700/80 bg-[#0a1122]/95 shadow-2xl backdrop-blur-md">
+              <Search className="absolute left-3 h-4 w-4 text-sky-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                placeholder="Search location like Google Earth (farm, port, city)…"
+                className="h-10 w-full rounded-lg bg-transparent pl-9 pr-16 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none font-mono"
+              />
+              <div className="absolute right-2 flex items-center gap-1">
+                {searching && <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />}
+                <button
+                  type="button"
+                  onClick={locateMe}
+                  className="rounded p-1 text-slate-400 hover:text-white"
+                  title="My GPS location"
+                >
+                  <Crosshair className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Autocomplete Dropdown */}
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-800 bg-[#0a1122]/98 p-1.5 shadow-2xl backdrop-blur-md">
+                {searchResults.map((item) => (
+                  <button
+                    key={item.placeId}
+                    type="button"
+                    onClick={() => handleSelectSearchResult(item)}
+                    className="flex w-full items-start gap-2 rounded-md p-2 text-left hover:bg-slate-800/80 transition"
+                  >
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-slate-200">{item.name}</p>
+                      <p className="truncate text-[10px] text-slate-400 font-mono">{item.displayName}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="text-[11px] text-muted-foreground">Evidence score (heuristic): {alert.confidence}% · {new Date(alert.captured_at).toLocaleDateString()} · Status: {alert.status}</span><div className="flex gap-2">{alert.status === "open" && <Button type="button" size="sm" variant="outline" onClick={() => void updateAlertStatus(alert, "acknowledged")}>Acknowledge</Button>}{alert.status !== "resolved" && <Button type="button" size="sm" variant="ghost" onClick={() => void updateAlertStatus(alert, "resolved")}>Resolve</Button>}</div></div>
-        </div>)}
-      </div>
-      <p className="text-[11px] text-muted-foreground">Alerts indicate unusual spectral change, not a confirmed disease diagnosis. Cloud percentage is scene-level, and the current monitor does not yet apply pixel-level cloud/shadow masking. Verify in the field before applying treatments.</p>
-    </section>
 
-    {fieldStats.ndvi && <section className="space-y-3 rounded-2xl border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="flex items-center gap-2 font-semibold"><Sprout className="h-5 w-5 text-emerald-600" /> Field spectral summary</h2><p className="text-xs text-muted-foreground">Computed from valid Sentinel-2 pixels within your drawn polygon</p></div><Badge variant="outline">{fieldArea.toFixed(2)} hectares (approx.)</Badge></div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Mean NDVI" value={ndviMean === null ? "—" : ndviMean.toFixed(3)} help={describeNdvi(ndviMean)} />
-        <Stat label="Mean NDMI" value={ndmiMean === null ? "—" : ndmiMean.toFixed(3)} help={describeNdmi(ndmiMean)} />
-        <Stat label="Mean NDWI" value={fieldStats.ndwi?.mean == null ? "—" : fieldStats.ndwi.mean.toFixed(3)} help="Relative open-water / surface-water signal" />
+          {/* ── REAL-TIME NAVIGATION / DIRECTIONS PANEL (Floating) ── */}
+          {navOpen && (
+            <div className="absolute left-4 top-16 z-[400] w-80 sm:w-96 rounded-xl border border-slate-700/80 bg-[#090f1f]/95 p-3.5 shadow-2xl backdrop-blur-md text-xs font-mono">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="flex items-center gap-1.5 font-bold text-sky-400">
+                  <Navigation className="h-4 w-4" />
+                  REAL-TIME NAVIGATION & DIRECTIONS
+                </span>
+                <button
+                  onClick={() => setNavOpen(false)}
+                  className="rounded p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Mode Selector */}
+              <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-md bg-slate-900/90 p-1 border border-slate-800">
+                {[
+                  { id: "freight", label: "Freight", icon: Truck },
+                  { id: "driving", label: "Auto", icon: Navigation },
+                  { id: "tractor", label: "Tractor", icon: Sprout },
+                  { id: "walking", label: "Walk", icon: Compass },
+                ].map((m) => {
+                  const Icon = m.icon;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setTravelMode(m.id as TravelMode)}
+                      className={`flex flex-col items-center gap-0.5 rounded py-1 text-[10px] transition ${
+                        travelMode === m.id
+                          ? "bg-sky-600 text-white font-bold"
+                          : "text-slate-400 hover:text-slate-200"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Origin & Destination inputs */}
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 font-bold text-white text-[10px]">
+                    A
+                  </span>
+                  <input
+                    type="text"
+                    value={navStartText}
+                    onChange={(e) => setNavStartText(e.target.value)}
+                    placeholder="Origin or click 'Set A' on map"
+                    className="h-8 flex-1 rounded border border-slate-800 bg-slate-900/90 px-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNavPickMode(navPickMode === "start" ? null : "start")}
+                    className={`rounded px-2 py-1 text-[10px] border ${
+                      navPickMode === "start"
+                        ? "border-amber-500 bg-amber-500/20 text-amber-300"
+                        : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {navPickMode === "start" ? "Click map…" : "Pick on map"}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-600 font-bold text-white text-[10px]">
+                    B
+                  </span>
+                  <input
+                    type="text"
+                    value={navEndText}
+                    onChange={(e) => setNavEndText(e.target.value)}
+                    placeholder="Destination or click 'Pick on map'"
+                    className="h-8 flex-1 rounded border border-slate-800 bg-slate-900/90 px-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNavPickMode(navPickMode === "end" ? null : "end")}
+                    className={`rounded px-2 py-1 text-[10px] border ${
+                      navPickMode === "end"
+                        ? "border-amber-500 bg-amber-500/20 text-amber-300"
+                        : "border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    {navPickMode === "end" ? "Click map…" : "Pick on map"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={handleCalculateRoute}
+                  disabled={routingLoading || !navStartPoint || !navEndPoint}
+                  className="flex-1 bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs h-8 gap-1"
+                >
+                  {routingLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Navigation className="h-3.5 w-3.5" />
+                  )}
+                  Calculate Live Route
+                </Button>
+                {routeData && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsSimulatingNav(!isSimulatingNav)}
+                    className="border-slate-700 bg-slate-900 text-xs font-mono text-emerald-400 hover:bg-slate-800 h-8 gap-1"
+                  >
+                    <Play className={`h-3.5 w-3.5 ${isSimulatingNav ? "text-amber-400 animate-pulse" : ""}`} />
+                    <span>{isSimulatingNav ? "Pause" : "Live Simulation"}</span>
+                  </Button>
+                )}
+              </div>
+
+              {/* Route Summary & Turn-by-Turn Steps */}
+              {routeData && (
+                <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950/70 p-2.5">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                    <div>
+                      <span className="text-base font-bold text-emerald-400 tabular-nums">
+                        {routeData.distanceKm} km
+                      </span>
+                      <span className="ml-2 text-slate-400">
+                        {Math.floor(routeData.durationMinutes / 60) > 0
+                          ? `${Math.floor(routeData.durationMinutes / 60)}h `
+                          : ""}
+                        {routeData.durationMinutes % 60}m
+                      </span>
+                    </div>
+                    {isSimulatingNav && (
+                      <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px]">
+                        {simulatedSpeedKmh} km/h
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Active Guidance Step during Simulation */}
+                  {routeData.steps[simStepIndex] && (
+                    <div className="mt-2 rounded bg-sky-950/40 border border-sky-800/40 p-2 text-sky-200 text-[11px] flex items-start gap-2">
+                      <Navigation className="h-4 w-4 shrink-0 text-sky-400 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-white">Next Maneuver:</div>
+                        <div>{routeData.steps[simStepIndex].instruction}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Steps Scroll Area */}
+                  <div className="mt-2 max-h-36 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                    {routeData.steps.slice(0, 8).map((step, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-start justify-between text-[10px] p-1 rounded ${
+                          idx === simStepIndex ? "bg-slate-800 text-amber-300 font-bold" : "text-slate-400"
+                        }`}
+                      >
+                        <span className="line-clamp-1">{idx + 1}. {step.instruction}</span>
+                        <span className="shrink-0 tabular-nums text-slate-500 ml-2">
+                          {(step.distanceMeters / 1000).toFixed(1)} km
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DRAWING MODE HUD BANNER ── */}
+          {drawing && (
+            <div className="absolute left-1/2 top-4 -translate-x-1/2 z-[400] flex items-center gap-3 rounded-lg border border-amber-500/80 bg-[#0c1427]/95 px-4 py-2 font-mono text-xs shadow-2xl backdrop-blur-md">
+              <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                <Ruler className="h-4 w-4" />
+                Click map to draw boundary ({fieldPoints.length} points &bull; {fieldArea.toFixed(2)} ha)
+              </span>
+              <Button
+                size="sm"
+                onClick={runFieldAnalysis}
+                disabled={fieldPoints.length < 3 || analysisLoading}
+                className="h-7 bg-amber-500 text-black hover:bg-amber-400 text-xs font-bold"
+              >
+                {analysisLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Analyse Sentinel Indices
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setFieldPoints([])}
+                className="h-7 text-xs text-slate-400 hover:text-white"
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+
+          {/* ── MAP ZOOM & COMPASS HUD CONTROLS (Floating Top Right) ── */}
+          <div className="absolute right-4 top-4 z-[400] flex flex-col gap-1.5">
+            <button
+              onClick={() => setMapZoom((z) => Math.min(19, z + 1))}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900/90 text-slate-200 hover:bg-slate-800 shadow"
+              title="Zoom In"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setMapZoom((z) => Math.max(2, z - 1))}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900/90 text-slate-200 hover:bg-slate-800 shadow"
+              title="Zoom Out"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                setMapCenter(activeBoard.center);
+                setMapZoom(activeBoard.zoom);
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900/90 text-sky-400 hover:bg-slate-800 shadow"
+              title="Reset Corridor View"
+            >
+              <Compass className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setTelemetryOpen(!telemetryOpen)}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900/90 text-amber-400 hover:bg-slate-800 shadow"
+              title="Toggle Telemetry Cards"
+            >
+              <Sliders className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* ── BOTTOM MAP LEGEND STRIP (Faithful to Screenshot) ── */}
+          <div className="absolute bottom-3 left-4 z-[400] hidden sm:flex items-center gap-4 rounded-md border border-slate-800/80 bg-[#09101f]/90 px-3 py-1.5 font-mono text-[10px] text-slate-400 backdrop-blur-md">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 border border-slate-400" />
+              stock &mdash; level
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full border border-sky-400" />
+              flow &mdash; rate
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-0.5 w-4 bg-sky-400" />
+              corridor &mdash; charted lane
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-0.5 w-3 border-b border-dashed border-slate-400" />
+              anchorage spur
+            </span>
+            <span className="flex items-center gap-1.5 text-amber-400">
+              <span>&#9733;</span>
+              selected
+            </span>
+          </div>
+
+          {/* ── RIGHT TELEMETRY HUD & TIME-SERIES CARDS (Floating over Map) ── */}
+          {telemetryOpen && (
+            <aside className="absolute right-4 bottom-4 top-16 z-[400] flex w-80 sm:w-96 flex-col gap-2.5 pointer-events-none">
+              {/* Primary Telemetry Card (Screenshot: Bab el-Mandeb gate) */}
+              <div className="pointer-events-auto rounded-xl border border-slate-700/80 bg-[#090f1e]/96 p-4 shadow-2xl backdrop-blur-md font-mono">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-100">{selectedStation.name}</h2>
+                    <p className="text-[10px] uppercase text-slate-400">{activeBoard.currentStatSub}</p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] uppercase font-mono ${
+                      selectedStation.deltaType === "up"
+                        ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                        : "border-rose-500/40 text-rose-400 bg-rose-500/10"
+                    }`}
+                  >
+                    {selectedStation.status}
+                  </Badge>
+                </div>
+
+                {/* Big Primary Metric */}
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-3xl font-extrabold text-amber-400 tabular-nums">
+                    {selectedStation.metricValue}
+                  </span>
+                  <span className="text-xs text-slate-400">{activeBoard.timeframeUnit}</span>
+                  <span
+                    className={`ml-auto text-xs font-bold ${
+                      selectedStation.deltaType === "up" ? "text-emerald-400" : "text-rose-400"
+                    }`}
+                  >
+                    {selectedStation.delta}
+                  </span>
+                </div>
+
+                {/* Time-Series Trend Chart (Observed vs Rolling Average with Reference Band) */}
+                <div className="mt-3 h-36 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="bandGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis
+                        dataKey="date"
+                        stroke="#475569"
+                        fontSize={9}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis stroke="#475569" fontSize={9} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#070d1a",
+                          borderColor: "#334155",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontFamily: "monospace",
+                        }}
+                      />
+                      {/* Confidence spread band */}
+                      <Area
+                        type="monotone"
+                        dataKey="upperBand"
+                        stroke="none"
+                        fill="url(#bandGrad)"
+                      />
+                      {/* Observed daily counts line */}
+                      <Line
+                        type="monotone"
+                        dataKey="observed"
+                        stroke="#f1f5f9"
+                        strokeWidth={1.5}
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#f59e0b" }}
+                      />
+                      {/* 7-day rolling average line */}
+                      <Line
+                        type="monotone"
+                        dataKey="average7d"
+                        stroke="#38bdf8"
+                        strokeWidth={1.5}
+                        strokeDasharray="3 3"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Time Range Selector & Legend */}
+                <div className="mt-2 flex items-center justify-between border-t border-slate-800/80 pt-2 text-[10px] text-slate-400">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-100" /> observed
+                    </span>
+                    <span className="flex items-center gap-1 text-sky-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400" /> average (7d)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {(["30d", "90d", "1y"] as const).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setChartRange(r)}
+                        className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                          chartRange === r
+                            ? "bg-amber-500 text-slate-950"
+                            : "bg-slate-900 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setFullBoardModal(true)}
+                  className="mt-3 w-full border-slate-800 bg-slate-900/60 text-xs font-mono text-slate-300 hover:bg-slate-800"
+                >
+                  FULL BOARD VIEW
+                </Button>
+              </div>
+
+              {/* Secondary Station Mini-Cards Grid (Screenshot Lower Right) */}
+              <div className="pointer-events-auto grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {activeBoard.stations.slice(0, 3).map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => handleSelectStation(st)}
+                    className={`rounded-lg border p-2 text-left font-mono transition backdrop-blur-md ${
+                      st.id === selectedStationId
+                        ? "border-amber-500 bg-[#0e172a]/95 text-white"
+                        : "border-slate-800/90 bg-[#090f1d]/90 text-slate-300 hover:border-slate-700"
+                    }`}
+                  >
+                    <p className="truncate text-[10px] font-bold text-slate-200">{st.name}</p>
+                    <div className="mt-1 flex items-baseline justify-between text-[11px]">
+                      <span className="font-bold text-amber-400">{st.metricValue}</span>
+                      <span className={`text-[9px] ${st.deltaType === "up" ? "text-emerald-400" : "text-rose-400"}`}>
+                        {st.delta}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[9px] text-slate-500">{st.sensor}</p>
+                  </button>
+                ))}
+              </div>
+
+              {/* Field Spectral Stats summary if analysis was run */}
+              {fieldStats.ndvi && (
+                <div className="pointer-events-auto rounded-xl border border-emerald-500/40 bg-[#09151e]/96 p-3 shadow-2xl backdrop-blur-md font-mono text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-400 flex items-center gap-1">
+                      <Sprout className="h-3.5 w-3.5" />
+                      FIELD SPECTRAL INDICES
+                    </span>
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-300">
+                      {fieldArea.toFixed(2)} ha
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+                    <div className="rounded bg-slate-900/60 p-1 border border-slate-800">
+                      <div className="text-[10px] text-slate-400">NDVI</div>
+                      <div className="text-sm font-bold text-emerald-400">{fieldStats.ndvi.mean?.toFixed(3) ?? "—"}</div>
+                    </div>
+                    <div className="rounded bg-slate-900/60 p-1 border border-slate-800">
+                      <div className="text-[10px] text-slate-400">NDMI</div>
+                      <div className="text-sm font-bold text-sky-400">{fieldStats.ndmi?.mean?.toFixed(3) ?? "—"}</div>
+                    </div>
+                    <div className="rounded bg-slate-900/60 p-1 border border-slate-800">
+                      <div className="text-[10px] text-slate-400">NDWI</div>
+                      <div className="text-sm font-bold text-cyan-400">{fieldStats.ndwi?.mean?.toFixed(3) ?? "—"}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </aside>
+          )}
+        </main>
       </div>
-      <div className="rounded-lg bg-muted/40 p-3">
-        <h3 className="text-sm font-semibold">How to interpret this field</h3>
-        <p className="mt-1 text-sm">{fieldInterpretation.combinedSignal}</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-3 text-xs">
-          <div><p className="font-semibold">Vegetation (NDVI)</p><p className="mt-1 text-muted-foreground">{fieldInterpretation.vegetation}</p></div>
-          <div><p className="font-semibold">Canopy moisture (NDMI)</p><p className="mt-1 text-muted-foreground">{fieldInterpretation.canopyMoisture}</p></div>
-          <div><p className="font-semibold">Surface water (NDWI)</p><p className="mt-1 text-muted-foreground">{fieldInterpretation.surfaceWater}</p></div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          FULL BOARD VIEW MATRIX MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {fullBoardModal && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative max-h-[85vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-700 bg-[#0a1122] shadow-2xl font-mono text-xs">
+            <div className="flex items-center justify-between border-b border-slate-800 p-4">
+              <div>
+                <h3 className="text-base font-bold text-amber-400">{activeBoard.title}</h3>
+                <p className="text-xs text-slate-400">Comprehensive station registry and live observations</p>
+              </div>
+              <button
+                onClick={() => setFullBoardModal(false)}
+                className="rounded-lg border border-slate-800 p-1.5 text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto p-4 space-y-4">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase">
+                    <th className="py-2">Station / Node</th>
+                    <th className="py-2">Measurement</th>
+                    <th className="py-2">Delta</th>
+                    <th className="py-2">Sensor</th>
+                    <th className="py-2">Observed</th>
+                    <th className="py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {activeBoard.stations.map((st) => (
+                    <tr
+                      key={st.id}
+                      onClick={() => {
+                        handleSelectStation(st);
+                        setFullBoardModal(false);
+                      }}
+                      className="cursor-pointer hover:bg-slate-800/50 transition"
+                    >
+                      <td className="py-2.5 font-bold text-slate-200">
+                        {st.name}
+                        <div className="text-[10px] text-slate-500 font-normal">{st.subLabel}</div>
+                      </td>
+                      <td className="py-2.5 font-bold text-amber-400">{st.metricLabel}</td>
+                      <td
+                        className={`py-2.5 font-bold ${
+                          st.deltaType === "up" ? "text-emerald-400" : "text-rose-400"
+                        }`}
+                      >
+                        {st.delta}
+                      </td>
+                      <td className="py-2.5 text-sky-400">{st.sensor}</td>
+                      <td className="py-2.5 text-slate-400">{st.sensorDate}</td>
+                      <td className="py-2.5">
+                        <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] uppercase text-slate-300">
+                          {st.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-800 p-3 bg-slate-950/80 text-[11px] text-slate-400">
+              <span>Feed timestamp: 2026-07-31 &bull; Settlement: daily confirmed passes</span>
+              <Button size="sm" onClick={() => setFullBoardModal(false)} className="bg-amber-500 text-black">
+                Close
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div><p className="text-xs font-semibold">Possible explanations to consider</p><ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-muted-foreground">{fieldInterpretation.possibleExplanations.map((item) => <li key={item}>{item}</li>)}</ul></div>
-          <div><p className="text-xs font-semibold">What to do next</p><ol className="mt-1 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">{fieldInterpretation.fieldChecks.map((item) => <li key={item}>{item}</li>)}</ol></div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          SATELLITE ALERTS DRAWER
+      ───────────────────────────────────────────────────────────── */}
+      {alertsDrawerOpen && (
+        <div className="fixed inset-0 z-[600] flex justify-end bg-black/70 backdrop-blur-sm">
+          <div className="relative h-full w-full max-w-md border-l border-slate-800 bg-[#090f1e] p-4 font-mono shadow-2xl overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <span className="flex items-center gap-2 font-bold text-amber-400 text-sm">
+                <Bell className="h-4 w-4" />
+                SATELLITE FIELD ALERTS ({savedAlerts.length})
+              </span>
+              <button
+                onClick={() => setAlertsDrawerOpen(false)}
+                className="rounded p-1 text-slate-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {savedAlerts.length === 0 ? (
+                <p className="text-xs text-slate-400 py-6 text-center">
+                  No automated crop alerts recorded yet. Monitor a field boundary to establish an NDVI historical baseline.
+                </p>
+              ) : (
+                savedAlerts.map((alert) => (
+                  <div key={alert.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-200">{alert.title}</span>
+                      <Badge
+                        variant={alert.severity === "high" ? "destructive" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {alert.severity}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-slate-300 text-[11px] leading-relaxed">{alert.message}</p>
+                    <div className="mt-2 text-[10px] text-slate-500">
+                      Date: {new Date(alert.captured_at).toLocaleDateString()} &bull; Status: {alert.status}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-      <p className="text-xs text-muted-foreground">Index ranges are broad explanatory guides, not universal crop-health thresholds. Interpret them using this field’s previous observations, crop type, planting date and growth stage. NDMI does not directly measure soil moisture; NDWI is a surface-water signal, not a crop-water diagnosis.</p>
-    </section>}
-
-    {sample && <section className="rounded-xl border bg-card p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Pixel inspection</h2>{sampleLoading && <Loader2 className="h-4 w-4 animate-spin" />}</div><p className="text-xs text-muted-foreground">{sample.point.lat.toFixed(5)}, {sample.point.lon.toFixed(5)} · Selected Sentinel scene</p><div className="mt-3 grid grid-cols-3 gap-2"><Stat label="NDVI" value={sample.values.ndvi == null ? "—" : sample.values.ndvi.toFixed(3)} /><Stat label="NDMI" value={sample.values.ndmi == null ? "—" : sample.values.ndmi.toFixed(3)} /><Stat label="NDWI" value={sample.values.ndwi == null ? "—" : sample.values.ndwi.toFixed(3)} /></div></section>}
-
-    <div className="grid gap-3 md:grid-cols-2">
-      <div className="rounded-xl border bg-card p-4"><h2 className="mb-2 flex items-center gap-2 font-semibold"><Activity className="h-4 w-4 text-emerald-600" /> Understanding satellite results</h2><ul className="space-y-2 text-sm text-muted-foreground"><li><strong className="text-foreground">NDVI:</strong> estimates vegetation greenness. Falling values over time can flag change, but planting, crop maturity and harvest also change NDVI.</li><li><strong className="text-foreground">NDMI:</strong> responds to canopy water content. A fall alongside NDVI can strengthen a possible water-stress signal, but it does not measure soil moisture.</li><li><strong className="text-foreground">NDWI:</strong> highlights open water or wet surfaces. It may help identify inundation, but is not a direct crop-health measure.</li></ul><p className="mt-3 text-xs text-muted-foreground">Start with the question: “What changed compared with this same field before?” Then check the field itself. Do not use one index or one image alone to decide to spray, fertilise or irrigate.</p></div>
-      <div className="rounded-xl border bg-card p-4"><h2 className="mb-2 flex items-center gap-2 font-semibold"><Droplets className="h-4 w-4 text-sky-600" /> Data quality and limitations</h2><p className="text-sm text-muted-foreground">Sentinel-2 scenes are archived observations, not live imagery. The catalogue cloud percentage describes the whole scene, not necessarily your field. Clouds, haze, shadows, mixed pixels, terrain and acquisition dates can affect results. Compare multiple clear observations and ground-truth before making irrigation, fertilizer or crop-protection decisions.</p><p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><Waves className="h-3.5 w-3.5" /> Sentinel-2 visible/NIR bands: 10 m; SWIR: 20 m. MODIS fallback is much coarser.</p></div>
+      )}
     </div>
-    <p className="text-center text-[11px] text-muted-foreground">Sentinel-2 data: AWS Open Data / Element 84 Earth Search · Raster tiles and statistics: public TiTiler endpoint · Regional fallback: NASA GIBS · Map: Leaflet · Geocoding: OpenStreetMap Nominatim. Public endpoints are free to access but may impose fair-use limits or temporary availability restrictions.</p>
-  </div>;
+  );
 }
