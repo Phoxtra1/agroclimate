@@ -36,8 +36,8 @@ create table if not exists public.geo_features (
   description text,
   visibility text not null default 'private' check (visibility in ('private','public')),
   geojson jsonb not null,
-  geom geometry(Geometry, 4326),
-  centroid geometry(Point, 4326),
+  geom extensions.geometry(Geometry, 4326),
+  centroid extensions.geometry(Point, 4326),
   properties jsonb not null default '{}'::jsonb,
   source_name text,
   source_url text,
@@ -103,7 +103,7 @@ create table if not exists public.geo_routes (
   origin jsonb not null,
   destination jsonb not null,
   geometry jsonb not null,
-  geom geometry(LineString, 4326),
+  geom extensions.geometry(LineString, 4326),
   distance_m numeric,
   duration_s numeric,
   provider text,
@@ -199,13 +199,13 @@ create table if not exists public.vessel_locations (
   user_id uuid references auth.users(id) on delete set null,
   lat double precision not null check (lat between -90 and 90),
   lon double precision not null check (lon between -180 and 180),
-  geom geometry(Point, 4326),
+  geom extensions.geometry(Point, 4326),
   speed_kn numeric,
   heading numeric,
   risk_level text,
   created_at timestamptz not null default now()
 );
-alter table public.vessel_locations add column if not exists geom geometry(Point, 4326);
+alter table public.vessel_locations add column if not exists geom extensions.geometry(Point, 4326);
 create index if not exists vessel_locations_vessel_idx on public.vessel_locations (vessel_id, created_at desc);
 create index if not exists vessel_locations_geom_gix on public.vessel_locations using gist (geom);
 
@@ -406,7 +406,7 @@ create policy nav_routes_owner on public.nav_routes for all to authenticated
 using (user_id = auth.uid() or public.is_agroclimate_admin())
 with check (user_id = auth.uid() or public.is_agroclimate_admin());
 
-drop policy responders_read on public.external_responders;
+drop policy if exists responders_read on public.external_responders;
 create policy responders_read on public.external_responders for select to authenticated
 using (active = true or public.is_agroclimate_admin());
 drop policy if exists responders_admin_write on public.external_responders;
@@ -465,6 +465,25 @@ with check (
       and (e.vessel_id in (from_vessel_id, to_vessel_id) or e.accepted_by_vessel_id in (from_vessel_id, to_vessel_id))
   )
 );
+
+-- Explicit grants complement row-level security. No operational vessel,
+-- location, emergency or private route data is available to anon.
+revoke all on public.geo_features, public.geo_observations, public.geo_routes,
+  public.geo_data_sources, public.vessels, public.vessel_locations, public.farms,
+  public.nav_routes, public.external_responders, public.sos_events, public.vessel_messages
+from anon;
+
+grant select, insert, update, delete on public.geo_features to authenticated;
+grant select, insert on public.geo_observations to authenticated;
+grant select, insert, update, delete on public.geo_routes to authenticated;
+grant select, insert, update, delete on public.geo_data_sources to authenticated;
+grant select, insert, update, delete on public.vessels to authenticated;
+grant select, insert on public.vessel_locations to authenticated;
+grant select, insert, update, delete on public.farms to authenticated;
+grant select, insert, update, delete on public.nav_routes to authenticated;
+grant select, insert, update, delete on public.external_responders to authenticated;
+grant select, insert, update, delete on public.sos_events to authenticated;
+grant select, insert, update, delete on public.vessel_messages to authenticated;
 
 -- Enable realtime for live operational layers without making data public.
 do $$
