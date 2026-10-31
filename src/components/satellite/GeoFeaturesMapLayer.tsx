@@ -33,7 +33,7 @@ function FeaturePopup({ feature }: { feature: GeoFeatureRecord }) {
   return (
     <div className="min-w-44 space-y-1 text-xs">
       <div className="font-semibold">{feature.name}</div>
-      <div className="capitalize">{feature.feature_type.replaceAll("_", " ")}</div>
+      <div className="capitalize">{feature.feature_type.replace(/_/g, " ")}</div>
       <div>Record quality: {feature.data_quality}</div>
       <div>Visibility: {feature.visibility}</div>
       {feature.source_name && <div>Source: {feature.source_name}</div>}
@@ -92,7 +92,7 @@ export function GeoFeaturesMapLayer({ onSelect }: Props) {
         return (
           <GeoJSON
             key={feature.id}
-            data={{ type: "Feature", properties: { id: feature.id, feature_type: feature.feature_type }, geometry }}
+            data={geometry}
             style={() => ({ color, weight: 2, opacity: 0.9, fillColor: color, fillOpacity: 0.16 })}
             eventHandlers={{
               click: (event: LeafletMouseEvent) => {
