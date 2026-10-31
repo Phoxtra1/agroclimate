@@ -84,21 +84,7 @@ function useUserRole() {
   useEffect(() => {
     let active = true;
     let timedOut = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-
-    if (authLoading) return;
-    if (!user) {
-      setRole(null);
-      setRoleLoading(false);
-      return;
-    }
-    if (role) {
-      setRoleLoading(false);
-      return;
-    }
-
-    setRoleLoading(true);
-    timeout = setTimeout(() => {
+    const timeout: ReturnType<typeof setTimeout> = setTimeout(() => {
       timedOut = true;
       if (active) {
         console.warn("Role lookup timed out; continuing with the standard user role.");
