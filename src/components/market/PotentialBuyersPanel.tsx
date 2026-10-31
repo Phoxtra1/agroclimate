@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Search, CheckCircle, XCircle, Send, Globe, Mail, Building2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
 interface BuyerRow {
   id: string;
@@ -151,7 +152,14 @@ export function PotentialBuyersPanel() {
                 <span className="font-bold text-primary">{b.relevance_score}/100</span>
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <OpenInSatelliteButton
+                  query={`${b.region ? `${b.region}, ` : ""}${b.country}`}
+                  label={`Buyer regional listing · ${b.company_name}`}
+                  zoom={9}
+                >
+                  Map broad region
+                </OpenInSatelliteButton>
                 <Button
                   size="sm"
                   variant="outline"
