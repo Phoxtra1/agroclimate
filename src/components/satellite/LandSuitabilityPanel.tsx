@@ -16,8 +16,9 @@ interface Props {
 }
 
 function fitLabel(value: string) {
-  if (value === "within_reference_envelope") return "Within broad reference";
-  if (value === "outside_reference_envelope") return "Outside broad reference";
+  if (value === "within_optimal_range") return "Within FAO EcoCrop optimal interval";
+  if (value === "within_absolute_range_only") return "Within absolute interval only";
+  if (value === "outside_absolute_range") return "Outside absolute interval";
   return "Insufficient data";
 }
 
@@ -145,8 +146,17 @@ export function LandSuitabilityPanel({ point, pointLabel, fieldGeometry, fieldAr
               <Badge variant="outline" className="border-amber-600/50 text-[9px] text-amber-300">{fitLabel(selectedCrop?.climateScreen ?? "unknown")}</Badge>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <div><span className="text-slate-500">Temperature</span><div className="text-slate-200">{fitLabel(selectedCrop?.temperatureFit ?? "unknown")}</div></div>
-              <div><span className="text-slate-500">Rainfall</span><div className="text-slate-200">{fitLabel(selectedCrop?.rainfallFit ?? "unknown")}</div></div>
+              <div><span className="text-slate-500">Annual mean temperature</span><div className="text-slate-200">{fitLabel(selectedCrop?.temperatureFit ?? "unknown")}</div></div>
+              <div><span className="text-slate-500">Estimated annual rainfall</span><div className="text-slate-200">{fitLabel(selectedCrop?.rainfallFit ?? "unknown")}</div></div>
+            </div>
+            <div className="rounded bg-slate-950/70 p-2 text-[10px] space-y-1">
+              <div className="font-semibold text-slate-200">{selectedCrop?.reference.scientificName} · FAO EcoCrop #{selectedCrop?.reference.ecoCropId}</div>
+              <div className="text-slate-400">Optimal temperature: {selectedCrop?.reference.optimalTemperatureC.join("–")}°C · absolute: {selectedCrop?.reference.absoluteTemperatureC.join("–")}°C</div>
+              <div className="text-slate-400">Optimal rainfall: {selectedCrop?.reference.optimalAnnualRainfallMm.join("–")} mm/year · absolute: {selectedCrop?.reference.absoluteAnnualRainfallMm.join("–")} mm/year</div>
+              <div className="text-slate-400">Soil depth: {selectedCrop?.reference.soilDepth} · Texture: {selectedCrop?.reference.soilTexture} · Fertility: {selectedCrop?.reference.soilFertility}</div>
+              <div className="text-slate-400">Soil pH: {selectedCrop?.reference.soilPhOptimal ? selectedCrop.reference.soilPhOptimal.join("–") : "not stated"} optimal; {selectedCrop?.reference.soilPhAbsolute ? selectedCrop.reference.soilPhAbsolute.join("–") : "not stated"} absolute</div>
+              <div className="text-slate-400">Drainage: {selectedCrop?.reference.drainage}</div>
+              {selectedCrop?.reference.sourceUrl && <a href={selectedCrop.reference.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-sky-300 underline">Open FAO EcoCrop source record</a>}
             </div>
             <p className="text-[10px] leading-relaxed text-slate-400">{selectedCrop?.explanation}</p>
             <p className="text-[9px] leading-relaxed text-slate-500">{selectedCrop?.reference.notes}</p>
