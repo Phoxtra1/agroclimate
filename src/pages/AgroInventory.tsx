@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgriCostCalculator } from "@/components/inventory/AgriCostCalculator";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
 // ─── Comprehensive timezone → currency map ───
 const USER_TZ = typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
@@ -334,12 +335,17 @@ export default function AgroInventory() {
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">📦 Agro Inventory</h1>
           <p className="text-sm text-muted-foreground">Comprehensive farm input, labor, harvest, loss &amp; sales tracking</p>
           <Badge variant="outline" className="mt-1 text-[10px]">Currency: {selectedCurrency.symbol} {selectedCurrency.code}</Badge>
         </div>
+        {filterPlot && (
+          <OpenInSatelliteButton query={filterPlot} label={`Inventory farm plot reference · ${filterPlot}`} zoom={15}>
+            Map selected plot
+          </OpenInSatelliteButton>
+        )}
       </div>
 
       {/* ─── Filter Bar ─── */}
