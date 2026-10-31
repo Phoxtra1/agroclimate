@@ -179,7 +179,8 @@ serve(async (req) => {
       const { data: event } = await adminClient.from("sos_events").select("*").eq("id", eventId).maybeSingle();
       if (!event) return json({ error: "Emergency event not found" }, 404);
       const { data: vessel } = await adminClient.from("vessels").select("id,owner_id").eq("owner_id", user.id).in("id", [event.vessel_id, event.accepted_by_vessel_id].filter(Boolean)).maybeSingle();
-      if (!vessel && !(await adminClient.rpc("is_agroclimate_admin")).data) return json({ error: "Only the reporting or accepting vessel can resolve this emergency" }, 403);
+      const { data: adminRole } = await adminClient.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
+      if (!vessel && !adminRole) return json({ error: "Only the reporting or accepting vessel can resolve this emergency" }, 403);
       const { data: resolved, error } = await adminClient.from("sos_events").update({
         status: "RESOLVED", resolved_at: new Date().toISOString(),
       }).eq("id", eventId).neq("status", "RESOLVED").select("id,status,resolved_at").maybeSingle();
