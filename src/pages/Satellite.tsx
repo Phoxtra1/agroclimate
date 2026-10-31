@@ -484,8 +484,8 @@ export default function Satellite() {
       setSimulatedVehiclePos(null);
       try {
         await cacheNavigationRoute({
-          origin: { ...navStartPoint, label: route.startAddress },
-          destination: { ...navEndPoint, label: route.endAddress },
+          origin: navStartPoint,
+          destination: navEndPoint,
           mode: travelMode,
           route,
           provider: "OSRM public demo routing service",
@@ -496,8 +496,8 @@ export default function Satellite() {
       try {
         await saveSharedRoadRoute({
           routeType,
-          origin: { ...navStartPoint, label: route.startAddress },
-          destination: { ...navEndPoint, label: route.endAddress },
+          origin: navStartPoint,
+          destination: navEndPoint,
           geometry: route.geometry,
           distanceM: route.distanceKm * 1000,
           durationS: route.durationMinutes * 60,
