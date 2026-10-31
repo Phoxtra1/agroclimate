@@ -202,8 +202,31 @@ export default function Satellite() {
   const [mapCenter, setMapCenter] = useState<[number, number]>(activeBoard.center);
   const [mapZoom, setMapZoom] = useState<number>(activeBoard.zoom);
 
+  // Resolve location hand-offs from AG Trans, Post-Harvest Tracker and Flight Advisory.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get("q") || params.get("query");
+    const latValue = params.get("lat");
+    const lonValue = params.get("lon");
+    if (query?.trim()) setSearchQuery(query.trim());
+    if (latValue !== null && lonValue !== null) {
+      const lat = Number(latValue);
+      const lon = Number(lonValue);
+      if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        const label = params.get("label") || `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+        const requestedZoom = Number(params.get("zoom") || 15);
+        setMapCenter([lat, lon]);
+        setMapZoom(Number.isFinite(requestedZoom) ? Math.max(2, Math.min(22, requestedZoom)) : 15);
+        setCurrentLocation({ lat, lon, label });
+      }
+    }
+  }, []);
+
   // Google Earth Place Search state
   const [searchQuery, setSearchQuery] = useState("");
+  const [dipaQuestion, setDipaQuestion] = useState("");
+  const [dipaAnswer, setDipaAnswer] = useState("");
+  const [dipaLoading, setDipaLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -312,6 +335,49 @@ export default function Satellite() {
     toast.success(`Flying to ${result.name}`, {
       description: `${result.lat.toFixed(4)}, ${result.lon.toFixed(4)}`,
     });
+  };
+
+  const handleAskDipa = async (event: FormEvent) => {
+    event.preventDefault();
+    const question = dipaQuestion.trim();
+    if (!question || dipaLoading) return;
+    setDipaLoading(true);
+    setDipaAnswer("");
+    try {
+      const { data, error } = await supabase.functions.invoke("dipa-intelligence", {
+        body: {
+          action: "summary",
+          payload: {
+            topic: "Satellite geospatial and agricultural assessment",
+            audience: "farmer, field officer or agricultural logistics operator",
+            data: {
+              question,
+              selectedLocation: currentLocation,
+              mapCenter: { lat: mapCenter[0], lon: mapCenter[1] },
+              selectedImageryProvider: basemap,
+              selectedObservationDate: selectedScene?.acquiredAt || null,
+              selectedSceneCloudCover: selectedScene?.cloudCover ?? null,
+              selectedFieldAreaHectares: fieldArea || null,
+              fieldSpectralStatistics: fieldStats,
+              dataLimitations: [
+                "Use only the supplied observations and context.",
+                "Do not infer soil laboratory results, land ownership, crop identity or live conditions from coordinates alone.",
+                "State when evidence is missing, old, coarse-resolution or uncertain.",
+              ],
+            },
+          },
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setDipaAnswer(typeof data?.text === "string" ? data.text : "Dipa did not return an assessment. Please try again.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Dipa could not complete this assessment.";
+      setDipaAnswer(message);
+      toast.error("Dipa analysis unavailable", { description: message });
+    } finally {
+      setDipaLoading(false);
+    }
   };
 
   // Locate User
@@ -677,20 +743,9 @@ export default function Satellite() {
 
         {/* Right: Feed Status, Full Board, and Tools */}
         <div className="flex items-center gap-3">
-          <div className="hidden lg:flex items-center gap-2 font-mono text-[11px] text-slate-400">
-            <span className="flex items-center gap-1 text-sky-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
-              query
-            </span>
-            <span>&bull;</span>
-            <span className="flex items-center gap-1 text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              active
-            </span>
-            <span className="text-slate-500">9.4x</span>
-            <span className="rounded bg-slate-800/80 px-1.5 py-0.5 text-slate-300">
-              FEED 2026-07-31
-            </span>
+          <div className="hidden lg:flex items-center gap-2 font-mono text-[10px] text-amber-300">
+            <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1">STRATEGIC REFERENCE BOARD</span>
+            <span className="text-slate-400">Illustrative board values are not verified live telemetry.</span>
           </div>
 
           <Button
@@ -792,6 +847,8 @@ export default function Satellite() {
               <p className="mt-1 text-slate-300">{activeBoard.regionalRead}</p>
             </div>
 
+            <p className="mt-2 text-[10px] leading-relaxed text-amber-300/80">Strategic-board metrics are reference values, not verified live telemetry. Field observations display their own source and acquisition dates.</p>
+
             {/* Badges */}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {activeBoard.statusBadges.map((badge, idx) => (
@@ -805,10 +862,23 @@ export default function Satellite() {
             </div>
           </div>
 
+          <div className="border-b border-slate-800/80 p-3">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-sky-300"><Sparkles className="h-4 w-4" /> DIPA SATELLITE INTELLIGENCE</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-400">Ask about the selected location or field. Dipa receives available coordinates, imagery date and measured field indices, and must identify missing evidence.</p>
+            <form onSubmit={(event) => void handleAskDipa(event)} className="mt-2 space-y-2">
+              <Input value={dipaQuestion} onChange={(event) => setDipaQuestion(event.target.value)} placeholder="Ask Dipa about this location…" className="h-9 border-slate-700 bg-slate-900 text-xs text-slate-100 placeholder:text-slate-500" disabled={dipaLoading} />
+              <Button type="submit" size="sm" disabled={!dipaQuestion.trim() || dipaLoading} className="w-full h-8 bg-sky-700 hover:bg-sky-600 text-xs">
+                {dipaLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-2 h-3.5 w-3.5" />}
+                {dipaLoading ? "Analyzing…" : "Ask Dipa"}
+              </Button>
+            </form>
+            {dipaAnswer && <div className="mt-2 rounded-md border border-sky-900/70 bg-sky-950/30 p-2.5 text-[11px] leading-relaxed text-slate-200 whitespace-pre-wrap">{dipaAnswer}</div>}
+          </div>
+
           {/* Monitored Corridors & Boards List */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
             <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400">
-              Active Corridors ({filteredBoards.length})
+              Strategic Reference Boards ({filteredBoards.length})
             </div>
             {filteredBoards.map((board) => {
               const isSelected = board.id === selectedBoardId;
@@ -862,6 +932,7 @@ export default function Satellite() {
           <MapContainer
             center={mapCenter}
             zoom={mapZoom}
+            maxZoom={22}
             scrollWheelZoom
             preferCanvas
             zoomControl={false}
@@ -872,7 +943,8 @@ export default function Satellite() {
               key={basemap}
               url={BASEMAP_TILES[basemap].url}
               attribution={BASEMAP_TILES[basemap].attribution}
-              maxZoom={BASEMAP_TILES[basemap].maxZoom}
+              maxZoom={22}
+              maxNativeZoom={BASEMAP_TILES[basemap].maxZoom}
               updateWhenIdle
               keepBuffer={3}
             />
