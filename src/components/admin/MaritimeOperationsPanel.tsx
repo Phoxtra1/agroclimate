@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Anchor, MapPinned, Phone, Radio, RefreshCw, ShieldAlert, Ship, Users } from "lucide-react";
+import { Anchor, LifeBuoy, Phone, Radio, RefreshCw, ShieldAlert, Ship, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
