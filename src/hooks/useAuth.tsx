@@ -106,13 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return;
   }
 
-  // Track sign-in activity for admin analytics
+  // Track sign-in activity after the Supabase auth callback releases its lock.
   if (event === "SIGNED_IN" && currentSession?.user?.id) {
-    void supabase.from("activity" as any).insert({
-      user_id: currentSession.user.id,
-      action: "login",
-      metadata: { at: new Date().toISOString() },
-    }).then(() => {}, () => {});
+    const signedInUserId = currentSession.user.id;
+    window.setTimeout(() => {
+      void supabase.from("activity" as any).insert({
+        user_id: signedInUserId,
+        action: "login",
+        metadata: { at: new Date().toISOString() },
+      }).then(() => {}, () => {});
+    }, 0);
   }
 
   updateAuthState(currentSession ?? null);
