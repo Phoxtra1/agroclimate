@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { getActiveProvider } from "@/lib/aiProviders/registry";
 import { AIAgroRiskAssessment, AIEnvironmentalAssessment, RiskLevel } from "@/lib/aiProviders/index";
 import { calculateAgroRiskLocal, LocalAgroRiskResult } from "@/lib/riskEngine";
-import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/pages/admin/AGNavEngine";
+import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/services/satellite/geospatial";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -1010,6 +1011,11 @@ export default function EnvironmentalMonitor() {
           <p className="text-sm text-muted-foreground">{locationLabel}</p>
         </div>
         <div className="flex items-center gap-3">
+          {clickPoint && (
+            <OpenInSatelliteButton lat={clickPoint[0]} lon={clickPoint[1]} label={clickLocationName || "AgroRisk selected location"} zoom={16}>
+              Open selected risk location in Satellite
+            </OpenInSatelliteButton>
+          )}
           {/* Tabs switch */}
           <div className="bg-muted p-1 rounded-lg flex items-center border border-border">
             <button
