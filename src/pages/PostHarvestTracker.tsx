@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePostHarvest, computeRisk, uploadHarvestPhoto, type HarvestEntry, type RiskLevel } from "@/hooks/usePostHarvest";
 import { queueHarvest, getPendingCount, syncPendingHarvests, installOfflineSync } from "@/lib/offlineQueue";
 import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
@@ -329,6 +330,7 @@ export default function PostHarvestTracker() {
   }, []);
 
   const dangerCount = entries.filter((e) => computeRisk(e).level === "danger").length;
+  const latestMappedStorage = entries.find((entry) => entry.storage_location?.trim())?.storage_location;
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this harvest entry?")) return;
@@ -348,9 +350,12 @@ export default function PostHarvestTracker() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Sprout className="h-6 w-6 text-primary" /> Post-Harvest Tracker</h1>
-        <p className="text-sm text-muted-foreground">Track stored crops, monitor spoilage risk and get AI guidance.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Sprout className="h-6 w-6 text-primary" /> Post-Harvest Tracker</h1>
+          <p className="text-sm text-muted-foreground">Track stored crops, monitor spoilage risk and get AI guidance.</p>
+        </div>
+        {latestMappedStorage && <OpenInSatelliteButton query={latestMappedStorage} label="Post-harvest storage location" zoom={16}>View storage location</OpenInSatelliteButton>}
       </div>
 
       {(pending > 0 || !online) && (
