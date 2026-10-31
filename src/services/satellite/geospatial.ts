@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { GeoPoint } from "@/services/satellite/navigation";
 
 export type GeoFeatureType =
-  | "farm_boundary" | "warehouse" | "silo" | "cold_store" | "collection_centre"
+  | "farm_boundary" | "farm_location" | "warehouse" | "silo" | "cold_store" | "collection_centre"
   | "processing_facility" | "buyer" | "supplier" | "port" | "pickup_point"
   | "delivery_point" | "drone_observation" | "water_source" | "road_hazard" | "other";
 
@@ -173,14 +173,37 @@ export async function saveFarm(input: {
     throw new Error("You can only save a farm location under your own account.");
   }
   const point = toPointGeometry(input.location);
-  const { data, error } = await (supabase.from("farms" as any) as any).insert({
+  const { data: farm, error: farmError } = await (supabase.from("farms" as any) as any).insert({
     user_id: userData.user.id,
     name: input.name.trim(),
     lat: point.coordinates[1],
     lon: point.coordinates[0],
   }).select("*").single();
-  if (error) throw new Error(error.message || "Could not save farm location.");
-  return data;
+  if (farmError) throw new Error(farmError.message || "Could not save farm location.");
+
+  const { data: feature, error: featureError } = await (supabase.from("geo_features" as any) as any).insert({
+    owner_id: userData.user.id,
+    feature_type: "farm_location",
+    name: input.name.trim(),
+    visibility: "private",
+    geojson: point,
+    properties: { farm_record_id: String(farm.id), location_method: "user_supplied" },
+    source_name: "AgroClimate AgroRisk farm registration",
+    data_quality: "unverified",
+  }).select("id").single();
+  if (featureError || !feature) {
+    await (supabase.from("farms" as any) as any).delete().eq("id", farm.id);
+    throw new Error(featureError?.message || "Farm location was saved but could not be linked to the shared Satellite map.");
+  }
+
+  const { data: linkedFarm, error: linkError } = await (supabase.from("farms" as any) as any)
+    .update({ geo_feature_id: feature.id }).eq("id", farm.id).select("*").single();
+  if (linkError) {
+    await (supabase.from("geo_features" as any) as any).delete().eq("id", feature.id);
+    await (supabase.from("farms" as any) as any).delete().eq("id", farm.id);
+    throw new Error(linkError.message || "Could not link the farm to the shared Satellite map.");
+  }
+  return linkedFarm;
 }
 
 export async function listFarms(userId?: string) {
