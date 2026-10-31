@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 const Landing = lazy(() => import("./pages/Landing"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
@@ -27,7 +28,7 @@ const HandlerManagement = lazy(() => import("./pages/HandlerManagement"));
 const HandlerWorkspace = lazy(() => import("./pages/HandlerWorkspace"));
 const PostHarvestTracker = lazy(() => import("./pages/PostHarvestTracker"));
 const MarketLink = lazy(() => import("./pages/MarketLink"));
-const AGNav = lazy(() => import("./pages/AGNav"));
+
 const MarketplaceHome = lazy(() => import("./pages/marketplace/MarketplaceHome"));
 const MarketplaceSupplyPage = lazy(() => import("./pages/marketplace/MarketplaceSupplyPage"));
 const MarketplaceOrderForm = lazy(() => import("./pages/marketplace/MarketplaceOrderForm"));
@@ -81,17 +82,32 @@ function useUserRole() {
   const location = useLocation();
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) { setRole(null); setRoleLoading(false); return; }
+    let active = true;
+    let timedOut = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
 
-    // Optimization: If role is already resolved, skip recheck on path change
+    if (authLoading) return;
+    if (!user) {
+      setRole(null);
+      setRoleLoading(false);
+      return;
+    }
     if (role) {
       setRoleLoading(false);
       return;
     }
 
-    const checkRole = async () => {
-      setRoleLoading(true);
+    setRoleLoading(true);
+    timeout = setTimeout(() => {
+      timedOut = true;
+      if (active) {
+        console.warn("Role lookup timed out; continuing with the standard user role.");
+        setRole("user");
+        setRoleLoading(false);
+      }
+    }, 8000);
+
+    const resolveRole = async () => {
       try {
         const { data } = await supabase
           .from("user_roles")
@@ -101,27 +117,36 @@ function useUserRole() {
         const roles = (data || []).map((r: { role: string }) => r.role);
         const metaRole = user.user_metadata?.role || user.user_metadata?.account_type;
 
-        // Double check driver registration profile to instantly sync driver role
         const { data: driverData } = await supabase
           .from("agtrans_drivers")
           .select("id")
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (roles.includes("admin")) setRole("admin");
-        else if (roles.includes("handler")) setRole("handler");
-        else if (roles.includes("buyer") || metaRole === "buyer") setRole("buyer");
-        else if (roles.includes("driver") || metaRole === "driver" || driverData) setRole("driver");
-        else setRole("user");
+        const resolvedRole = roles.includes("admin") ? "admin"
+          : roles.includes("handler") ? "handler"
+          : roles.includes("buyer") || metaRole === "buyer" ? "buyer"
+          : roles.includes("driver") || metaRole === "driver" || driverData ? "driver"
+          : "user";
+
+        if (active && !timedOut) setRole(resolvedRole);
       } catch (error) {
         console.error("Error fetching user role:", error);
+        if (active && !timedOut) setRole("user");
       } finally {
-        setRoleLoading(false);
+        if (active) {
+          if (timeout) clearTimeout(timeout);
+          setRoleLoading(false);
+        }
       }
     };
-    checkRole();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, location.pathname]);
+
+    void resolveRole();
+    return () => {
+      active = false;
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [user, authLoading, location.pathname, role]);
 
   return { role, roleLoading };
 }
@@ -225,26 +250,13 @@ function PublicOrProtectedRoute({ children, publicFallback }: { children: React.
   return <>{publicFallback}</>;
 }
 
-// Extra guard: wait for Supabase to fully restore the session from storage
-function useSessionReady() {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    // getSession() resolves only after the persisted session is restored
-    supabase.auth.getSession().then(() => setReady(true));
-  }, []);
-
-  return ready;
-}
-
 function AppRoutes() {
-  const sessionReady = useSessionReady();
   const { user, loading } = useAuth();
   const { role, roleLoading } = useUserRole();
   const isPreview = isPreviewEnvironment();
 
   // Wait for BOTH the session storage restore AND the auth provider
-  if (!sessionReady || loading || (user && roleLoading)) return <LoadingScreen />;
+  if (loading || (user && roleLoading)) return <LoadingScreen />;
 
   // Determine post-login redirect
   const getHomeRoute = () => {
@@ -308,7 +320,7 @@ function AppRoutes() {
       <Route path="/handler-management" element={<ProtectedRoute><PremiumGate component="handler"><HandlerManagement /></PremiumGate></ProtectedRoute>} />
       <Route path="/post-harvest" element={<ProtectedRoute><PremiumGate component="post_harvest"><PostHarvestTracker /></PremiumGate></ProtectedRoute>} />
       <Route path="/market-link" element={<ProtectedRoute><PremiumGate component="market_link"><MarketLink /></PremiumGate></ProtectedRoute>} />
-      <Route path="/agnav" element={<ProtectedRoute><PremiumGate component="agnav"><AGNav /></PremiumGate></ProtectedRoute>} />
+      <Route path="/agnav" element={<Navigate to="/satellite" replace />} />
       <Route path="/subscription" element={<ProtectedRoute><Subscription /></ProtectedRoute>} />
       <Route path="/subscription/pay" element={<ProtectedRoute><Sikasem /></ProtectedRoute>} />
       <Route path="/subscription/verify" element={<SubscriptionVerify />} />
@@ -342,7 +354,9 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <AuthProvider>
-              <AppRoutes />
+              <ErrorBoundary fallbackTitle="AgroClimate could not open this workspace">
+                <AppRoutes />
+              </ErrorBoundary>
             </AuthProvider>
           </BrowserRouter>
         </TooltipProvider>
