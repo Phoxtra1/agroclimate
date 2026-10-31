@@ -227,7 +227,7 @@ alter table public.vessel_locations alter column captured_at set default now();
 alter table public.vessel_locations alter column captured_at set not null;
 alter table public.vessel_locations alter column location_source set default 'unverified';
 alter table public.vessel_locations alter column location_source set not null;
-do $
+do $$
 begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.vessel_locations'::regclass and conname = 'vessel_locations_accuracy_check') then
     alter table public.vessel_locations add constraint vessel_locations_accuracy_check check (accuracy_m is null or accuracy_m between 0.1 and 100);
@@ -235,7 +235,7 @@ begin
   if not exists (select 1 from pg_constraint where conrelid = 'public.vessel_locations'::regclass and conname = 'vessel_locations_source_check') then
     alter table public.vessel_locations add constraint vessel_locations_source_check check (location_source in ('unverified','device_gps'));
   end if;
-end $;
+end $$;
 create index if not exists vessel_locations_vessel_idx on public.vessel_locations (vessel_id, created_at desc);
 create index if not exists vessel_locations_geom_gix on public.vessel_locations using gist (geom);
 
