@@ -7,7 +7,7 @@ import { logConnectionEvent } from "@/lib/drone/eventLog";
 
 // Back-compat aliases used by existing components
 export type DroneStatus = FlightStatus;
-export interface TelemetryData extends DroneTelemetry {}
+export type TelemetryData = DroneTelemetry;
 export interface EnvironmentData {
   windSpeed: number;
   windDirection: string;
@@ -137,20 +137,20 @@ export const useDroneState = () => {
     }
     setActiveDrone(target);
     // Persist aircraft-type hint so AGNav marker + other views can react in real time
-    try { localStorage.setItem("aih_active_type", (target.type || target.aircraftType || "drone") as string); } catch {}
+    try { localStorage.setItem("aih_active_type", (target.type || target.aircraftType || "drone") as string); } catch { /* Storage may be unavailable in private browsing or restricted contexts. */ }
     await adapterRef.current.connect(target.id);
     // Best-effort: mark the registered row as connected so admin/registry views update immediately
     try {
       await supabase.from("drones").update({
         status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
       }).eq("id", target.id);
-    } catch {}
+    } catch { /* Registry updates are best-effort; the hardware connection is authoritative. */ }
   }, [available, scan]);
 
   const disconnect = useCallback(async () => {
     const priorId = activeDrone?.id;
     await adapterRef.current?.disconnect();
-    if (priorId) { try { await supabase.from("drones").update({ status: "offline", last_seen_at: new Date().toISOString() }).eq("id", priorId); } catch {} }
+    if (priorId) { try { await supabase.from("drones").update({ status: "offline", last_seen_at: new Date().toISOString() }).eq("id", priorId); } catch { /* Keep local disconnect successful if the registry is offline. */ } }
     setActiveDrone(null);
     setMissionId(null);
   }, [activeDrone]);
@@ -207,7 +207,7 @@ export const useDroneState = () => {
           battery_pct: telemetry.battery, signal_strength: telemetry.signalStrength,
           gps_accuracy_m: telemetry.gpsAccuracy,
         });
-      } catch {}
+      } catch { /* Telemetry logging must not interrupt flight control when offline. */ }
     }, 5000);
     return () => clearInterval(t);
   }, [status, missionId, telemetry]);
