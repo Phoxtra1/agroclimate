@@ -125,15 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 2) Restore session on refresh, but never leave the entire application
     // behind an endless loading screen if the auth endpoint is unreachable.
     const startupTimeout = window.setTimeout(() => {
-      setLoading((current) => {
-        if (current) {
-          console.warn("Supabase session restore exceeded 10 seconds; rendering a signed-out recovery state.");
-          setUser(null);
-          setSession(null);
-          return false;
-        }
-        return current;
-      });
+      console.warn("Supabase session restore exceeded 10 seconds; rendering a signed-out recovery state.");
+      setUser(null);
+      setSession(null);
+      setLoading(false);
     }, 10000);
     void refreshSession().finally(() => window.clearTimeout(startupTimeout));
 
