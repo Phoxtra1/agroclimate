@@ -7,17 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { MapPin, Navigation, CheckCircle, AlertTriangle, Bot, Phone, Navigation2, Compass, ShieldAlert, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
-// Fix Leaflet marker icons in Vite
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
 
 export default function TripPage() {
   const { id } = useParams();
@@ -45,7 +36,7 @@ export default function TripPage() {
     if (!job) return;
     try {
       await updateDeliveryJobStatus(job.id, "In Transit");
-      toast.success("Trip started! GPS tracking simulation online.");
+      toast.success("Trip status updated to In Transit.");
     } catch (err) {
       toast.error("Failed to start trip");
     }
@@ -74,33 +65,6 @@ export default function TripPage() {
     }
   };
 
-  // Map Coordinates configuration
-  const defaultPickup: [number, number] = [5.6037, -0.1870]; // Accra
-  const defaultDropoff: [number, number] = [6.6961, -1.6152]; // Kumasi
-  const currentPos: [number, number] = session?.current_lat && session?.current_lon 
-    ? [session.current_lat, session.current_lon] 
-    : defaultPickup;
-
-  // Custom marker icons
-  const pickupIcon = L.divIcon({
-    html: `<div class="bg-blue-500 w-4 h-4 rounded-full border-2 border-white shadow-md animate-pulse"></div>`,
-    className: "custom-pin",
-  });
-  
-  const dropoffIcon = L.divIcon({
-    html: `<div class="bg-red-500 w-4 h-4 rounded-full border-2 border-white shadow-md"></div>`,
-    className: "custom-pin",
-  });
-
-  const truckIcon = L.divIcon({
-    html: `<div class="bg-emerald-500 p-1.5 rounded-full border-2 border-white shadow-lg text-white" style="transform: rotate(${session?.heading || 0}deg);">
-      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-    </div>`,
-    className: "truck-pin",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-  });
-
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top Title HUD */}
@@ -121,43 +85,22 @@ export default function TripPage() {
         {/* Left column - Map and controls */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Leaflet Map Card */}
           <Card className="overflow-hidden border-border/60 shadow-lg">
-            <CardHeader className="bg-muted/10 py-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Navigation className="h-4 w-4 text-primary animate-pulse" /> Live Route Map
-              </CardTitle>
-              {session && (
-                <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" /> GPS Simulator Connected
-                </span>
-              )}
+            <CardHeader className="bg-muted/10 py-3">
+              <CardTitle className="text-sm font-bold flex items-center gap-2"><Navigation className="h-4 w-4 text-primary" /> Shared Satellite Navigation</CardTitle>
+              <p className="text-xs text-muted-foreground">Open recorded pickup and delivery locations in the common AgroClimate Satellite workspace.</p>
             </CardHeader>
-            <CardContent className="p-0 h-[400px]">
-              <MapContainer center={currentPos} zoom={8} className="h-full w-full">
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <Marker position={defaultPickup} icon={pickupIcon}>
-                  <Popup><strong>Pickup:</strong> {trip.pickup_location}</Popup>
-                </Marker>
-                <Marker position={defaultDropoff} icon={dropoffIcon}>
-                  <Popup><strong>Dropoff:</strong> {trip.delivery_location}</Popup>
-                </Marker>
-                {session && (
-                  <Marker position={currentPos} icon={truckIcon}>
-                    <Popup>
-                      <strong>Your Truck Position</strong><br />
-                      Speed: {session.speed_kn} km/h<br />
-                      Heading: {session.heading}°
-                    </Popup>
-                  </Marker>
-                )}
-                {session?.route && (
-                  <Polyline positions={session.route} color="#10b981" weight={4} dashArray="5, 10" />
-                )}
-              </MapContainer>
+            <CardContent className="grid sm:grid-cols-2 gap-3">
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground">PICKUP / COLLECTION</div>
+                <p className="text-sm font-medium">{trip.pickup_location || "Pickup location not recorded"}</p>
+                {trip.pickup_location && <OpenInSatelliteButton query={trip.pickup_location} label="AG Trans pickup" zoom={16}>Inspect pickup</OpenInSatelliteButton>}
+              </div>
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground">DELIVERY DESTINATION</div>
+                <p className="text-sm font-medium">{trip.delivery_location || "Delivery destination not recorded"}</p>
+                {trip.delivery_location && <OpenInSatelliteButton query={trip.delivery_location} label="AG Trans delivery destination" zoom={16}>Navigate to destination</OpenInSatelliteButton>}
+              </div>
             </CardContent>
           </Card>
 
@@ -214,7 +157,7 @@ export default function TripPage() {
           <div className="flex gap-4">
             {job?.status === "Assigned" && (
               <Button onClick={handleStartTrip} className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-12 text-lg">
-                <Navigation className="mr-2 h-5 w-5" /> Start Simulated Transit
+                <Navigation className="mr-2 h-5 w-5" /> Start Trip
               </Button>
             )}
             {(job?.status === "In Transit" || job?.status === "Near Delivery") && (
