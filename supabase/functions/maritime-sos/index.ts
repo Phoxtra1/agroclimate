@@ -150,7 +150,11 @@ serve(async (req) => {
         for (const target of smsTargets) {
           try {
             const { error } = await adminClient.functions.invoke("send-sms", {
-              body: { to: target.phone, message: `AGROCLIMATE MARITIME SOS: ${body.message || "Emergency assistance requested"}. Coordinates ${body.location.lat.toFixed(5)}, ${body.location.lon.toFixed(5)}. Event ${event.id}.` },
+              body: {
+                to: target.phone,
+                username: Deno.env.get("AFRICASTALKING_USERNAME") || "sandbox",
+                message: `AGROCLIMATE MARITIME SOS: ${body.message || "Emergency assistance requested"}. Coordinates ${body.location.lat.toFixed(5)}, ${body.location.lon.toFixed(5)}. Event ${event.id}.`,
+              },
             });
             if (!error) smsQueued += 1;
           } catch (error) {
