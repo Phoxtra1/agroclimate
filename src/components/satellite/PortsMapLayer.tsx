@@ -12,7 +12,6 @@ interface Props {
 export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
   const map = useMap();
   const [ports, setPorts] = useState<PortSearchFeature[]>([]);
-  const [loading, setLoading] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -21,7 +20,6 @@ export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
     if (!enabled) {
       setPorts([]);
       onResults?.([]);
-      setLoading(false);
       return;
     }
     if (map.getZoom() < 7) {
@@ -34,7 +32,6 @@ export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
     const bounds = map.getBounds();
     const controller = new AbortController();
     requestRef.current = controller;
-    setLoading(true);
     try {
       const result = await searchMappedPorts({
         south: bounds.getSouth(),
@@ -52,7 +49,6 @@ export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
         });
       }
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
     }
   }, [enabled, map, onResults]);
 
@@ -98,7 +94,6 @@ export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
           </Popup>
         </CircleMarker>
       ))}
-      {enabled && loading ? null : null}
     </>
   );
 }
