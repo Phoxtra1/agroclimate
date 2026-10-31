@@ -28,7 +28,7 @@ create table if not exists public.geo_features (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid references auth.users(id) on delete set null,
   feature_type text not null check (feature_type in (
-    'farm_boundary','warehouse','silo','cold_store','collection_centre',
+    'farm_boundary','farm_location','warehouse','silo','cold_store','collection_centre',
     'processing_facility','buyer','supplier','port','pickup_point',
     'delivery_point','drone_observation','water_source','road_hazard','other'
   )),
@@ -51,6 +51,13 @@ create table if not exists public.geo_features (
   updated_at timestamptz not null default now(),
   constraint geo_features_geojson_object check (jsonb_typeof(geojson) = 'object')
 );
+
+alter table public.geo_features drop constraint if exists geo_features_feature_type_check;
+alter table public.geo_features add constraint geo_features_feature_type_check check (feature_type in (
+  'farm_boundary','farm_location','warehouse','silo','cold_store','collection_centre',
+  'processing_facility','buyer','supplier','port','pickup_point','delivery_point',
+  'drone_observation','water_source','road_hazard','other'
+));
 
 create index if not exists geo_features_geom_gix on public.geo_features using gist (geom);
 create index if not exists geo_features_centroid_gix on public.geo_features using gist (centroid);
@@ -256,9 +263,32 @@ create table if not exists public.farms (
   name text not null,
   lat double precision not null,
   lon double precision not null,
+  geo_feature_id uuid references public.geo_features(id) on delete set null,
   created_at timestamptz not null default now()
 );
+alter table public.farms add column if not exists geo_feature_id uuid references public.geo_features(id) on delete set null;
 create index if not exists farms_user_idx on public.farms (user_id, created_at desc);
+create index if not exists farms_geo_feature_idx on public.farms (geo_feature_id);
+
+-- Bring legacy AgroRisk farm pins into the common Satellite feature registry.
+insert into public.geo_features (owner_id, feature_type, name, visibility, geojson, properties, source_name, data_quality)
+select f.user_id, 'farm_location', f.name, 'private',
+       jsonb_build_object('type','Point','coordinates',jsonb_build_array(f.lon,f.lat)),
+       jsonb_build_object('farm_record_id', f.id::text, 'location_method', 'legacy_user_entry'),
+       'Legacy AgroRisk farm registration', 'unverified'
+from public.farms f
+where f.geo_feature_id is null
+  and not exists (
+    select 1 from public.geo_features g
+    where g.feature_type = 'farm_location' and g.properties->>'farm_record_id' = f.id::text
+  );
+
+update public.farms f
+set geo_feature_id = g.id
+from public.geo_features g
+where f.geo_feature_id is null
+  and g.feature_type = 'farm_location'
+  and g.properties->>'farm_record_id' = f.id::text;
 
 create table if not exists public.nav_routes (
   id uuid primary key default gen_random_uuid(),
