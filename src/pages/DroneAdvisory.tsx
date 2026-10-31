@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { useNewTag } from "@/hooks/useNewTag";
 import { DroneOperationsConsole } from "@/components/drone/DroneOperationsConsole";
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
 interface FlightAdvisory {
   status: "safe" | "caution" | "no_fly";
@@ -61,12 +62,19 @@ export default function DroneAdvisory() {
 
   return (
     <div className="p-3 lg:p-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center gap-3 mb-4">
-        <Plane className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-xl font-bold">Drone Operations &amp; Aerial Intelligence</h1>
-          <p className="text-sm text-muted-foreground">Mission control · Dipa advisory · vision analytics</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <Plane className="h-6 w-6 text-primary" />
+          <div>
+            <h1 className="text-xl font-bold">Drone Operations &amp; Aerial Intelligence</h1>
+            <p className="text-sm text-muted-foreground">Mission control · Dipa advisory · vision analytics</p>
+          </div>
         </div>
+        {Number.isFinite(position.lat) && Number.isFinite(position.lon) && (
+          <OpenInSatelliteButton lat={position.lat} lon={position.lon} label={position.locationName || "Flight advisory location"} zoom={17}>
+            Open mission location in Satellite
+          </OpenInSatelliteButton>
+        )}
       </div>
 
       <Tabs defaultValue="operations" onValueChange={(val) => {
