@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GeoJSON, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import {
   Activity,
@@ -50,6 +50,13 @@ import {
   YAxis,
 } from "recharts";
 import { Button } from "@/components/ui/button";
+import { LandSuitabilityPanel } from "@/components/satellite/LandSuitabilityPanel";
+import { MaritimeSafetyPanel, type MaritimeMapPosition } from "@/components/satellite/MaritimeSafetyPanel";
+import { PortsMapLayer } from "@/components/satellite/PortsMapLayer";
+import { cacheNavigationRoute, getCachedNavigationRoute, routeCacheAgeMinutes, type CachedNavigationRoute } from "@/services/satellite/offlineNavigation";
+import { saveSharedRoadRoute } from "@/services/satellite/geospatial";
+import type { MaritimeSosEvent } from "@/services/satellite/maritime";
+import type { PortSearchFeature } from "@/services/satellite/ports";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -244,7 +251,7 @@ export default function Satellite() {
   const [routingLoading, setRoutingLoading] = useState(false);
   const [routingError, setRoutingError] = useState("");
 
-  // Simulated Live Turn-by-Turn Navigation
+  // Simulated route preview playback (not a vehicle GPS feed).
   const [isSimulatingNav, setIsSimulatingNav] = useState(false);
   const [simStepIndex, setSimStepIndex] = useState(0);
   const [simulatedVehiclePos, setSimulatedVehiclePos] = useState<[number, number] | null>(null);
@@ -275,8 +282,27 @@ export default function Satellite() {
   const [savedFields, setSavedFields] = useState<SatelliteField[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
+  const [maritimePanelOpen, setMaritimePanelOpen] = useState(false);
+  const [maritimeEvents, setMaritimeEvents] = useState<MaritimeSosEvent[]>([]);
+  const [maritimePositions, setMaritimePositions] = useState<MaritimeMapPosition[]>([]);
+  const [portsLayerEnabled, setPortsLayerEnabled] = useState(false);
+  const [mappedPorts, setMappedPorts] = useState<PortSearchFeature[]>([]);
+  const [offlineRouteInfo, setOfflineRouteInfo] = useState<CachedNavigationRoute | null>(null);
 
   const selectedScene = useMemo(() => scenes.find((s) => s.id === sceneId) ?? null, [scenes, sceneId]);
+  const suitabilityPoint = useMemo<GeoPoint>(() => {
+    if (fieldPoints.length > 0) {
+      const total = fieldPoints.reduce((acc, point) => ({ lat: acc.lat + point.lat, lon: acc.lon + point.lon }), { lat: 0, lon: 0 });
+      return { lat: total.lat / fieldPoints.length, lon: total.lon / fieldPoints.length };
+    }
+    return { lat: currentLocation.lat, lon: currentLocation.lon };
+  }, [fieldPoints, currentLocation]);
+  const suitabilityGeometry = useMemo<GeoJSON.Polygon | null>(() => {
+    if (fieldPoints.length < 3) return null;
+    const ring: number[][] = fieldPoints.map((point) => [point.lon, point.lat]);
+    ring.push([...ring[0]]);
+    return { type: "Polygon", coordinates: [ring] };
+  }, [fieldPoints]);
   const isNasa = imageryOverlay.startsWith("nasa-");
   const maxDate = fmtDate(new Date(Date.now() - 86400000));
   const nasaUrl = isNasa
@@ -405,7 +431,8 @@ export default function Satellite() {
     );
   };
 
-  // Compute Navigation Route
+  // Calculate a road route from the live routing provider, or use a dated cached
+  // route when offline. A cached route is never represented as live navigation.
   const handleCalculateRoute = async () => {
     if (!navStartPoint || !navEndPoint) {
       toast.error("Please specify both origin and destination points.");
@@ -413,25 +440,74 @@ export default function Satellite() {
     }
     setRoutingLoading(true);
     setRoutingError("");
+    setOfflineRouteInfo(null);
+    const routeType = travelMode === "walking" ? "walking" : travelMode === "tractor" ? "tractor" : travelMode === "freight" ? "freight" : "road";
+
+    const useCachedRoute = async () => {
+      const cached = await getCachedNavigationRoute(navStartPoint, navEndPoint, travelMode);
+      if (!cached) throw new Error("No saved route is available for these exact endpoints and travel mode.");
+      setRouteData(cached.route);
+      setOfflineRouteInfo(cached);
+      setIsSimulatingNav(false);
+      setSimulatedVehiclePos(null);
+      setSimStepIndex(0);
+      toast.message("Showing a saved route", {
+        description: `Cached ${routeCacheAgeMinutes(cached)} minutes ago. This is not a live route or traffic update.`,
+      });
+    };
+
     try {
+      if (!navigator.onLine) {
+        await useCachedRoute();
+        return;
+      }
       const route = await calculateRoute(navStartPoint, navEndPoint, travelMode);
       setRouteData(route);
       setSimStepIndex(0);
       setIsSimulatingNav(false);
-      setSimulatedVehiclePos(route.geometry[0] || null);
-      toast.success("Navigation route calculated", {
-        description: `${route.distanceKm} km · approx. ${route.durationMinutes} min`,
+      setSimulatedVehiclePos(null);
+      try {
+        await cacheNavigationRoute({
+          origin: { ...navStartPoint, label: route.startAddress },
+          destination: { ...navEndPoint, label: route.endAddress },
+          mode: travelMode,
+          route,
+          provider: "OSRM public demo routing service",
+        });
+      } catch (cacheError) {
+        console.warn("Route could not be saved to the offline browser cache:", cacheError);
+      }
+      try {
+        await saveSharedRoadRoute({
+          routeType,
+          origin: { ...navStartPoint, label: route.startAddress },
+          destination: { ...navEndPoint, label: route.endAddress },
+          geometry: route.geometry,
+          distanceM: route.distanceKm * 1000,
+          durationS: route.durationMinutes * 60,
+          provider: "OSRM public demo routing service",
+        });
+      } catch (saveError) {
+        console.warn("Route could not be saved to the shared route registry:", saveError);
+      }
+      toast.success("Road route calculated", {
+        description: `${route.distanceKm} km · planning estimate ${route.durationMinutes} min. Traffic and heavy-vehicle restrictions are not verified.`,
       });
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to calculate navigation route.";
-      setRoutingError(errorMessage);
-      toast.error("Routing error: " + errorMessage);
+      const message = err instanceof Error ? err.message : "Failed to calculate navigation route.";
+      try {
+        await useCachedRoute();
+      } catch (cacheError) {
+        const cacheMessage = cacheError instanceof Error ? cacheError.message : "";
+        setRoutingError(`${message} ${cacheMessage}`.trim());
+        toast.error("Routing unavailable", { description: `${message} ${cacheMessage}`.trim() });
+      }
     } finally {
       setRoutingLoading(false);
     }
   };
 
-  // Simulated Navigation Playback
+  // Route preview playback is a visual simulation, not a vehicle GPS feed.
   useEffect(() => {
     if (!isSimulatingNav || !routeData || !routeData.geometry.length) return;
 
@@ -454,7 +530,7 @@ export default function Satellite() {
         Math.floor((currentIndex / routeData.geometry.length) * routeData.steps.length)
       );
       setSimStepIndex(stepIdx);
-      setSimulatedSpeedKmh(Math.round(45 + Math.sin(currentIndex * 0.2) * 12));
+      setSimulatedSpeedKmh(0);
     }, 800);
 
     return () => clearInterval(interval);
@@ -593,6 +669,25 @@ export default function Satellite() {
   useEffect(() => {
     void refreshSavedFields();
   }, [refreshSavedFields]);
+
+  const handleInspectMapLocation = useCallback((point: GeoPoint, label: string) => {
+    setMapCenter([point.lat, point.lon]);
+    setMapZoom(15);
+    setCurrentLocation({ ...point, label });
+    setSearchQuery(label);
+    setShowSearchResults(false);
+  }, []);
+
+  const handleMaritimeMapData = useCallback((events: MaritimeSosEvent[], positions: MaritimeMapPosition[]) => {
+    setMaritimeEvents(events);
+    setMaritimePositions(positions);
+  }, []);
+
+  const handleSelectPort = useCallback((port: PortSearchFeature) => {
+    const label = `${port.name} · OpenStreetMap mapped port`;
+    handleInspectMapLocation({ lat: port.lat, lon: port.lon }, label);
+    toast.message(port.name, { description: "Mapped location only. Operational status, cargo capabilities and customs services are not verified." });
+  }, [handleInspectMapLocation]);
 
   // Filtered Boards by Category
   const filteredBoards = useMemo(() => {
@@ -758,6 +853,15 @@ export default function Satellite() {
             <span>FULL BOARD VIEW</span>
           </Button>
 
+          <Button size="sm" variant={portsLayerEnabled ? "default" : "outline"}
+            onClick={() => setPortsLayerEnabled((enabled) => !enabled)}
+            className={`h-8 gap-1.5 text-xs font-mono ${portsLayerEnabled ? "bg-cyan-700 text-white" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+            title="Discover mapped ports in the current view">
+            <Anchor className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Ports</span>
+            {portsLayerEnabled && mappedPorts.length > 0 ? <span>{mappedPorts.length}</span> : null}
+          </Button>
+
           {/* Navigation Route Toggle Button */}
           <Button
             size="sm"
@@ -862,6 +966,7 @@ export default function Satellite() {
             </div>
           </div>
 
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="border-b border-slate-800/80 p-3">
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-sky-300"><Sparkles className="h-4 w-4" /> DIPA SATELLITE INTELLIGENCE</div>
             <p className="mt-1 text-[10px] leading-relaxed text-slate-400">Ask about the selected location or field. Dipa receives available coordinates, imagery date and measured field indices, and must identify missing evidence.</p>
@@ -875,8 +980,27 @@ export default function Satellite() {
             {dipaAnswer && <div className="mt-2 rounded-md border border-sky-900/70 bg-sky-950/30 p-2.5 text-[11px] leading-relaxed text-slate-200 whitespace-pre-wrap">{dipaAnswer}</div>}
           </div>
 
+          <LandSuitabilityPanel
+            point={suitabilityPoint}
+            pointLabel={fieldPoints.length >= 3 ? "Drawn field centroid · climate point screen" : currentLocation.label}
+            fieldGeometry={suitabilityGeometry}
+            fieldAreaHa={fieldPoints.length >= 3 ? fieldArea : undefined}
+          />
+
+          <div className="border-b border-slate-800/80 p-3">
+            <Button size="sm" variant="outline" className="w-full h-8 border-slate-700 bg-slate-900 text-xs"
+              onClick={() => setMaritimePanelOpen((open) => !open)}>
+              <Anchor className="mr-2 h-3.5 w-3.5" /> {maritimePanelOpen ? "Hide maritime safety" : "Open maritime safety & rescue"}
+            </Button>
+          </div>
+          {maritimePanelOpen && (
+            <div className="border-b border-slate-800/80 p-2">
+              <MaritimeSafetyPanel onInspectLocation={handleInspectMapLocation} onMapDataChange={handleMaritimeMapData} />
+            </div>
+          )}
+
           {/* Monitored Corridors & Boards List */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+          <div className="p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
             <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400">
               Strategic Reference Boards ({filteredBoards.length})
             </div>
@@ -923,6 +1047,7 @@ export default function Satellite() {
               <LocateFixed className="h-3.5 w-3.5" />
               <span>GPS</span>
             </button>
+          </div>
           </div>
         </aside>
 
@@ -996,6 +1121,29 @@ export default function Satellite() {
               onPickNavPoint={(point) => void handlePickNavPoint(point)}
             />
 
+            <PortsMapLayer enabled={portsLayerEnabled} onResults={setMappedPorts} onSelect={handleSelectPort} />
+            {maritimeEvents.map((event) => (
+              <CircleMarker key={`maritime-sos-${event.id}`} center={[event.lat, event.lon]}
+                radius={event.status === "BROADCAST" ? 10 : 8}
+                pathOptions={{ color: event.status === "BROADCAST" ? "#fb7185" : "#f59e0b", weight: 2, fillColor: event.status === "BROADCAST" ? "#be123c" : "#b45309", fillOpacity: 0.85 }}>
+                <Popup>
+                  <strong>Maritime emergency · {event.status}</strong>
+                  <div>{event.vessel_id}</div>
+                  <div>{new Date(event.created_at).toLocaleString()}</div>
+                  <div className="text-amber-700">Map marker only. Rescue response status is shown in the Maritime Safety panel.</div>
+                </Popup>
+              </CircleMarker>
+            ))}
+            {maritimePositions.map((position) => (
+              <CircleMarker key={`vessel-location-${position.vesselId}`} center={[position.point.lat, position.point.lon]} radius={7}
+                pathOptions={{ color: "#38bdf8", weight: 2, fillColor: "#0369a1", fillOpacity: 0.9 }}>
+                <Popup>
+                  <strong>{position.vesselName}</strong>
+                  <div>Recorded GPS position · {new Date(position.capturedAt).toLocaleString()}</div>
+                </Popup>
+              </CircleMarker>
+            ))}
+
             {/* Strategic Corridor & Stations Overlay (Attached Image) */}
             <StrategicCorridorOverlay
               corridorLine={activeBoard.corridorLine}
@@ -1060,7 +1208,7 @@ export default function Satellite() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-                placeholder="Search location like Google Earth (farm, port, city)…"
+                placeholder="Search globally: farm, port, city, facility or coordinates…"
                 className="h-10 w-full rounded-lg bg-transparent pl-9 pr-16 text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none font-mono"
               />
               <div className="absolute right-2 flex items-center gap-1">
@@ -1103,7 +1251,7 @@ export default function Satellite() {
               <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span className="flex items-center gap-1.5 font-bold text-sky-400">
                   <Navigation className="h-4 w-4" />
-                  REAL-TIME NAVIGATION & DIRECTIONS
+                  ROAD ROUTING & DIRECTIONS
                 </span>
                 <button
                   onClick={() => setNavOpen(false)}
@@ -1112,6 +1260,12 @@ export default function Satellite() {
                   <X className="h-3.5 w-3.5" />
                 </button>
               </div>
+              {offlineRouteInfo && (
+                <div className="mt-2 rounded border border-amber-700/40 bg-amber-950/20 p-2 text-[10px] leading-relaxed text-amber-100">
+                  Cached road route · saved {routeCacheAgeMinutes(offlineRouteInfo)} minutes ago. This is not a live route, traffic update or confirmation that the road remains passable.
+                </div>
+              )}
+              {routingError && <div className="mt-2 rounded border border-rose-800/50 bg-rose-950/30 p-2 text-[10px] text-rose-200">{routingError}</div>}
 
               {/* Mode Selector */}
               <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-md bg-slate-900/90 p-1 border border-slate-800">
@@ -1303,7 +1457,7 @@ export default function Satellite() {
           {/* ── MAP ZOOM & COMPASS HUD CONTROLS (Floating Top Right) ── */}
           <div className="absolute right-4 top-4 z-[400] flex flex-col gap-1.5">
             <button
-              onClick={() => setMapZoom((z) => Math.min(19, z + 1))}
+              onClick={() => setMapZoom((z) => Math.min(22, z + 1))}
               className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900/90 text-slate-200 hover:bg-slate-800 shadow"
               title="Zoom In"
             >
@@ -1334,6 +1488,12 @@ export default function Satellite() {
               <Sliders className="h-4 w-4" />
             </button>
           </div>
+
+          {portsLayerEnabled && (
+            <div className="absolute left-4 bottom-16 z-[400] rounded-md border border-cyan-800/60 bg-[#071827]/95 px-3 py-2 text-[10px] text-cyan-100 shadow-xl">
+              {mappedPorts.length} mapped port feature(s) in view · OpenStreetMap · status and cargo capability unverified
+            </div>
+          )}
 
           {/* ── BOTTOM MAP LEGEND STRIP (Faithful to Screenshot) ── */}
           <div className="absolute bottom-3 left-4 z-[400] hidden sm:flex items-center gap-4 rounded-md border border-slate-800/80 bg-[#09101f]/90 px-3 py-1.5 font-mono text-[10px] text-slate-400 backdrop-blur-md">
