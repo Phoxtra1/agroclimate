@@ -30,6 +30,7 @@ export const useDroneState = () => {
   const [available, setAvailable] = useState<DiscoveredDrone[]>([]);
   const [activeDrone, setActiveDrone] = useState<DiscoveredDrone | null>(null);
   const [telemetry, setTelemetry] = useState<DroneTelemetry>(INITIAL_TELEMETRY);
+  const [lastTelemetryAt, setLastTelemetryAt] = useState<number | null>(null);
   const [missionId, setMissionId] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<ConnectionDiagnostics>({ transport: "none", framesReceived: 0, bytesReceived: 0 });
 
@@ -52,7 +53,11 @@ export const useDroneState = () => {
       if (s === "connected") logConnectionEvent({ type: "connect", protocol, aircraftId: activeDrone?.id, aircraftName: activeDrone?.name, message: `Aircraft connected via ${protocol}` });
       if (s === "disconnected") logConnectionEvent({ type: "disconnect", protocol, aircraftId: activeDrone?.id, aircraftName: activeDrone?.name, message: `Aircraft disconnected` });
     }));
-    unsubRef.current.push(adapter.onTelemetry(setTelemetry));
+    setLastTelemetryAt(null);
+    unsubRef.current.push(adapter.onTelemetry((nextTelemetry) => {
+      setTelemetry(nextTelemetry);
+      setLastTelemetryAt(Date.now());
+    }));
     if (adapter.onDiagnostics) unsubRef.current.push(adapter.onDiagnostics(setDiagnostics));
     return () => { unsubRef.current.forEach((u) => u()); };
   }, [protocol]);
@@ -231,7 +236,7 @@ export const useDroneState = () => {
 
   return {
     protocol, setProtocol,
-    status, telemetry, environment, setEnvironment,
+    status, telemetry, lastTelemetryAt, environment, setEnvironment,
     available, activeDrone, droneName,
     missionId, diagnostics,
     connectionState,
