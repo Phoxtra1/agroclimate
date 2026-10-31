@@ -251,10 +251,10 @@ export async function assessLandClimate(point: GeoPoint, signal?: AbortSignal): 
 
   const meanTemps = extractMonthly(climatePayload, "T2M");
   const dailyRain = extractMonthly(climatePayload, "PRECTOTCORR");
-  const tempValues = Object.values(meanTemps).filter((v): v is number => v !== null);
-  const rainValues = Object.values(dailyRain);
-  const annualMeanTemperatureC = tempValues.length
-    ? tempValues.reduce((sum, value) => sum + value, 0) / tempValues.length
+  const temperatureMonths = MONTHS.map((month, index) => ({ value: meanTemps[month], days: DAYS_IN_MONTH[index] }));
+  const annualMeanTemperatureC = temperatureMonths.every((month) => month.value !== null)
+    ? temperatureMonths.reduce((sum, month) => sum + (month.value ?? 0) * month.days, 0)
+      / temperatureMonths.reduce((sum, month) => sum + month.days, 0)
     : null;
 
   // POWER's monthly PRECTOTCORR climatology is a mean daily precipitation
