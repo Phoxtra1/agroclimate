@@ -54,6 +54,8 @@ import { Button } from "@/components/ui/button";
 import { LandSuitabilityPanel } from "@/components/satellite/LandSuitabilityPanel";
 import { MaritimeSafetyPanel, type MaritimeMapPosition } from "@/components/satellite/MaritimeSafetyPanel";
 import { PortsMapLayer } from "@/components/satellite/PortsMapLayer";
+import { GeoFeaturesMapLayer } from "@/components/satellite/GeoFeaturesMapLayer";
+import { createGeoFeature, toPointGeometry, type GeoFeatureType } from "@/services/satellite/geospatial";
 import { cacheNavigationRoute, getCachedNavigationRoute, routeCacheAgeMinutes, type CachedNavigationRoute } from "@/services/satellite/offlineNavigation";
 import { saveSharedRoadRoute } from "@/services/satellite/geospatial";
 import type { MaritimeSosEvent } from "@/services/satellite/maritime";
@@ -150,18 +152,24 @@ function MapEventsHandler({
   onMapClick,
   onSample,
   onPickNavPoint,
+  captureFeature,
+  onCaptureFeaturePoint,
 }: {
   drawing: boolean;
   navPickMode: "start" | "end" | null;
   onMapClick: (point: GeoPoint) => void;
   onSample: (point: GeoPoint) => void;
   onPickNavPoint: (point: GeoPoint) => void;
+  captureFeature: boolean;
+  onCaptureFeaturePoint: (point: GeoPoint) => void;
 }) {
   useMapEvents({
     click(event) {
       const point = { lat: event.latlng.lat, lon: event.latlng.lng };
       if (navPickMode) {
         onPickNavPoint(point);
+      } else if (captureFeature) {
+        onCaptureFeaturePoint(point);
       } else if (drawing) {
         onMapClick(point);
       } else {
@@ -284,6 +292,13 @@ export default function Satellite() {
   const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
   const [maritimePanelOpen, setMaritimePanelOpen] = useState(false);
+  const [geoFeaturePanelOpen, setGeoFeaturePanelOpen] = useState(false);
+  const [geoFeatureType, setGeoFeatureType] = useState<GeoFeatureType>("warehouse");
+  const [geoFeatureName, setGeoFeatureName] = useState("");
+  const [geoFeatureNotes, setGeoFeatureNotes] = useState("");
+  const [geoFeaturePoint, setGeoFeaturePoint] = useState<GeoPoint | null>(null);
+  const [captureGeoFeaturePoint, setCaptureGeoFeaturePoint] = useState(false);
+  const [geoFeatureSaving, setGeoFeatureSaving] = useState(false);
   const [maritimeEvents, setMaritimeEvents] = useState<MaritimeSosEvent[]>([]);
   const [maritimePositions, setMaritimePositions] = useState<MaritimeMapPosition[]>([]);
   const [portsLayerEnabled, setPortsLayerEnabled] = useState(false);
@@ -671,6 +686,50 @@ export default function Satellite() {
     void refreshSavedFields();
   }, [refreshSavedFields]);
 
+  const handleCaptureGeoFeaturePoint = useCallback((point: GeoPoint) => {
+    setGeoFeaturePoint(point);
+    setCaptureGeoFeaturePoint(false);
+    setMapCenter([point.lat, point.lon]);
+    setMapZoom(17);
+    toast.success("Map position selected", { description: `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}` });
+  }, []);
+
+  const handleSaveGeoFeature = async () => {
+    if (!user) {
+      toast.error("Sign in to save a shared map record.");
+      return;
+    }
+    if (!geoFeatureName.trim() || !geoFeaturePoint) {
+      toast.error("Enter a name and select a position on the map.");
+      return;
+    }
+    setGeoFeatureSaving(true);
+    try {
+      const feature = await createGeoFeature({
+        featureType: geoFeatureType,
+        name: geoFeatureName.trim(),
+        description: geoFeatureNotes.trim() || undefined,
+        visibility: "private",
+        geometry: toPointGeometry(geoFeaturePoint),
+        properties: {
+          registration_method: "manual_map_pin",
+          source_context: "AgroClimate Satellite",
+        },
+        sourceName: "User-pinned location in AgroClimate Satellite",
+        dataQuality: "unverified",
+      });
+      toast.success("Map record saved privately", { description: `${feature.name} · ${feature.feature_type}` });
+      setGeoFeatureName("");
+      setGeoFeatureNotes("");
+      setGeoFeaturePoint(null);
+      setCaptureGeoFeaturePoint(false);
+    } catch (error) {
+      toast.error("Could not save this map record", { description: error instanceof Error ? error.message : "Try again." });
+    } finally {
+      setGeoFeatureSaving(false);
+    }
+  };
+
   const handleInspectMapLocation = useCallback((point: GeoPoint, label: string) => {
     setMapCenter([point.lat, point.lon]);
     setMapZoom(15);
@@ -854,6 +913,12 @@ export default function Satellite() {
             <span>FULL BOARD VIEW</span>
           </Button>
 
+          <Button size="sm" variant={geoFeaturePanelOpen ? "default" : "outline"}
+            onClick={() => setGeoFeaturePanelOpen((open) => !open)}
+            className={`h-8 gap-1.5 text-xs font-mono ${geoFeaturePanelOpen ? "bg-emerald-700 text-white" : "border-slate-700 bg-slate-900 text-slate-300"}`}>
+            <MapPin className="h-3.5 w-3.5" /><span className="hidden sm:inline">Add location</span>
+          </Button>
+
           <Button size="sm" variant={portsLayerEnabled ? "default" : "outline"}
             onClick={() => setPortsLayerEnabled((enabled) => !enabled)}
             className={`h-8 gap-1.5 text-xs font-mono ${portsLayerEnabled ? "bg-cyan-700 text-white" : "border-slate-700 bg-slate-900 text-slate-300"}`}
@@ -980,6 +1045,48 @@ export default function Satellite() {
             </form>
             {dipaAnswer && <div className="mt-2 rounded-md border border-sky-900/70 bg-sky-950/30 p-2.5 text-[11px] leading-relaxed text-slate-200 whitespace-pre-wrap">{dipaAnswer}</div>}
           </div>
+
+          {geoFeaturePanelOpen && (
+            <div className="border-b border-slate-800/80 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-300">
+                <MapPin className="h-4 w-4" /> REGISTER A SHARED MAP RECORD
+              </div>
+              <p className="text-[10px] leading-relaxed text-slate-400">Pin an actual location, such as a warehouse, silo, cold store, buyer, supplier, port, pickup or delivery point. New records are private and marked unverified until evidence is attached.</p>
+              <select value={geoFeatureType} onChange={(event) => setGeoFeatureType(event.target.value as GeoFeatureType)}
+                className="h-9 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100">
+                <option value="warehouse">Warehouse</option>
+                <option value="silo">Silo</option>
+                <option value="cold_store">Cold store</option>
+                <option value="collection_centre">Collection centre</option>
+                <option value="processing_facility">Processing facility</option>
+                <option value="buyer">Buyer location</option>
+                <option value="supplier">Supplier location</option>
+                <option value="port">Port / harbour</option>
+                <option value="pickup_point">Pickup point</option>
+                <option value="delivery_point">Delivery point</option>
+                <option value="water_source">Water source</option>
+                <option value="road_hazard">Road hazard</option>
+                <option value="drone_observation">Aerial observation point</option>
+                <option value="other">Other</option>
+              </select>
+              <Input value={geoFeatureName} onChange={(event) => setGeoFeatureName(event.target.value)}
+                placeholder="Record name" className="h-9 border-slate-700 bg-slate-900 text-xs text-slate-100" />
+              <Input value={geoFeatureNotes} onChange={(event) => setGeoFeatureNotes(event.target.value)}
+                placeholder="Description / reference (optional)" className="h-9 border-slate-700 bg-slate-900 text-xs text-slate-100" />
+              <Button size="sm" variant={captureGeoFeaturePoint ? "destructive" : "outline"} className="w-full h-8 border-slate-700 bg-slate-900 text-xs"
+                onClick={() => { setCaptureGeoFeaturePoint((value) => !value); setDrawing(false); setNavPickMode(null); }}>
+                {captureGeoFeaturePoint ? "Cancel map selection" : geoFeaturePoint ? "Choose another map position" : "Pick exact position on map"}
+              </Button>
+              {geoFeaturePoint && (
+                <div className="rounded border border-slate-700 bg-slate-900 p-2 text-[10px] text-slate-300">
+                  Selected {geoFeaturePoint.lat.toFixed(6)}, {geoFeaturePoint.lon.toFixed(6)}
+                </div>
+              )}
+              <Button size="sm" onClick={() => void handleSaveGeoFeature()} disabled={geoFeatureSaving || !geoFeatureName.trim() || !geoFeaturePoint} className="w-full h-8 bg-emerald-700 hover:bg-emerald-600 text-xs">
+                {geoFeatureSaving ? "Saving private record…" : "Save to shared geospatial registry"}
+              </Button>
+            </div>
+          )}
 
           <LandSuitabilityPanel
             point={suitabilityPoint}
@@ -1114,6 +1221,8 @@ export default function Satellite() {
             <MapEventsHandler
               drawing={drawing}
               navPickMode={navPickMode}
+              captureFeature={captureGeoFeaturePoint}
+              onCaptureFeaturePoint={handleCaptureGeoFeaturePoint}
               onMapClick={(point) => {
                 setFieldPoints((prev) => [...prev, point]);
                 setFieldStats({});
@@ -1122,6 +1231,7 @@ export default function Satellite() {
               onPickNavPoint={(point) => void handlePickNavPoint(point)}
             />
 
+            <GeoFeaturesMapLayer onSelect={handleInspectMapLocation} />
             <PortsMapLayer enabled={portsLayerEnabled} onResults={setMappedPorts} onSelect={handleSelectPort} />
             {maritimeEvents.map((event) => (
               <CircleMarker key={`maritime-sos-${event.id}`} center={[event.lat, event.lon]}
