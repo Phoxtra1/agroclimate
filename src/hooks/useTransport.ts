@@ -169,7 +169,7 @@ export interface TrackingSession {
   heading?: number | null;
   last_location_at?: string | null;
   location_accuracy_m?: number | null;
-  location_source?: "unverified" | "device_gps" | "network_gps" | "simulated";
+  location_source?: "unverified" | "device_gps" | "simulated";
   is_simulated?: boolean;
   status: string;
   created_at: string;
@@ -870,7 +870,7 @@ export function useAGTrans() {
     speed_kn?: number;
     heading?: number;
     accuracyM: number;
-    source: "device_gps" | "network_gps";
+    source: "device_gps";
     capturedAt: string;
     eta?: string;
     distance_m?: number;
@@ -882,6 +882,11 @@ export function useAGTrans() {
     }
     if (!Number.isFinite(locationData.accuracyM) || locationData.accuracyM <= 0 || locationData.accuracyM > 100) {
       throw new Error("GPS accuracy is too low to publish this vehicle position.");
+    }
+    const capturedAtMs = Date.parse(locationData.capturedAt);
+    const ageMs = Date.now() - capturedAtMs;
+    if (!Number.isFinite(capturedAtMs) || ageMs > 90000 || ageMs < -15000) {
+      throw new Error("The GPS fix is stale or has an invalid capture time. Request a fresh device GPS position.");
     }
     const { error } = await supabase
       .from("tracking_sessions")
