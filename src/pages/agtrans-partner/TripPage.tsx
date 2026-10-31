@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAGTrans } from "@/hooks/useAGTrans";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,13 @@ import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteBut
 export default function TripPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { requests, deliveryJobs, trackingSessions, updateDeliveryJobStatus, handleCancelTrip } = useAGTrans();
+  const { requests, deliveryJobs, trackingSessions, updateDeliveryJobStatus, updateTrackingSessionLocation, handleCancelTrip } = useAGTrans();
+  const { user } = useAuth();
+  const [gpsSharing, setGpsSharing] = useState(false);
+  const [gpsFix, setGpsFix] = useState<{ lat: number; lon: number; accuracyM: number; capturedAt: string } | null>(null);
+  const [gpsError, setGpsError] = useState("");
+  const gpsWatchIdRef = useRef<number | null>(null);
+  const lastGpsWriteAtRef = useRef(0);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [showCancelWarning, setShowCancelWarning] = useState(false);
 
@@ -29,6 +36,73 @@ export default function TripPage() {
       setAiInsight("Awaiting dispatch. Ready to calculate optimal corridors once trip starts.");
     }
   }, [job]);
+
+  const stopGpsSharing = () => {
+    if (gpsWatchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
+    setGpsSharing(false);
+  };
+
+  useEffect(() => () => {
+    if (gpsWatchIdRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+    }
+  }, []);
+
+  const startGpsSharing = () => {
+    if (!job || !user || user.id !== job.driver_id) {
+      setGpsError("Only the assigned driver can share this trip's location.");
+      return;
+    }
+    if (!navigator.geolocation) {
+      setGpsError("This browser does not support device GPS.");
+      return;
+    }
+    if (!navigator.onLine) {
+      setGpsError("An internet connection is required to publish live trip GPS.");
+      return;
+    }
+
+    setGpsError("");
+    setGpsSharing(true);
+    gpsWatchIdRef.current = navigator.geolocation.watchPosition(async (position) => {
+      const capturedAt = new Date(position.timestamp).toISOString();
+      const accuracyM = position.coords.accuracy;
+      setGpsFix({
+        lat: position.coords.latitude,
+        lon: position.coords.longitude,
+        accuracyM,
+        capturedAt,
+      });
+
+      if (!Number.isFinite(accuracyM) || accuracyM <= 0 || accuracyM > 100) {
+        setGpsError("GPS accuracy is over 100 m. The current position is not being published until accuracy improves.");
+        return;
+      }
+      if (Date.now() - lastGpsWriteAtRef.current < 15000) return;
+
+      lastGpsWriteAtRef.current = Date.now();
+      try {
+        await updateTrackingSessionLocation(job.id, {
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+          accuracyM,
+          source: "device_gps",
+          capturedAt,
+          speed_kn: position.coords.speed == null ? undefined : Number((position.coords.speed * 3.6).toFixed(1)),
+          heading: position.coords.heading ?? undefined,
+        });
+        setGpsError("");
+      } catch (error) {
+        setGpsError(error instanceof Error ? error.message : "Could not publish this GPS update.");
+      }
+    }, (error) => {
+      setGpsError(error.message || "Device GPS permission or signal unavailable.");
+      stopGpsSharing();
+    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+  };
 
   if (!trip) return <div className="p-6">Trip not found</div>;
 
@@ -100,6 +174,34 @@ export default function TripPage() {
                 <div className="text-xs font-semibold text-muted-foreground">DELIVERY DESTINATION</div>
                 <p className="text-sm font-medium">{trip.delivery_location || "Delivery destination not recorded"}</p>
                 {trip.delivery_location && <OpenInSatelliteButton query={trip.delivery_location} label="AG Trans delivery destination" zoom={16}>Navigate to destination</OpenInSatelliteButton>}
+              </div>
+              <div className="sm:col-span-2 rounded-lg border p-3 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-semibold">DRIVER DEVICE GPS</div>
+                    <p className="text-[11px] text-muted-foreground">Location sharing is opt-in. Only the assigned driver can publish device GPS for this trip.</p>
+                  </div>
+                  {gpsSharing ? (
+                    <Button size="sm" variant="destructive" onClick={stopGpsSharing}>Stop GPS sharing</Button>
+                  ) : (
+                    <Button size="sm" onClick={startGpsSharing} disabled={!user || user.id !== job?.driver_id || ["Delivered","Cancelled","Completed"].includes(job?.status || "")}>
+                      Start GPS sharing
+                    </Button>
+                  )}
+                </div>
+                {gpsFix && (
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                    <span>{gpsFix.lat.toFixed(6)}, {gpsFix.lon.toFixed(6)}</span>
+                    <span>±{Math.round(gpsFix.accuracyM)} m</span>
+                    <span>{new Date(gpsFix.capturedAt).toLocaleTimeString()}</span>
+                    {gpsFix.accuracyM <= 100 && (
+                      <OpenInSatelliteButton lat={gpsFix.lat} lon={gpsFix.lon} label="Last device GPS fix for this AG Trans trip" zoom={17}>
+                        Inspect last GPS fix in Satellite
+                      </OpenInSatelliteButton>
+                    )}
+                  </div>
+                )}
+                {gpsError && <p className="text-[10px] text-amber-700">{gpsError}</p>}
               </div>
             </CardContent>
           </Card>
