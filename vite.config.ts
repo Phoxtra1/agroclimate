@@ -19,8 +19,8 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
 
     VitePWA({
-      // Prompt the user whenever a new version is deployed from the web app
-      registerType: "prompt",
+      // Keep installed PWAs aligned with the deployed application shell.
+      registerType: "autoUpdate",
       injectRegister: null,
 
       includeAssets: ["favicon.png", "placeholder.svg"],
@@ -60,9 +60,10 @@ export default defineConfig(({ mode }) => ({
       },
 
       workbox: {
-        // Prompt flow: the new SW waits until the user accepts the update
-        skipWaiting: false,
+        // Activate updated workers promptly and remove obsolete precache entries.
+        skipWaiting: true,
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
 
 
         // FIX: Increase default 2MB precache limit
@@ -79,10 +80,11 @@ export default defineConfig(({ mode }) => ({
             // Lazy-loaded application chunks are cached after first visit,
             // rather than downloaded eagerly during PWA installation.
             urlPattern: /\/assets\/.*\.js$/i,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
-              cacheName: "agroclimate-app-chunks",
-              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheName: "agroclimate-app-chunks-v2",
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },
@@ -162,13 +164,13 @@ export default defineConfig(({ mode }) => ({
               },
             },
           },
-          // AGNav offline support: map tiles
+          // Shared Satellite offline support: map tiles
           {
             urlPattern:
               /^https:\/\/(?:[a-c]\.)?tile\.openstreetmap\.org\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "agnav-osm-tiles",
+              cacheName: "satellite-osm-tiles",
               expiration: { maxEntries: 1500, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -179,7 +181,7 @@ export default defineConfig(({ mode }) => ({
               /^https:\/\/(?:[a-c]\.)?tile\.opentopomap\.org\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "agnav-topo-tiles",
+              cacheName: "satellite-topo-tiles",
               expiration: { maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -190,18 +192,18 @@ export default defineConfig(({ mode }) => ({
               /^https:\/\/services\.arcgisonline\.com\/.*/i,
             handler: "CacheFirst",
             options: {
-              cacheName: "agnav-satellite-tiles",
+              cacheName: "satellite-esri-tiles",
               expiration: { maxEntries: 800, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },
 
-          // AGNav offline support: routing + geocoding responses
+          // Shared Satellite offline support: routing + geocoding responses
           {
             urlPattern: /^https:\/\/router\.project-osrm\.org\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "agnav-routing",
+              cacheName: "satellite-routing",
               expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] },
             },
@@ -211,7 +213,7 @@ export default defineConfig(({ mode }) => ({
             urlPattern: /^https:\/\/nominatim\.openstreetmap\.org\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "agnav-geocoding",
+              cacheName: "satellite-geocoding",
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },
