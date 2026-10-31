@@ -46,6 +46,14 @@ export default function LiveTracking() {
     if (!job) return null;
     return trackingSessions.find((s) => s.delivery_job_id === job.id) || null;
   }, [job, trackingSessions]);
+  const hasVerifiedGps = session?.location_source === "device_gps"
+    && !session.is_simulated
+    && session.current_lat != null
+    && session.current_lon != null
+    && !!session.last_location_at;
+  const lastGpsAgeSeconds = hasVerifiedGps && session?.last_location_at
+    ? Math.max(0, Math.round((Date.now() - Date.parse(session.last_location_at)) / 1000))
+    : null;
 
   useEffect(() => {
     if (!job) return;
@@ -112,10 +120,19 @@ export default function LiveTracking() {
             <p className="text-sm text-muted-foreground">AgroClimate Satellite is the common map workspace for delivery coordinates, pickup and destination inspection.</p>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            {session?.current_lat != null && session?.current_lon != null ? (
-              <OpenInSatelliteButton lat={session.current_lat} lon={session.current_lon} label="Current recorded vehicle position" zoom={17}>View current recorded vehicle position</OpenInSatelliteButton>
+            {hasVerifiedGps && session?.current_lat != null && session?.current_lon != null ? (
+              <div className="space-y-1">
+                <OpenInSatelliteButton lat={session.current_lat} lon={session.current_lon} label="Last verified driver device GPS fix" zoom={17}>
+                  Inspect last driver GPS fix in Satellite
+                </OpenInSatelliteButton>
+                <p className="text-[10px] text-muted-foreground">
+                  Device GPS recorded {new Date(session.last_location_at!).toLocaleString()}
+                  {session.location_accuracy_m != null ? ` · ±${Math.round(session.location_accuracy_m)} m` : ""}
+                  {lastGpsAgeSeconds != null && lastGpsAgeSeconds > 120 ? " · STALE POSITION" : ""}
+                </p>
+              </div>
             ) : (
-              <span className="text-sm text-muted-foreground">No current vehicle coordinates have been recorded yet.</span>
+              <span className="text-sm text-muted-foreground">No verified driver device GPS fix has been shared for this trip.</span>
             )}
             {job.pickup_location && <OpenInSatelliteButton query={job.pickup_location} label="Delivery pickup" zoom={16}>View pickup</OpenInSatelliteButton>}
             {job.destination && <OpenInSatelliteButton query={job.destination} label="Delivery destination" zoom={16}>View destination</OpenInSatelliteButton>}
