@@ -156,6 +156,15 @@ export function MaritimeSafetyPanel({ onInspectLocation, onMapDataChange }: Prop
       };
       gpsRef.current = fix;
       setGpsFix(fix);
+      if (!Number.isFinite(fix.accuracyM) || fix.accuracyM < 0.1 || fix.accuracyM > 100) {
+        setGpsError("GPS accuracy is over 100 m. This fix is shown locally but is not shared or used for SOS.");
+        return;
+      }
+      if (!Number.isFinite(fix.timestamp) || Date.now() - fix.timestamp > 30000 || fix.timestamp - Date.now() > 15000) {
+        setGpsError("The browser supplied a stale GPS fix. Waiting for a current position.");
+        return;
+      }
+      setGpsError("");
       if (Date.now() - lastLocationWriteRef.current < 20000) return;
       lastLocationWriteRef.current = Date.now();
       try {
@@ -163,6 +172,7 @@ export function MaritimeSafetyPanel({ onInspectLocation, onMapDataChange }: Prop
           vesselId: selectedVessel.id,
           point: fix.point,
           accuracyM: fix.accuracyM,
+          capturedAt: new Date(fix.timestamp).toISOString(),
           speedMps: fix.speedMps,
           headingDeg: fix.headingDeg,
         });
@@ -315,7 +325,7 @@ export function MaritimeSafetyPanel({ onInspectLocation, onMapDataChange }: Prop
         <div className="flex flex-wrap gap-2">
           {vessels.length > 0 ? (
             <select className="h-9 min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
-              value={selectedVesselId} onChange={(event) => { stopLocationSharing(); setSelectedVesselId(event.target.value); setGpsFix(null); }}>
+              value={selectedVesselId} onChange={(event) => { stopLocationSharing(); gpsRef.current = null; setSelectedVesselId(event.target.value); setGpsFix(null); }}>
               {vessels.map((vessel) => <option key={vessel.id} value={vessel.id}>{vessel.vessel_name || vessel.id} · {vessel.status}</option>)}
             </select>
           ) : null}
