@@ -678,7 +678,7 @@ export default function EnvironmentalMonitor() {
         const data = await res.json();
         return data.display_name ? data.display_name.split(",").slice(0, 3).join(",") : `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
       }
-    } catch {}
+    } catch { /* Fall back to raw coordinates when reverse geocoding is unavailable. */ }
     return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   };
 
