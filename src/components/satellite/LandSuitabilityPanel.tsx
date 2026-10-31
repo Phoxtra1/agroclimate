@@ -75,7 +75,7 @@ export function LandSuitabilityPanel({ point, pointLabel, fieldGeometry, fieldAr
         observationType: "preliminary_crop_climate_screen",
         sourceName: "NASA POWER Climatology / Copernicus DEM GLO-90 via Open-Meteo",
         sourceUrl: assessment.sources.map((source) => source.url).join(" | "),
-        confidence: assessment.confidence === "moderate" ? 0.5 : 0.25,
+        confidence: 0.25,
         metrics: {
           coordinates: assessment.coordinates,
           elevation_m: assessment.elevationM,
