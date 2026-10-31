@@ -25,7 +25,6 @@ export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
     if (map.getZoom() < 7) {
       setPorts([]);
       onResults?.([]);
-      setLoading(false);
       return;
     }
 
@@ -48,7 +47,6 @@ export function PortsMapLayer({ enabled, onResults, onSelect }: Props) {
           description: error instanceof Error ? error.message : "OpenStreetMap port data could not be loaded.",
         });
       }
-    } finally {
     }
   }, [enabled, map, onResults]);
 
