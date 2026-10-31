@@ -106,23 +106,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return;
   }
 
-  // Track sign-in activity for admin analytics
+  // Track sign-in activity after the Supabase auth callback releases its lock.
   if (event === "SIGNED_IN" && currentSession?.user?.id) {
-    void supabase.from("activity" as any).insert({
-      user_id: currentSession.user.id,
-      action: "login",
-      metadata: { at: new Date().toISOString() },
-    }).then(() => {}, () => {});
+    const signedInUserId = currentSession.user.id;
+    window.setTimeout(() => {
+      void supabase.from("activity" as any).insert({
+        user_id: signedInUserId,
+        action: "login",
+        metadata: { at: new Date().toISOString() },
+      }).then(() => {}, () => {});
+    }, 0);
   }
 
   updateAuthState(currentSession ?? null);
 });
 
 
-    // 2) Restore session on refresh
-    void refreshSession();
+    // 2) Restore session on refresh, but never leave the entire application
+    // behind an endless loading screen if the auth endpoint is unreachable.
+    const startupTimeout = window.setTimeout(() => {
+      console.warn("Supabase session restore exceeded 10 seconds; rendering a signed-out recovery state.");
+      setUser(null);
+      setSession(null);
+      setLoading(false);
+    }, 10000);
+    void refreshSession().finally(() => window.clearTimeout(startupTimeout));
 
     return () => {
+      window.clearTimeout(startupTimeout);
       subscription.unsubscribe();
     };
   }, [refreshSession, updateAuthState]);

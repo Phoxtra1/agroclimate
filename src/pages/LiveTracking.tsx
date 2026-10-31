@@ -5,21 +5,11 @@ import { useAGTrans, DeliveryJob } from "@/hooks/useAGTrans";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import { Progress } from "@/components/ui/progress";
 import { Truck, MapPin, Navigation, Clock, Route, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
-
+import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 interface TrackingEvent {
   id: string;
   delivery_job_id: string;
@@ -77,29 +67,6 @@ export default function LiveTracking() {
     return () => { supabase.removeChannel(ch); };
   }, [job]);
 
-  const defaultPickup: [number, number] = [5.6037, -0.1870];
-  const defaultDropoff: [number, number] = [6.6961, -1.6152];
-  const currentPos: [number, number] = session?.current_lat && session?.current_lon
-    ? [session.current_lat, session.current_lon]
-    : defaultPickup;
-
-  const pickupIcon = L.divIcon({
-    html: `<div class="bg-blue-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
-    className: "custom-pin",
-  });
-  const dropoffIcon = L.divIcon({
-    html: `<div class="bg-red-500 w-3 h-3 rounded-full border border-white shadow-sm"></div>`,
-    className: "custom-pin",
-  });
-  const truckIcon = L.divIcon({
-    html: `<div class="bg-emerald-500 p-1.5 rounded-full border border-white shadow-lg text-white" style="transform: rotate(${session?.heading || 0}deg);">
-      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-    </div>`,
-    className: "truck-pin",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  });
-
   const progress = STATUS_PROGRESS[job?.status || "Assigned"] || 0;
 
   const confirmDelivery = async () => {
@@ -140,31 +107,18 @@ export default function LiveTracking() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
-          <CardContent className="p-0">
-            <div className="h-[400px] rounded-xl overflow-hidden">
-              <MapContainer center={currentPos} zoom={8} className="h-full w-full">
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <Marker position={defaultPickup} icon={pickupIcon}>
-                  <Popup>Pickup: {job.pickup_location}</Popup>
-                </Marker>
-                <Marker position={defaultDropoff} icon={dropoffIcon}>
-                  <Popup>Dropoff: {job.destination}</Popup>
-                </Marker>
-                {session && (
-                  <Marker position={currentPos} icon={truckIcon}>
-                    <Popup>
-                      <strong>{session.driver_name}</strong><br />
-                      {session.vehicle_type} · {session.plate_number}<br />
-                      Speed: {session.speed_kn} km/h
-                    </Popup>
-                  </Marker>
-                )}
-                {session?.route && <Polyline positions={session.route} color="#10b981" weight={4} dashArray="5, 10" />}
-              </MapContainer>
-            </div>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2"><Navigation className="h-4 w-4 text-primary" /> Shared Satellite Tracking Map</CardTitle>
+            <p className="text-sm text-muted-foreground">AgroClimate Satellite is the common map workspace for delivery coordinates, pickup and destination inspection.</p>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {session?.current_lat != null && session?.current_lon != null ? (
+              <OpenInSatelliteButton lat={session.current_lat} lon={session.current_lon} label="Current recorded vehicle position" zoom={17}>View current recorded vehicle position</OpenInSatelliteButton>
+            ) : (
+              <span className="text-sm text-muted-foreground">No current vehicle coordinates have been recorded yet.</span>
+            )}
+            {job.pickup_location && <OpenInSatelliteButton query={job.pickup_location} label="Delivery pickup" zoom={16}>View pickup</OpenInSatelliteButton>}
+            {job.destination && <OpenInSatelliteButton query={job.destination} label="Delivery destination" zoom={16}>View destination</OpenInSatelliteButton>}
           </CardContent>
         </Card>
 
