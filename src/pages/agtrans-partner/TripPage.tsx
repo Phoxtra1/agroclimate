@@ -36,10 +36,14 @@ export default function TripPage() {
     setGpsSharing(false);
   }, []);
 
+  const currentJobId = job?.id;
+  const currentJobStatus = job?.status;
+  const currentDriverId = job?.driver_id;
+
   useEffect(() => {
-    const terminal = !job || ["Delivered", "Cancelled", "Completed"].includes(job.status);
-    if (terminal || user?.id !== job?.driver_id) stopGpsSharing();
-  }, [job?.id, job?.status, job?.driver_id, user?.id, stopGpsSharing]);
+    const terminal = !currentJobId || ["Delivered", "Cancelled", "Completed"].includes(currentJobStatus || "");
+    if (terminal || user?.id !== currentDriverId) stopGpsSharing();
+  }, [currentJobId, currentJobStatus, currentDriverId, user?.id, stopGpsSharing]);
 
   useEffect(() => () => {
     if (gpsWatchIdRef.current !== null && navigator.geolocation) {
