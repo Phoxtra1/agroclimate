@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, AlertCircle, CheckCircle2, CloudRain, Mountain, Save, Sprout, Thermometer, Waves } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle2, CloudRain, Mountain, Save, Sprout, Thermometer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
