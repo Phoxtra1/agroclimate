@@ -9,7 +9,7 @@ import SecurityPanel from "./SecurityPanel";
 import SubscriptionPanel from "./SubscriptionPanel";
 import PostHarvestAdminPanel from "./PostHarvestAdminPanel";
 import MarketLinkAdminPanel from "./MarketLinkAdminPanel";
-import AGNavEngine from "./AGNavEngine";
+import { MaritimeOperationsPanel } from "@/components/admin/MaritimeOperationsPanel";
 import AdminAGTransPanel from "./AdminAGTransPanel";
 import DataExporterPanel from "./DataExporterPanel";
 import AgrofundPanel from "./AgrofundPanel";
@@ -28,7 +28,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 type EngineKey =
   | "overview" | "data-export" | "agrofund" | "alert" | "ai" | "flight" | "system"
-  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "agnav" | "agtrans" | "approvals";
+  | "settings" | "security" | "subscriptions" | "post-harvest" | "market-link" | "maritime" | "agtrans" | "approvals";
 
 const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: Shield },
@@ -38,7 +38,7 @@ const navItems: { key: EngineKey; label: string; icon: React.ElementType }[] = [
   { key: "alert", label: "Alert Engine", icon: Bell },
   { key: "ai", label: "AI Layer", icon: Layers },
   { key: "flight", label: "Flight Advisory", icon: Plane },
-  { key: "agnav", label: "AGNav Engine", icon: Anchor },
+  { key: "maritime", label: "Maritime Safety", icon: Anchor },
   { key: "agtrans", label: "AGTrans (Logistics)", icon: Truck },
   { key: "post-harvest", label: "Post-Harvest", icon: Archive },
   { key: "market-link", label: "Market Link", icon: Store },
@@ -421,7 +421,7 @@ export default function AdminDashboard() {
       case "subscriptions": return <SubscriptionPanel />;
       case "post-harvest": return <PostHarvestAdminPanel />;
       case "market-link": return <MarketLinkAdminPanel />;
-      case "agnav": return <AGNavEngine />;
+      case "maritime": return <MaritimeOperationsPanel />;
       case "agtrans": return <AdminAGTransPanel />;
       case "approvals": return <DriverApprovals />;
       default: return <OverviewPanel onNavigate={setActiveEngine} />;
