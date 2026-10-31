@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAGTrans } from "@/hooks/useAGTrans";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MapPin, Navigation, CheckCircle, AlertTriangle, Bot, Phone, Navigation2, Compass, ShieldAlert, Clock } from "lucide-react";
+import { MapPin, Navigation, CheckCircle, AlertTriangle, Phone, Navigation2, Compass, ShieldAlert, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 
@@ -21,33 +21,30 @@ export default function TripPage() {
   const [gpsError, setGpsError] = useState("");
   const gpsWatchIdRef = useRef<number | null>(null);
   const lastGpsWriteAtRef = useRef(0);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [showCancelWarning, setShowCancelWarning] = useState(false);
 
   // Retrieve matching request, job and tracking session
   const trip = requests.find(r => r.id === id);
-  const job = deliveryJobs.find(j => j.product === trip?.product_type && j.supplier_id === trip?.supplier_id);
+  const job = deliveryJobs.find(j => j.request_id === trip?.id);
   const session = job ? trackingSessions.find(s => s.delivery_job_id === job.id) : null;
 
-  useEffect(() => {
-    if (job && job.status === "In Transit") {
-      setAiInsight("Route optimized. Standard Kumasi-Accra highway weather warning: Light rains near Koforidua. Maintain 50km/h.");
-    } else {
-      setAiInsight("Awaiting dispatch. Ready to calculate optimal corridors once trip starts.");
-    }
-  }, [job]);
-
-  const stopGpsSharing = () => {
+  const stopGpsSharing = useCallback(() => {
     if (gpsWatchIdRef.current !== null && navigator.geolocation) {
       navigator.geolocation.clearWatch(gpsWatchIdRef.current);
       gpsWatchIdRef.current = null;
     }
     setGpsSharing(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    const terminal = !job || ["Delivered", "Cancelled", "Completed"].includes(job.status);
+    if (terminal || user?.id !== job?.driver_id) stopGpsSharing();
+  }, [job?.id, job?.status, job?.driver_id, user?.id, stopGpsSharing]);
 
   useEffect(() => () => {
     if (gpsWatchIdRef.current !== null && navigator.geolocation) {
       navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
     }
   }, []);
 
@@ -227,7 +224,7 @@ export default function TripPage() {
                 <CardContent className="p-4 flex flex-col justify-center items-center text-center">
                   <Clock className="h-5 w-5 text-blue-500 mb-1" />
                   <span className="text-[10px] text-muted-foreground uppercase font-bold">Est. Duration</span>
-                  <span className="text-lg font-black mt-1 text-primary">{session.eta || "Calculating..."}</span>
+                  <span className="text-lg font-black mt-1 text-primary">{session.eta || "Not available"}</span>
                 </CardContent>
               </Card>
               <Card className="hover:shadow-md transition">
@@ -240,19 +237,6 @@ export default function TripPage() {
                 </CardContent>
               </Card>
             </div>
-          )}
-
-          {/* AI Advisor Panel */}
-          {aiInsight && (
-            <Card className="border-blue-500 bg-blue-500/5">
-              <CardContent className="p-4 flex gap-3">
-                <Bot className="h-6 w-6 text-blue-500 shrink-0" />
-                <div>
-                  <h4 className="font-semibold text-sm text-blue-700">AI Route Advisor</h4>
-                  <p className="text-sm text-blue-600/90 mt-0.5">{aiInsight}</p>
-                </div>
-              </CardContent>
-            </Card>
           )}
 
           {/* Action Buttons */}
