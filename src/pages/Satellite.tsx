@@ -665,26 +665,50 @@ export default function Satellite() {
   // Supabase Monitored Fields & Alerts Loading
   const refreshSavedFields = useCallback(async () => {
     if (!user) return;
-    const { data: fields } = await supabase
+    const { data: fields, error: fieldsError } = await supabase
       .from("satellite_fields")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+    if (fieldsError) {
+      toast.error("Could not load monitored fields", { description: fieldsError.message });
+      return;
+    }
     setSavedFields(fields ?? []);
     if (fields?.length) {
-      const { data: alerts } = await supabase
+      const { data: alerts, error: alertsError } = await supabase
         .from("satellite_field_alerts")
         .select("*")
         .in("field_id", fields.map((f) => f.id))
         .order("created_at", { ascending: false })
         .limit(20);
+      if (alertsError) {
+        toast.error("Could not load field alerts", { description: alertsError.message });
+        return;
+      }
       setSavedAlerts(alerts ?? []);
+    } else {
+      setSavedAlerts([]);
     }
   }, [user]);
 
   useEffect(() => {
     void refreshSavedFields();
-  }, [refreshSavedFields]);
+    if (!user) return;
+    const channel = supabase
+      .channel(`satellite-monitor-${user.id}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "satellite_fields", filter: `user_id=eq.${user.id}` }, () => { void refreshSavedFields(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "satellite_field_alerts" }, () => { void refreshSavedFields(); })
+      .subscribe();
+    const interval = window.setInterval(() => { void refreshSavedFields(); }, 60000);
+    const refresh = () => { void refreshSavedFields(); };
+    window.addEventListener("online", refresh);
+    return () => {
+      void supabase.removeChannel(channel);
+      window.clearInterval(interval);
+      window.removeEventListener("online", refresh);
+    };
+  }, [refreshSavedFields, user]);
 
   const handleCaptureGeoFeaturePoint = useCallback((point: GeoPoint) => {
     setGeoFeaturePoint(point);
@@ -1275,7 +1299,7 @@ export default function Satellite() {
             {/* Drawn Field Boundaries */}
             {fieldPoints.length > 0 && (
               <Polygon
-                positions={fieldPoints.map((pt) => [pt.lat, pt.lon])}
+                positions={fieldPoints.map((pt): [number, number] => [pt.lat, pt.lon])}
                 pathOptions={{
                   color: "#f59e0b",
                   fillColor: "#f59e0b",
