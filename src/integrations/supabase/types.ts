@@ -1320,6 +1320,39 @@ export type Database = {
         }
         Relationships: []
       }
+      external_responders: {
+        Row: {
+          active: boolean
+          agency: string | null
+          created_at: string
+          id: string
+          name: string
+          phone_number: string | null
+          region: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          active?: boolean
+          agency?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          phone_number?: string | null
+          region?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          active?: boolean
+          agency?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          phone_number?: string | null
+          region?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       farm_qr_codes: {
         Row: {
           created_at: string
@@ -1455,6 +1488,44 @@ export type Database = {
         }
         Relationships: []
       }
+      farms: {
+        Row: {
+          created_at: string
+          geo_feature_id: string | null
+          id: string
+          lat: number
+          lon: number
+          name: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          geo_feature_id?: string | null
+          id?: string
+          lat: number
+          lon: number
+          name: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          geo_feature_id?: string | null
+          id?: string
+          lat?: number
+          lon?: number
+          name?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "farms_geo_feature_id_fkey"
+            columns: ["geo_feature_id"]
+            isOneToOne: false
+            referencedRelation: "geo_features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fish_ponds: {
         Row: {
           created_at: string
@@ -1542,6 +1613,221 @@ export type Database = {
           stale_timeout_sec?: number
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      geo_data_sources: {
+        Row: {
+          access_status: string
+          attribution: string | null
+          data_family: string
+          id: string
+          last_checked_at: string
+          name: string
+          notes: string | null
+          provider: string
+          source_url: string
+          spatial_resolution: string | null
+        }
+        Insert: {
+          access_status: string
+          attribution?: string | null
+          data_family: string
+          id: string
+          last_checked_at?: string
+          name: string
+          notes?: string | null
+          provider: string
+          source_url: string
+          spatial_resolution?: string | null
+        }
+        Update: {
+          access_status?: string
+          attribution?: string | null
+          data_family?: string
+          id?: string
+          last_checked_at?: string
+          name?: string
+          notes?: string | null
+          provider?: string
+          source_url?: string
+          spatial_resolution?: string | null
+        }
+        Relationships: []
+      }
+      geo_features: {
+        Row: {
+          acquisition_date: string | null
+          centroid: unknown
+          confidence: number | null
+          created_at: string
+          data_quality: string
+          description: string | null
+          feature_type: string
+          geojson: Json
+          geom: unknown
+          id: string
+          name: string
+          owner_id: string | null
+          properties: Json
+          resolution_m: number | null
+          source_name: string | null
+          source_record_id: string | null
+          source_url: string | null
+          stale_after: string | null
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          acquisition_date?: string | null
+          centroid?: unknown
+          confidence?: number | null
+          created_at?: string
+          data_quality?: string
+          description?: string | null
+          feature_type: string
+          geojson: Json
+          geom?: unknown
+          id?: string
+          name: string
+          owner_id?: string | null
+          properties?: Json
+          resolution_m?: number | null
+          source_name?: string | null
+          source_record_id?: string | null
+          source_url?: string | null
+          stale_after?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          acquisition_date?: string | null
+          centroid?: unknown
+          confidence?: number | null
+          created_at?: string
+          data_quality?: string
+          description?: string | null
+          feature_type?: string
+          geojson?: Json
+          geom?: unknown
+          id?: string
+          name?: string
+          owner_id?: string | null
+          properties?: Json
+          resolution_m?: number | null
+          source_name?: string | null
+          source_record_id?: string | null
+          source_url?: string | null
+          stale_after?: string | null
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: []
+      }
+      geo_observations: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          evidence: Json
+          feature_id: string | null
+          id: string
+          metrics: Json
+          observation_type: string
+          observed_at: string
+          observer_id: string | null
+          resolution_m: number | null
+          source_name: string | null
+          source_url: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          evidence?: Json
+          feature_id?: string | null
+          id?: string
+          metrics?: Json
+          observation_type: string
+          observed_at?: string
+          observer_id?: string | null
+          resolution_m?: number | null
+          source_name?: string | null
+          source_url?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          evidence?: Json
+          feature_id?: string | null
+          id?: string
+          metrics?: Json
+          observation_type?: string
+          observed_at?: string
+          observer_id?: string | null
+          resolution_m?: number | null
+          source_name?: string | null
+          source_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_observations_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "geo_features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geo_routes: {
+        Row: {
+          calculated_at: string
+          created_at: string
+          destination: Json
+          distance_m: number | null
+          duration_s: number | null
+          geom: unknown
+          geometry: Json
+          id: string
+          is_simulated: boolean
+          last_confirmed_at: string | null
+          origin: Json
+          provider: string | null
+          route_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          calculated_at?: string
+          created_at?: string
+          destination: Json
+          distance_m?: number | null
+          duration_s?: number | null
+          geom?: unknown
+          geometry: Json
+          id?: string
+          is_simulated?: boolean
+          last_confirmed_at?: string | null
+          origin: Json
+          provider?: string | null
+          route_type?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          calculated_at?: string
+          created_at?: string
+          destination?: Json
+          distance_m?: number | null
+          duration_s?: number | null
+          geom?: unknown
+          geometry?: Json
+          id?: string
+          is_simulated?: boolean
+          last_confirmed_at?: string | null
+          origin?: Json
+          provider?: string | null
+          route_type?: string
+          status?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2026,6 +2312,68 @@ export type Database = {
         }
         Relationships: []
       }
+      nav_routes: {
+        Row: {
+          cargo_kg: number
+          created_at: string
+          distance_m: number | null
+          duration_s: number | null
+          end_lat: number | null
+          end_lon: number | null
+          geometry: Json | null
+          id: string
+          passengers: number
+          risk_level: string | null
+          risk_score: number | null
+          start_lat: number | null
+          start_lon: number | null
+          user_id: string | null
+          vessel_id: string
+        }
+        Insert: {
+          cargo_kg?: number
+          created_at?: string
+          distance_m?: number | null
+          duration_s?: number | null
+          end_lat?: number | null
+          end_lon?: number | null
+          geometry?: Json | null
+          id?: string
+          passengers?: number
+          risk_level?: string | null
+          risk_score?: number | null
+          start_lat?: number | null
+          start_lon?: number | null
+          user_id?: string | null
+          vessel_id: string
+        }
+        Update: {
+          cargo_kg?: number
+          created_at?: string
+          distance_m?: number | null
+          duration_s?: number | null
+          end_lat?: number | null
+          end_lon?: number | null
+          geometry?: Json | null
+          id?: string
+          passengers?: number
+          risk_level?: string | null
+          risk_score?: number | null
+          start_lat?: number | null
+          start_lon?: number | null
+          user_id?: string | null
+          vessel_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nav_routes_vessel_id_fkey"
+            columns: ["vessel_id"]
+            isOneToOne: false
+            referencedRelation: "vessels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       negotiations: {
         Row: {
           agreed_price: number | null
@@ -2233,93 +2581,51 @@ export type Database = {
         }
         Relationships: []
       }
-      satellite_fields: {
+      sales_records: {
         Row: {
-          area_hectares: number
+          buyer_name: string | null
           created_at: string
-          crop_type: string | null
-          field_geojson: Json
+          crop_name: string
+          farm_plot: string | null
           id: string
-          last_scene_at: string | null
-          max_cloud_cover: number
-          monitoring_enabled: boolean
-          name: string
-          ndvi_drop_threshold: number
-          planted_on: string | null
+          notes: string | null
+          price_per_unit: number
+          quantity_sold: number
+          sale_date: string | null
+          season: string | null
+          unit: string
           updated_at: string
           user_id: string
         }
         Insert: {
-          area_hectares?: number
+          buyer_name?: string | null
           created_at?: string
-          crop_type?: string | null
-          field_geojson: Json
+          crop_name: string
+          farm_plot?: string | null
           id?: string
-          last_scene_at?: string | null
-          max_cloud_cover?: number
-          monitoring_enabled?: boolean
-          name: string
-          ndvi_drop_threshold?: number
-          planted_on?: string | null
+          notes?: string | null
+          price_per_unit?: number
+          quantity_sold?: number
+          sale_date?: string | null
+          season?: string | null
+          unit?: string
           updated_at?: string
           user_id: string
         }
         Update: {
-          area_hectares?: number
+          buyer_name?: string | null
           created_at?: string
-          crop_type?: string | null
-          field_geojson?: Json
+          crop_name?: string
+          farm_plot?: string | null
           id?: string
-          last_scene_at?: string | null
-          max_cloud_cover?: number
-          monitoring_enabled?: boolean
-          name?: string
-          ndvi_drop_threshold?: number
-          planted_on?: string | null
+          notes?: string | null
+          price_per_unit?: number
+          quantity_sold?: number
+          sale_date?: string | null
+          season?: string | null
+          unit?: string
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      satellite_field_observations: {
-        Row: {
-          captured_at: string
-          cloud_cover: number | null
-          created_at: string
-          field_id: string
-          id: string
-          max_ndvi: number | null
-          mean_ndmi: number | null
-          mean_ndvi: number | null
-          min_ndvi: number | null
-          scene_id: string
-          valid_pixel_count: number
-        }
-        Insert: {
-          captured_at: string
-          cloud_cover?: number | null
-          created_at?: string
-          field_id: string
-          id?: string
-          max_ndvi?: number | null
-          mean_ndmi?: number | null
-          mean_ndvi?: number | null
-          min_ndvi?: number | null
-          scene_id: string
-          valid_pixel_count?: number
-        }
-        Update: {
-          captured_at?: string
-          cloud_cover?: number | null
-          created_at?: string
-          field_id?: string
-          id?: string
-          max_ndvi?: number | null
-          mean_ndmi?: number | null
-          mean_ndvi?: number | null
-          min_ndvi?: number | null
-          scene_id?: string
-          valid_pixel_count?: number
         }
         Relationships: []
       }
@@ -2390,55 +2696,190 @@ export type Database = {
           title?: string
           valid_pixel_count?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "satellite_field_alerts_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_fields"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      sales_records: {
+      satellite_field_observations: {
         Row: {
-          buyer_name: string | null
+          captured_at: string
+          cloud_cover: number | null
           created_at: string
-          crop_name: string
-          farm_plot: string | null
+          field_id: string
           id: string
-          notes: string | null
-          price_per_unit: number
-          quantity_sold: number
-          sale_date: string | null
-          season: string | null
-          unit: string
+          max_ndvi: number | null
+          mean_ndmi: number | null
+          mean_ndvi: number | null
+          min_ndvi: number | null
+          scene_id: string
+          valid_pixel_count: number
+        }
+        Insert: {
+          captured_at: string
+          cloud_cover?: number | null
+          created_at?: string
+          field_id: string
+          id?: string
+          max_ndvi?: number | null
+          mean_ndmi?: number | null
+          mean_ndvi?: number | null
+          min_ndvi?: number | null
+          scene_id: string
+          valid_pixel_count?: number
+        }
+        Update: {
+          captured_at?: string
+          cloud_cover?: number | null
+          created_at?: string
+          field_id?: string
+          id?: string
+          max_ndvi?: number | null
+          mean_ndmi?: number | null
+          mean_ndvi?: number | null
+          min_ndvi?: number | null
+          scene_id?: string
+          valid_pixel_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satellite_field_observations_field_id_fkey"
+            columns: ["field_id"]
+            isOneToOne: false
+            referencedRelation: "satellite_fields"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      satellite_fields: {
+        Row: {
+          area_hectares: number
+          created_at: string
+          crop_type: string | null
+          field_geojson: Json
+          geo_feature_id: string | null
+          id: string
+          last_scene_at: string | null
+          max_cloud_cover: number
+          monitoring_enabled: boolean
+          name: string
+          ndvi_drop_threshold: number
+          planted_on: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          buyer_name?: string | null
+          area_hectares?: number
           created_at?: string
-          crop_name: string
-          farm_plot?: string | null
+          crop_type?: string | null
+          field_geojson: Json
+          geo_feature_id?: string | null
           id?: string
-          notes?: string | null
-          price_per_unit?: number
-          quantity_sold?: number
-          sale_date?: string | null
-          season?: string | null
-          unit?: string
+          last_scene_at?: string | null
+          max_cloud_cover?: number
+          monitoring_enabled?: boolean
+          name: string
+          ndvi_drop_threshold?: number
+          planted_on?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          buyer_name?: string | null
+          area_hectares?: number
           created_at?: string
-          crop_name?: string
-          farm_plot?: string | null
+          crop_type?: string | null
+          field_geojson?: Json
+          geo_feature_id?: string | null
           id?: string
-          notes?: string | null
-          price_per_unit?: number
-          quantity_sold?: number
-          sale_date?: string | null
-          season?: string | null
-          unit?: string
+          last_scene_at?: string | null
+          max_cloud_cover?: number
+          monitoring_enabled?: boolean
+          name?: string
+          ndvi_drop_threshold?: number
+          planted_on?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "satellite_fields_geo_feature_id_fkey"
+            columns: ["geo_feature_id"]
+            isOneToOne: false
+            referencedRelation: "geo_features"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sos_events: {
+        Row: {
+          accepted_by_vessel_id: string | null
+          created_at: string
+          eta_minutes: number | null
+          id: string
+          lat: number
+          lon: number
+          message: string | null
+          notified_responders: Json
+          notified_vessels: Json
+          resolved_at: string | null
+          risk_level: string
+          status: string
+          user_id: string | null
+          vessel_id: string
+        }
+        Insert: {
+          accepted_by_vessel_id?: string | null
+          created_at?: string
+          eta_minutes?: number | null
+          id?: string
+          lat: number
+          lon: number
+          message?: string | null
+          notified_responders?: Json
+          notified_vessels?: Json
+          resolved_at?: string | null
+          risk_level: string
+          status?: string
+          user_id?: string | null
+          vessel_id: string
+        }
+        Update: {
+          accepted_by_vessel_id?: string | null
+          created_at?: string
+          eta_minutes?: number | null
+          id?: string
+          lat?: number
+          lon?: number
+          message?: string | null
+          notified_responders?: Json
+          notified_vessels?: Json
+          resolved_at?: string | null
+          risk_level?: string
+          status?: string
+          user_id?: string | null
+          vessel_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sos_events_accepted_by_vessel_id_fkey"
+            columns: ["accepted_by_vessel_id"]
+            isOneToOne: false
+            referencedRelation: "vessels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sos_events_vessel_id_fkey"
+            columns: ["vessel_id"]
+            isOneToOne: false
+            referencedRelation: "vessels"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_tickets: {
         Row: {
@@ -2856,6 +3297,159 @@ export type Database = {
         }
         Relationships: []
       }
+      vessel_locations: {
+        Row: {
+          accuracy_m: number | null
+          captured_at: string
+          created_at: string
+          geom: unknown
+          heading: number | null
+          id: string
+          lat: number
+          location_source: string
+          lon: number
+          risk_level: string | null
+          speed_kn: number | null
+          user_id: string | null
+          vessel_id: string
+        }
+        Insert: {
+          accuracy_m?: number | null
+          captured_at?: string
+          created_at?: string
+          geom?: unknown
+          heading?: number | null
+          id?: string
+          lat: number
+          location_source?: string
+          lon: number
+          risk_level?: string | null
+          speed_kn?: number | null
+          user_id?: string | null
+          vessel_id: string
+        }
+        Update: {
+          accuracy_m?: number | null
+          captured_at?: string
+          created_at?: string
+          geom?: unknown
+          heading?: number | null
+          id?: string
+          lat?: number
+          location_source?: string
+          lon?: number
+          risk_level?: string | null
+          speed_kn?: number | null
+          user_id?: string | null
+          vessel_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vessel_locations_vessel_id_fkey"
+            columns: ["vessel_id"]
+            isOneToOne: false
+            referencedRelation: "vessels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vessel_messages: {
+        Row: {
+          body: string
+          created_at: string
+          from_vessel_id: string
+          id: string
+          sos_event_id: string | null
+          to_vessel_id: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          from_vessel_id: string
+          id?: string
+          sos_event_id?: string | null
+          to_vessel_id?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          from_vessel_id?: string
+          id?: string
+          sos_event_id?: string | null
+          to_vessel_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vessel_messages_from_vessel_id_fkey"
+            columns: ["from_vessel_id"]
+            isOneToOne: false
+            referencedRelation: "vessels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vessel_messages_sos_event_id_fkey"
+            columns: ["sos_event_id"]
+            isOneToOne: false
+            referencedRelation: "sos_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vessel_messages_to_vessel_id_fkey"
+            columns: ["to_vessel_id"]
+            isOneToOne: false
+            referencedRelation: "vessels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vessels: {
+        Row: {
+          cargo_capacity_kg: number
+          created_at: string
+          has_rescue_capability: boolean
+          home_lat: number | null
+          home_lon: number | null
+          id: string
+          max_capacity: number
+          operator_name: string | null
+          operator_type: string | null
+          owner_id: string | null
+          phone_number: string | null
+          status: string
+          vessel_name: string | null
+        }
+        Insert: {
+          cargo_capacity_kg?: number
+          created_at?: string
+          has_rescue_capability?: boolean
+          home_lat?: number | null
+          home_lon?: number | null
+          id: string
+          max_capacity?: number
+          operator_name?: string | null
+          operator_type?: string | null
+          owner_id?: string | null
+          phone_number?: string | null
+          status?: string
+          vessel_name?: string | null
+        }
+        Update: {
+          cargo_capacity_kg?: number
+          created_at?: string
+          has_rescue_capability?: boolean
+          home_lat?: number | null
+          home_lon?: number | null
+          id?: string
+          max_capacity?: number
+          operator_name?: string | null
+          operator_type?: string | null
+          owner_id?: string | null
+          phone_number?: string | null
+          status?: string
+          vessel_name?: string | null
+        }
+        Relationships: []
+      }
       work_sessions: {
         Row: {
           clock_in: string
@@ -2913,6 +3507,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_agroclimate_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "handler" | "buyer" | "driver"

@@ -1,7 +1,7 @@
 -- Persistent field boundaries and satellite-derived crop observation history.
 create table if not exists public.satellite_fields (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid not null,
   name text not null check (char_length(trim(name)) between 2 and 100),
   crop_type text,
   planted_on date,
@@ -17,6 +17,8 @@ create table if not exists public.satellite_fields (
     field_geojson->>'type' in ('Polygon', 'MultiPolygon')
   )
 );
+grant select, insert, update, delete on public.satellite_fields to authenticated;
+grant all on public.satellite_fields to service_role;
 
 create index if not exists satellite_fields_monitoring_idx
   on public.satellite_fields (monitoring_enabled, last_scene_at)
@@ -36,6 +38,8 @@ create table if not exists public.satellite_field_observations (
   created_at timestamptz not null default now(),
   unique (field_id, scene_id)
 );
+grant select on public.satellite_field_observations to authenticated;
+grant all on public.satellite_field_observations to service_role;
 
 create index if not exists satellite_field_observations_history_idx
   on public.satellite_field_observations (field_id, captured_at desc);
@@ -63,6 +67,9 @@ create table if not exists public.satellite_field_alerts (
   created_at timestamptz not null default now(),
   unique (field_id, scene_id, alert_kind)
 );
+grant select on public.satellite_field_alerts to authenticated;
+grant all on public.satellite_field_alerts to service_role;
+grant update (status) on public.satellite_field_alerts to authenticated;
 
 create index if not exists satellite_field_alerts_field_created_idx
   on public.satellite_field_alerts (field_id, created_at desc);
