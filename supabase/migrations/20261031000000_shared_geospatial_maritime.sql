@@ -26,7 +26,7 @@ grant execute on function public.is_agroclimate_admin() to authenticated;
 -- ports, drone observations and other map-backed records.
 create table if not exists public.geo_features (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid references auth.users(id) on delete set null,
+  owner_id uuid,
   feature_type text not null check (feature_type in (
     'farm_boundary','farm_location','warehouse','silo','cold_store','collection_centre',
     'processing_facility','buyer','supplier','port','pickup_point',
@@ -51,6 +51,8 @@ create table if not exists public.geo_features (
   updated_at timestamptz not null default now(),
   constraint geo_features_geojson_object check (jsonb_typeof(geojson) = 'object')
 );
+grant select, insert, update, delete on public.geo_features to authenticated;
+grant all on public.geo_features to service_role;
 
 alter table public.geo_features drop constraint if exists geo_features_feature_type_check;
 alter table public.geo_features add constraint geo_features_feature_type_check check (feature_type in (
@@ -89,7 +91,7 @@ for each row execute function public.set_geo_feature_geometry();
 create table if not exists public.geo_observations (
   id uuid primary key default gen_random_uuid(),
   feature_id uuid references public.geo_features(id) on delete cascade,
-  observer_id uuid references auth.users(id) on delete set null,
+  observer_id uuid,
   observation_type text not null,
   observed_at timestamptz not null default now(),
   source_name text,
@@ -100,12 +102,14 @@ create table if not exists public.geo_observations (
   evidence jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
+grant select, insert on public.geo_observations to authenticated;
+grant all on public.geo_observations to service_role;
 create index if not exists geo_observations_feature_idx on public.geo_observations (feature_id, observed_at desc);
 create index if not exists geo_observations_observer_idx on public.geo_observations (observer_id, observed_at desc);
 
 create table if not exists public.geo_routes (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
+  user_id uuid not null,
   route_type text not null default 'road' check (route_type in ('road','freight','tractor','walking','waterway','multimodal','drone')),
   origin jsonb not null,
   destination jsonb not null,
@@ -120,6 +124,8 @@ create table if not exists public.geo_routes (
   last_confirmed_at timestamptz,
   created_at timestamptz not null default now()
 );
+grant select, insert, update, delete on public.geo_routes to authenticated;
+grant all on public.geo_routes to service_role;
 create index if not exists geo_routes_geom_gix on public.geo_routes using gist (geom);
 create index if not exists geo_routes_user_idx on public.geo_routes (user_id, calculated_at desc);
 
@@ -154,27 +160,15 @@ create table if not exists public.geo_data_sources (
   last_checked_at timestamptz not null default now(),
   notes text
 );
-insert into public.geo_data_sources
-  (id,name,provider,data_family,access_status,spatial_resolution,source_url,attribution,notes)
-values
-  ('nasa-power-climatology','NASA POWER climatology','NASA POWER','climate','available','Gridded point product; product-dependent','https://power.larc.nasa.gov/docs/services/api/temporal/climatology/','NASA POWER','Climate normals only; not a field-scale weather forecast.'),
-  ('sentinel-2-l2a','Sentinel-2 L2A','Copernicus / Element 84 Earth Search','optical_imagery','available','10 m / 20 m bands','https://earth-search.aws.element84.com/v1/','Copernicus Sentinel-2','Scene acquisition date and cloud cover must accompany each result.'),
-  ('soilgrids','SoilGrids','ISRIC','soil','paused','250 m','https://docs.isric.org/globaldata/soilgrids/','ISRIC SoilGrids','REST API is currently paused by ISRIC; do not substitute synthetic soil values.'),
-  ('fao-gaez-v5','FAO GAEZ v5','FAO / IIASA','crop_suitability','not_ingested','Selected outputs approx. 1 km','https://gaez.fao.org/','FAO / IIASA','Catalogue only until licensed/downloaded layers are ingested and tiled.'),
-  ('openstreetmap','OpenStreetMap','OpenStreetMap contributors','roads_and_places','available','Crowdsourced / variable','https://www.openstreetmap.org/copyright','© OpenStreetMap contributors','Map geometry does not verify legal ownership, access rights or road passability.')
-on conflict (id) do update set
-  access_status = excluded.access_status,
-  spatial_resolution = excluded.spatial_resolution,
-  source_url = excluded.source_url,
-  attribution = excluded.attribution,
-  notes = excluded.notes,
-  last_checked_at = now();
+grant select, insert, update, delete on public.geo_data_sources to authenticated;
+grant all on public.geo_data_sources to service_role;
+
 
 -- AGNav data model. These CREATE IF NOT EXISTS statements also repair deployments
 -- where the old page was used after its migration had only been documented in code.
 create table if not exists public.vessels (
   id text primary key,
-  owner_id uuid references auth.users(id) on delete set null,
+  owner_id uuid,
   vessel_name text,
   operator_name text,
   operator_type text,
@@ -187,7 +181,9 @@ create table if not exists public.vessels (
   status text not null default 'ACTIVE',
   created_at timestamptz not null default now()
 );
-alter table public.vessels add column if not exists owner_id uuid references auth.users(id) on delete set null;
+grant select, insert, update, delete on public.vessels to authenticated;
+grant all on public.vessels to service_role;
+alter table public.vessels add column if not exists owner_id uuid;
 alter table public.vessels add column if not exists vessel_name text;
 alter table public.vessels add column if not exists operator_name text;
 alter table public.vessels add column if not exists operator_type text;
@@ -203,7 +199,7 @@ alter table public.vessels add column if not exists created_at timestamptz not n
 create table if not exists public.vessel_locations (
   id uuid primary key default gen_random_uuid(),
   vessel_id text not null references public.vessels(id) on delete cascade,
-  user_id uuid references auth.users(id) on delete set null,
+  user_id uuid,
   lat double precision not null check (lat between -90 and 90),
   lon double precision not null check (lon between -180 and 180),
   geom extensions.geometry(Point, 4326),
@@ -215,6 +211,8 @@ create table if not exists public.vessel_locations (
   risk_level text,
   created_at timestamptz not null default now()
 );
+grant select, insert on public.vessel_locations to authenticated;
+grant all on public.vessel_locations to service_role;
 alter table public.vessel_locations add column if not exists geom extensions.geometry(Point, 4326);
 alter table public.vessel_locations add column if not exists accuracy_m numeric;
 alter table public.vessel_locations add column if not exists captured_at timestamptz;
@@ -259,13 +257,15 @@ for each row execute function public.set_vessel_location_geometry();
 
 create table if not exists public.farms (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
+  user_id uuid,
   name text not null,
   lat double precision not null,
   lon double precision not null,
   geo_feature_id uuid references public.geo_features(id) on delete set null,
   created_at timestamptz not null default now()
 );
+grant select, insert, update, delete on public.farms to authenticated;
+grant all on public.farms to service_role;
 alter table public.farms add column if not exists geo_feature_id uuid references public.geo_features(id) on delete set null;
 create index if not exists farms_user_idx on public.farms (user_id, created_at desc);
 create index if not exists farms_geo_feature_idx on public.farms (geo_feature_id);
@@ -293,7 +293,7 @@ where f.geo_feature_id is null
 create table if not exists public.nav_routes (
   id uuid primary key default gen_random_uuid(),
   vessel_id text not null references public.vessels(id) on delete cascade,
-  user_id uuid references auth.users(id) on delete set null,
+  user_id uuid,
   start_lat double precision,
   start_lon double precision,
   end_lat double precision,
@@ -307,6 +307,8 @@ create table if not exists public.nav_routes (
   geometry jsonb,
   created_at timestamptz not null default now()
 );
+grant select, insert, update, delete on public.nav_routes to authenticated;
+grant all on public.nav_routes to service_role;
 create index if not exists nav_routes_user_idx on public.nav_routes (user_id, created_at desc);
 
 create table if not exists public.external_responders (
@@ -319,11 +321,13 @@ create table if not exists public.external_responders (
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+grant select, insert, update, delete on public.external_responders to authenticated;
+grant all on public.external_responders to service_role;
 
 create table if not exists public.sos_events (
   id uuid primary key default gen_random_uuid(),
   vessel_id text not null references public.vessels(id) on delete restrict,
-  user_id uuid references auth.users(id) on delete set null,
+  user_id uuid,
   lat double precision not null check (lat between -90 and 90),
   lon double precision not null check (lon between -180 and 180),
   risk_level text not null,
@@ -336,6 +340,8 @@ create table if not exists public.sos_events (
   created_at timestamptz not null default now(),
   resolved_at timestamptz
 );
+grant select on public.sos_events to authenticated;
+grant all on public.sos_events to service_role;
 create index if not exists sos_events_created_idx on public.sos_events (created_at desc);
 create index if not exists sos_events_status_idx on public.sos_events (status, created_at desc);
 
@@ -347,6 +353,8 @@ create table if not exists public.vessel_messages (
   body text not null check (length(body) between 1 and 2000),
   created_at timestamptz not null default now()
 );
+grant select on public.vessel_messages to authenticated;
+grant all on public.vessel_messages to service_role;
 create index if not exists vessel_messages_event_idx on public.vessel_messages (sos_event_id, created_at asc);
 
 -- Enable RLS on all operational and spatial tables.
