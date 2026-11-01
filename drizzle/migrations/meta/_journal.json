@@ -15,6 +15,13 @@
       "when": 1791303661986,
       "tag": "0001_agrofund_weekly_quota",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793495427838,
+      "tag": "0002_satellite_field_monitoring",
+      "breakpoints": true
     }
   ]
 }
