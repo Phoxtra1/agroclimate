@@ -22,6 +22,13 @@
       "when": 1793495427838,
       "tag": "0002_satellite_field_monitoring",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793495488577,
+      "tag": "0003_shared_geospatial_maritime",
+      "breakpoints": true
     }
   ]
 }
