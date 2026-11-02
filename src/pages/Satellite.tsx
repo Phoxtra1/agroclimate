@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleMarker, GeoJSON, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, GeoJSON, MapContainer, Marker, Polygon, Popup, ScaleControl, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { SatelliteMapControls } from "@/components/satellite/SatelliteMapControls";
 import L from "leaflet";
 import {
   Activity,
@@ -1211,7 +1212,8 @@ export default function Satellite() {
               <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png"
                 attribution="&copy; OpenStreetMap &copy; CARTO"
-                maxZoom={19}
+                maxZoom={22}
+                maxNativeZoom={19}
               />
             )}
 
@@ -1237,6 +1239,10 @@ export default function Satellite() {
 
             {/* Map Camera Controller */}
             <MapCameraController center={mapCenter} zoom={mapZoom} />
+
+            {/* Zoom, north-up and scale controls */}
+            <SatelliteMapControls />
+            <ScaleControl position="bottomleft" imperial={false} />
 
             {/* Route Bounds Controller */}
             <RouteBoundsController route={routeData} />
