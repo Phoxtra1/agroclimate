@@ -82,6 +82,8 @@ export function ProduceSafety() {
 
   // Developer Testing & Calibration Studio State
   const [evaluations, setEvaluations] = useState<EvaluationRecord[]>([]);
+  const [farms, setFarms] = useState<{ id: string; farm_name: string }[]>([]);
+  const [farmQrId, setFarmQrId] = useState<string>("none");
   const [evalExpectedResult, setEvalExpectedResult] = useState("");
   const [evalNotes, setEvalNotes] = useState("");
 
@@ -133,6 +135,51 @@ export function ProduceSafety() {
   }, [isTimerRunning, timerSecondsLeft]);
 
   useEffect(() => () => controller.current?.abort(), []);
+
+  // Farms owned by this user, so a scan can be linked to a buyer-checkable farm QR.
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("farm_qr_codes").select("id, farm_name").eq("farmer_id", user.id)
+      .then(({ data }) => setFarms(data ?? []));
+  }, [user]);
+
+  async function getPlace(): Promise<{ lat: number; lon: number; acc: number; label: string | null } | null> {
+    if (!("geolocation" in navigator)) return null;
+    const pos = await new Promise<GeolocationPosition | null>((resolve) =>
+      navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }));
+    if (!pos) return null;
+    const { latitude: lat, longitude: lon, accuracy: acc } = pos.coords;
+    let label: string | null = null;
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&zoom=14&lat=${lat}&lon=${lon}`);
+      const j = await r.json();
+      const a = j?.address ?? {};
+      label = [a.village || a.town || a.city || a.suburb, a.state, a.country].filter(Boolean).join(", ") || null;
+    } catch { /* place name optional */ }
+    return { lat, lon, acc, label };
+  }
+
+  async function saveScanToCloud(record: ScanRecord) {
+    if (!user) return;
+    const place = await getPlace();
+    const { error: insertError } = await supabase.from("produce_scans").insert({
+      user_id: user.id,
+      farm_qr_id: farmQrId !== "none" ? farmQrId : null,
+      mode: record.mode,
+      produce: record.result.produce,
+      label: record.label,
+      outcome: record.result.outcome,
+      confidence: record.result.confidence,
+      summary: record.result.summary,
+      observations: record.result.observations,
+      latitude: place?.lat ?? null,
+      longitude: place?.lon ?? null,
+      location_accuracy_m: place?.acc ?? null,
+      place_label: place?.label ?? (place ? `${place.lat.toFixed(4)}, ${place.lon.toFixed(4)}` : null),
+      scanned_at: record.at,
+    });
+    if (insertError) setStorageError("Scan kept on this device but could not be saved online yet.");
+  }
 
   function saveScans(items: ScanRecord[]) {
     setHistory(items);
@@ -358,6 +405,7 @@ export function ProduceSafety() {
 
       setResult(record);
       saveScans([record, ...history].slice(0, 30));
+      if (user) void saveScanToCloud(record);
     } catch (err) {
       if (!abort.signal.aborted) {
         setError(err instanceof Error ? err.message : "Analysis service unavailable. Try again shortly.");
@@ -597,6 +645,19 @@ This rapid screening inspection is provided for produce quality sorting and prel
                   <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
                     {SUPPORTED_PRODUCE_TYPES.find((p) => p.id === produceType)?.description}
                   </p>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Link to farm QR (buyers can check it)</Label>
+                    <Select value={farmQrId} onValueChange={setFarmQrId}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="No farm" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Not linked to a farm</SelectItem>
+                        {farms.map((f) => <SelectItem key={f.id} value={f.id}>{f.farm_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Each scan saves the time, your location and the product. <a href="/farm-check" className="text-primary underline">Check a farm QR</a>
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )}

@@ -2521,6 +2521,71 @@ export type Database = {
         }
         Relationships: []
       }
+      produce_scans: {
+        Row: {
+          confidence: string
+          created_at: string
+          farm_qr_id: string | null
+          id: string
+          label: string | null
+          latitude: number | null
+          location_accuracy_m: number | null
+          longitude: number | null
+          mode: string
+          observations: Json
+          outcome: string
+          place_label: string | null
+          produce: string
+          scanned_at: string
+          summary: string | null
+          user_id: string
+        }
+        Insert: {
+          confidence: string
+          created_at?: string
+          farm_qr_id?: string | null
+          id?: string
+          label?: string | null
+          latitude?: number | null
+          location_accuracy_m?: number | null
+          longitude?: number | null
+          mode?: string
+          observations?: Json
+          outcome: string
+          place_label?: string | null
+          produce: string
+          scanned_at?: string
+          summary?: string | null
+          user_id: string
+        }
+        Update: {
+          confidence?: string
+          created_at?: string
+          farm_qr_id?: string | null
+          id?: string
+          label?: string | null
+          latitude?: number | null
+          location_accuracy_m?: number | null
+          longitude?: number | null
+          mode?: string
+          observations?: Json
+          outcome?: string
+          place_label?: string | null
+          produce?: string
+          scanned_at?: string
+          summary?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produce_scans_farm_qr_id_fkey"
+            columns: ["farm_qr_id"]
+            isOneToOne: false
+            referencedRelation: "farm_qr_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -3512,6 +3577,7 @@ export type Database = {
         Args: { p_since: string; p_today: string }
         Returns: Json
       }
+      get_farm_scan_record: { Args: { p_code: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

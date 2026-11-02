@@ -36,6 +36,13 @@
       "when": 1793620500883,
       "tag": "0004_agtrans_location_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793624603638,
+      "tag": "0005_produce_scans",
+      "breakpoints": true
     }
   ]
 }
