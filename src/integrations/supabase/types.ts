@@ -3011,6 +3011,10 @@ export type Database = {
           eta: string | null
           heading: number | null
           id: string
+          is_simulated: boolean
+          last_location_at: string | null
+          location_accuracy_m: number | null
+          location_source: string
           pickup_location: string | null
           plate_number: string | null
           route: Json | null
@@ -3031,6 +3035,10 @@ export type Database = {
           eta?: string | null
           heading?: number | null
           id?: string
+          is_simulated?: boolean
+          last_location_at?: string | null
+          location_accuracy_m?: number | null
+          location_source?: string
           pickup_location?: string | null
           plate_number?: string | null
           route?: Json | null
@@ -3051,6 +3059,10 @@ export type Database = {
           eta?: string | null
           heading?: number | null
           id?: string
+          is_simulated?: boolean
+          last_location_at?: string | null
+          location_accuracy_m?: number | null
+          location_source?: string
           pickup_location?: string | null
           plate_number?: string | null
           route?: Json | null

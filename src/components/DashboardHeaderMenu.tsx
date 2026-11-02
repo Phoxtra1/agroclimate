@@ -55,12 +55,6 @@ export function DashboardHeaderMenu({ unreadCount = 0, alerts = [], onMarkRead, 
           <span className="hidden sm:inline text-xs font-medium">Market Link</span>
         </Button>
       </Link>
-      <Link to="/agnav">
-        <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2" title="AGNav — Water Transport Navigator">
-          <Anchor className="h-4 w-4" />
-          <span className="hidden sm:inline text-xs font-medium">AGNav</span>
-        </Button>
-      </Link>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
