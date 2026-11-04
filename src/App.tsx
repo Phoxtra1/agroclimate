@@ -24,6 +24,7 @@ const AgroLearning = lazy(() => import("./pages/AgroLearning"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const ProduceSafetyPage = lazy(() => import("./pages/ProduceSafety"));
+const FarmCheck = lazy(() => import("./pages/FarmCheck"));
 const HandlerManagement = lazy(() => import("./pages/HandlerManagement"));
 const HandlerWorkspace = lazy(() => import("./pages/HandlerWorkspace"));
 const PostHarvestTracker = lazy(() => import("./pages/PostHarvestTracker"));
@@ -274,6 +275,7 @@ function AppRoutes() {
       />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/farm-check" element={<FarmCheck />} />
 
       {/* Public Marketplace (buyer-facing) — does NOT require auth to browse */}
       <Route path="/marketplace" element={<BuyerRoute><MarketplaceHome /></BuyerRoute>} />

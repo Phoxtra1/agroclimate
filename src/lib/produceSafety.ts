@@ -83,6 +83,11 @@ export type ScanRecord = {
   result: ScanResult;
   imageSnippet?: string; // thumbnail / data url
   referenceSnippet?: string;
+  place?: string;
+  latitude?: number;
+  longitude?: number;
+  farmQrId?: string;
+  cloudSaved?: boolean;
 };
 
 // Test Configuration Structure for Level 2
