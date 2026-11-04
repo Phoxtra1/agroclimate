@@ -43,6 +43,13 @@
       "when": 1793624603638,
       "tag": "0005_produce_scans",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793773353947,
+      "tag": "0006_scan_results_and_satellite_live_observations",
+      "breakpoints": true
     }
   ]
 }
