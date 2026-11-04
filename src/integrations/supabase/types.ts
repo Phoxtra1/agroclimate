@@ -2536,6 +2536,8 @@ export type Database = {
           outcome: string
           place_label: string | null
           produce: string
+          product_type: string | null
+          result: Json | null
           scanned_at: string
           summary: string | null
           user_id: string
@@ -2554,6 +2556,8 @@ export type Database = {
           outcome: string
           place_label?: string | null
           produce: string
+          product_type?: string | null
+          result?: Json | null
           scanned_at?: string
           summary?: string | null
           user_id: string
@@ -2572,6 +2576,8 @@ export type Database = {
           outcome?: string
           place_label?: string | null
           produce?: string
+          product_type?: string | null
+          result?: Json | null
           scanned_at?: string
           summary?: string | null
           user_id?: string
