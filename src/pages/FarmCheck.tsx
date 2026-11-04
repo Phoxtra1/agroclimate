@@ -47,11 +47,6 @@ export default function FarmCheck() {
         const reader = new BrowserQRCodeReader();
         const scan = async () => {
           if (stopped) return;
-          try {
-            const found = reader.decodeFromCanvas(Object.assign(document.createElement("canvas"), { width: element.videoWidth, height: element.videoHeight }));
-            // Use a populated frame, not an empty canvas.
-            void found;
-          } catch { /* next frame */ }
           const canvas = document.createElement("canvas"); canvas.width = element.videoWidth; canvas.height = element.videoHeight;
           canvas.getContext("2d")?.drawImage(element, 0, 0);
           try {
@@ -79,7 +74,7 @@ export default function FarmCheck() {
       <div className="border-y py-4 text-sm text-muted-foreground flex gap-2"><ShieldAlert className="shrink-0 h-5 w-5" />Visual screening is not a food-safety certificate and cannot rule out pesticides or invisible contamination.</div>
       {farm && <section className="space-y-4"><h2 className="text-xl font-semibold">{farm.farm_name}</h2><p className="text-muted-foreground">{farm.farm_location || "Farm location not supplied"}</p>
         {!farm.scans.length && <p>No linked scans recorded yet.</p>}
-        {farm.scans.map((scan, i) => <article key={`${scan.scanned_at}-${i}`} className="border-b py-4 space-y-2"><h3 className="font-semibold">{scan.produce}</h3><p className="text-sm">{scan.outcome.replaceAll("_", " ")} · {scan.confidence} confidence</p><p className="text-sm">{scan.summary}</p><p className="text-xs text-muted-foreground">{new Date(scan.scanned_at).toLocaleString()} · {scan.place_label || "Scan location unavailable"}</p></article>)}
+        {farm.scans.map((scan, i) => <article key={`${scan.scanned_at}-${i}`} className="border-b py-4 space-y-2"><h3 className="font-semibold">{scan.produce}</h3><p className="text-sm">{scan.outcome.replace(/_/g, " ")} · {scan.confidence} confidence</p><p className="text-sm">{scan.summary}</p><p className="text-xs text-muted-foreground">{new Date(scan.scanned_at).toLocaleString()} · {scan.place_label || "Scan location unavailable"}</p></article>)}
       </section>}
     </div>
   </main>;

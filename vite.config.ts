@@ -84,7 +84,7 @@ export default defineConfig(({ mode }) => ({
           {
             // Lazy-loaded application chunks are cached after first visit,
             // rather than downloaded eagerly during PWA installation.
-            urlPattern: ({ url }) => url.origin === self.location.origin && /\/assets\/.*-[\w-]+\.js$/i.test(url.pathname),
+            urlPattern: ({ url, sameOrigin }) => sameOrigin && /\/assets\/.*-[\w-]+\.js$/i.test(url.pathname),
             handler: "CacheFirst",
             options: {
               cacheName: "agroclimate-app-chunks-v2",
