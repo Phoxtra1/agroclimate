@@ -1,23 +1,12 @@
 import { toast } from "sonner";
+import { refuseAppWorker } from "./updatePolicy";
 
 const SW_URL = "/sw.js";
 
 function isPreviewContext() {
   if (typeof window === "undefined") return true;
-  const { hostname, href } = window.location;
-  return (
-    !import.meta.env.PROD ||
-    window.self !== window.top ||
-    hostname.startsWith("id-preview--") ||
-    hostname.startsWith("preview--") ||
-    hostname === "lovableproject.com" ||
-    hostname.endsWith(".lovableproject.com") ||
-    hostname === "lovableproject-dev.com" ||
-    hostname.endsWith(".lovableproject-dev.com") ||
-    hostname === "beta.lovable.dev" ||
-    hostname.endsWith(".beta.lovable.dev") ||
-    new URL(href).searchParams.get("sw") === "off"
-  );
+  return refuseAppWorker(window.location.hostname, import.meta.env.PROD,
+    window.self !== window.top, new URL(window.location.href).searchParams.get("sw") === "off");
 }
 
 async function unregisterAppSW() {
@@ -42,16 +31,34 @@ export async function registerAppSW() {
       return;
     }
 
-    const { registerSW } = await import("virtual:pwa-register");
-    registerSW({
-      immediate: true,
-      onOfflineReady() {
-        toast.success("AgroClimate is ready to work offline");
-      },
-      onRegisterError(error) {
-        console.error("AgroClimate service worker registration failed:", error);
-      },
+    // The generated worker activates automatically, but a page reload must be
+    // deliberate so a new release never discards a scan or an unfinished form.
+    const wasControlled = Boolean(navigator.serviceWorker.controller);
+    const registration = await navigator.serviceWorker.register(SW_URL);
+    let notified = false;
+    const notify = () => {
+      if (notified) return;
+      notified = true;
+      toast("AgroClimate update available", {
+        id: "agroclimate-update", duration: Infinity,
+        description: "Save any unfinished work before reloading.",
+        action: { label: "Reload", onClick: () => window.location.reload() },
+      });
+    };
+    if (registration.waiting && wasControlled) notify();
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      worker?.addEventListener("statechange", () => {
+        if (worker.state === "installed" && (wasControlled || navigator.serviceWorker.controller)) notify();
+        if (worker.state === "activated" && !wasControlled && !notified) toast.success("AgroClimate is ready to work offline");
+      });
     });
+    const check = () => {
+      if (navigator.onLine && document.visibilityState === "visible") void registration.update().catch(() => undefined);
+    };
+    window.setInterval(check, 60 * 60 * 1000);
+    window.addEventListener("online", check);
+    document.addEventListener("visibilitychange", check);
   } catch (error) {
     // PWA support is an enhancement; a worker failure must not interrupt React startup.
     console.error("AgroClimate PWA initialization failed:", error);

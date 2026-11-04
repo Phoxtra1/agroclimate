@@ -72,18 +72,22 @@ export default defineConfig(({ mode }) => ({
         // Keep lazy route chunks out of install-time precache. They are cached
         // on first use, so initial install/download stays small.
         globPatterns: [
-          "**/*.{css,html,ico,png,svg,woff2}",
+          "**/*.{css,ico,png,svg,woff2}",
         ],
 
         runtimeCaching: [
           {
+            urlPattern: ({ request, url }) => request.mode === "navigate" && !url.pathname.startsWith("/~oauth"),
+            handler: "NetworkFirst",
+            options: { cacheName: "agroclimate-pages", networkTimeoutSeconds: 4 },
+          },
+          {
             // Lazy-loaded application chunks are cached after first visit,
             // rather than downloaded eagerly during PWA installation.
-            urlPattern: /\/assets\/.*\.js$/i,
-            handler: "NetworkFirst",
+            urlPattern: ({ url }) => url.origin === self.location.origin && /\/assets\/.*-[\w-]+\.js$/i.test(url.pathname),
+            handler: "CacheFirst",
             options: {
               cacheName: "agroclimate-app-chunks-v2",
-              networkTimeoutSeconds: 4,
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 7 },
               cacheableResponse: { statuses: [0, 200] },
             },
