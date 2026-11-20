@@ -18,11 +18,12 @@ import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { createGeoFeature } from "@/services/satellite/geospatial";
 import { PostHarvestStationPanel } from "@/components/PostHarvestStationPanel";
+import { createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
 const STORAGE_METHODS = ["Bagged", "Crib", "Open space", "Sealed container", "Cold storage", "Silo"];
-const createSubmissionKey = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `harvest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const createSubmissionKey = createHarvestIdempotencyKey;
 
 function riskBadge(level: RiskLevel) {
   if (level === "danger") return <Badge className="bg-red-500 hover:bg-red-500/90 text-white">High Risk</Badge>;
