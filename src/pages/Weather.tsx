@@ -23,7 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
-import { WeatherDay } from "@/data/mock-data";
+import type { WeatherDay } from "@/data/mock-data";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -268,7 +268,7 @@ function TodayWeather({ weather }: { weather: WeatherDay }) {
         <div>
           <Leaf className="h-4 w-4 mx-auto opacity-70" />
           <p className="font-semibold mt-1">{weather.evapotranspiration ?? 4.5}</p>
-          <p className="text-xs opacity-70">ET₀ mm</p>
+          <p className="text-xs opacity-70">ET₀ · {weather.evapotranspirationSource === "provider" ? "provider" : weather.evapotranspirationSource === "estimated" ? "estimated" : "sample"}</p>
         </div>
       </div>
     </div>
@@ -317,8 +317,8 @@ function SoilStatusBadge({ status }: { status: CropWaterAdvisory["soilStatus"] }
 // MAIN PAGE COMPONENT
 // ────────────────────────────────────────────────────────────
 export default function Weather() {
-  const { position, loading: geoLoading } = useGeolocation();
-  const { forecast, isLive, loading: weatherLoading, lastUpdated, refresh } = useWeather(
+  const { position, loading: geoLoading, retry: retryLocation } = useGeolocation();
+  const { forecast, source, loading: weatherLoading, lastUpdated, refresh } = useWeather(
     position?.lat,
     position?.lon
   );
@@ -336,6 +336,8 @@ export default function Weather() {
 
   const currentCrops = CROPS.filter((c) => c.season.includes(currentMonth));
   const isLoading = geoLoading || weatherLoading;
+  const locationIsFresh = position?.source === "gps" || (position?.source === "cached" && !!position.updatedAt && Date.now() - position.updatedAt < 24 * 60 * 60 * 1000);
+  const advisoryAvailable = locationIsFresh && (source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000));
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
@@ -363,17 +365,19 @@ export default function Weather() {
           <span className="font-medium">{position?.community || position?.locationName || "Accra, Ghana"}</span>
           {position?.district && <span>• {position.district}</span>}
           {position?.region && <span>• {position.region}</span>}
+          <Badge variant="outline" className="text-[10px]">
+            {position?.source === "gps" ? "GPS location" : position?.source === "cached" ? "Saved location" : "Default location"}
+          </Badge>
+          {position?.source !== "gps" && (
+            <button onClick={retryLocation} className="text-xs underline underline-offset-2" disabled={geoLoading}>
+              Use GPS
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {isLive ? (
-            <span className="flex items-center gap-1 text-green-600 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Live
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-amber-600 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Offline/Demo
-            </span>
-          )}
+          <span className={source === "live" ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+            {source === "live" ? "Live provider data" : source === "cache" ? "Cached provider data" : "Demo sample data"}
+          </span>
           {lastUpdated && (
             <span>
               Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -402,7 +406,7 @@ export default function Weather() {
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <CloudRain className="h-5 w-5 mx-auto text-blue-400" />
                 <p className="text-lg font-bold mt-2">{today.rainMm ?? 0} mm</p>
-                <p className="text-xs text-muted-foreground">Rainfall</p>
+                <p className="text-xs text-muted-foreground">{today.rainSource === "provider" ? "Rainfall · provider" : today.rainSource === "estimated" ? "Rainfall · estimated" : "Rainfall · sample"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Gauge className="h-5 w-5 mx-auto text-amber-600" />
@@ -412,7 +416,7 @@ export default function Weather() {
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Leaf className="h-5 w-5 mx-auto text-green-600" />
                 <p className="text-lg font-bold mt-2">{today.evapotranspiration ?? 0}</p>
-                <p className="text-xs text-muted-foreground">ET₀ (mm/day)</p>
+                <p className="text-xs text-muted-foreground">{today.evapotranspirationSource === "provider" ? "ET₀ · provider" : today.evapotranspirationSource === "estimated" ? "ET₀ · estimated" : "ET₀ · sample"} (mm/day)</p>
               </div>
             </div>
 
@@ -436,14 +440,16 @@ export default function Weather() {
                       : "border-green-300 text-green-600 bg-green-50 dark:bg-green-950/20"
                   }`}
                 >
-                  {summary.overallNeed === "none" ? "✓ No Irrigation" : `⚠ ${summary.overallNeed} need`}
+                  {advisoryAvailable ? (summary.overallNeed === "none" ? "✓ No Irrigation" : `⚠ ${summary.overallNeed} need`) : "Unavailable"}
                 </Badge>
               </h2>
 
+              {advisoryAvailable ? (
+                <>
               {/* Summary metrics row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 text-center border border-blue-100 dark:border-blue-900/40">
-                  <p className="text-xs text-muted-foreground">Ref. ET₀</p>
+                  <p className="text-xs text-muted-foreground">Ref. ET₀ · {forecast.every((day) => day.evapotranspirationSource === "provider") ? "provider" : "estimated"}</p>
                   <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
                     {summary.avgET.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">mm/d</span>
                   </p>
@@ -461,7 +467,7 @@ export default function Weather() {
                   </p>
                 </div>
                 <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 text-center border border-orange-100 dark:border-orange-900/40">
-                  <p className="text-xs text-muted-foreground">Avg Soil Temp</p>
+                  <p className="text-xs text-muted-foreground">{forecast.every((day) => day.soilTemperatureSource === "provider") ? "Avg Soil Temp · provider" : "Avg Soil Temp · estimated"}</p>
                   <p className="text-lg font-bold text-orange-700 dark:text-orange-300">
                     {Math.round(summary.avgSoilTemp)}°C
                   </p>
@@ -508,12 +514,19 @@ export default function Weather() {
                   ))
                 )}
               </div>
+
+                </>
+              ) : (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-muted-foreground">
+                  Current live weather or a recent provider cache is unavailable. Demo values are shown for layout only; AgroClimate will not issue irrigation recommendations from sample or stale weather data. Refresh the forecast or enable GPS location and try again.
+                </p>
+              )}
             </section>
 
             {/* 7-day forecast */}
             <section className="space-y-4">
               <div>
-                <h2 className="font-bold mb-1">7-Day Agricultural Forecast</h2>
+                <h2 className="font-bold mb-1">{forecast.length}-Day Agricultural Forecast</h2>
                 <p className="text-xs text-muted-foreground">Daily evapotranspiration and soil moisture projections.</p>
               </div>
               <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
@@ -525,7 +538,7 @@ export default function Weather() {
                   <span className="w-20 text-right">Air Temp</span>
                 </div>
                 {forecast.map((day) => (
-                  <ForecastRow key={day.date} day={day} />
+                  <ForecastRow key={day.isoDate || day.date} day={day} />
                 ))}
               </div>
             </section>
@@ -569,9 +582,10 @@ export default function Weather() {
               </ul>
             </div>
 
-            {/* Dynamic farmer tip based on live data */}
+            {advisoryAvailable && (
+
             <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4">
-              <p className="text-sm font-semibold text-green-800 dark:text-green-200">💡 Live Farmer Tip</p>
+              <p className="text-sm font-semibold text-green-800 dark:text-green-200">💡 Weather-derived Farmer Guidance</p>
               <p className="text-sm text-green-700 dark:text-green-300 mt-1">
                 {summary.overallNeed === "critical"
                   ? `${summary.criticalCrops} crop(s) at critical soil moisture. Irrigate immediately — ET₀ is ${summary.avgET.toFixed(1)} mm/day with only ${summary.effectiveRain.toFixed(1)} mm effective rain.`
@@ -582,6 +596,8 @@ export default function Weather() {
                   : `Conditions are balanced. Rain is meeting most crop needs. Monitor soil moisture daily for changes.`}
               </p>
             </div>
+
+            )}
 
             {/* ET explanation card */}
             <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">

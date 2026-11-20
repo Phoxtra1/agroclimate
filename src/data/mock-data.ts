@@ -16,6 +16,8 @@ export interface WeatherDay {
   soilTemperature?: number;
   soilMoistureSource?: "provider" | "estimated" | "sample";
   soilTemperatureSource?: "provider" | "estimated" | "sample";
+  rainSource?: "provider" | "estimated" | "sample";
+  evapotranspirationSource?: "provider" | "estimated" | "sample";
   isoDate?: string; // provider timestamp for this period
 }
 
@@ -74,7 +76,11 @@ function generateWeeklyForecast(): WeatherDay[] {
       day: dayName,
       date: dateString,
       isoDate: d.toISOString(),
-      ...baseData[i]
+      ...baseData[i],
+      soilMoistureSource: "sample",
+      soilTemperatureSource: "sample",
+      rainSource: "sample",
+      evapotranspirationSource: "sample",
     });
   }
   return forecast;
