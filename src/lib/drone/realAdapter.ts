@@ -46,14 +46,20 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
       const p = payload as Record<string, unknown>;
       const numericKeys = ["lat", "lng", "altitude", "alt", "groundSpeed", "speed", "verticalSpeed", "heading", "yaw", "battery", "batteryPct", "signal", "rssi", "gpsAccuracy"];
-      const hasMeasurement = numericKeys.some((key) => p[key] !== undefined && Number.isFinite(Number(p[key])));
-      if (!hasMeasurement) return false;
+      const providedNumericKeys = numericKeys.filter((key) => p[key] !== undefined && p[key] !== null);
+      if (!providedNumericKeys.length || providedNumericKeys.some((key) => !Number.isFinite(Number(p[key])))) return false;
 
       const lat = p.lat === undefined ? telemetry.lat : Number(p.lat);
       const lng = p.lng === undefined ? telemetry.lng : Number(p.lng);
+      const batteryValue = p.battery ?? p.batteryPct;
+      const signalValue = p.signal ?? p.rssi;
+      const accuracyValue = p.gpsAccuracy;
       if ((lat !== undefined && (!Number.isFinite(lat) || lat < -90 || lat > 90)) ||
           (lng !== undefined && (!Number.isFinite(lng) || lng < -180 || lng > 180)) ||
-          ((lat === undefined) !== (lng === undefined))) return false;
+          ((lat === undefined) !== (lng === undefined)) ||
+          (batteryValue !== undefined && (Number(batteryValue) < 0 || Number(batteryValue) > 100)) ||
+          (signalValue !== undefined && (Number(signalValue) < 0 || Number(signalValue) > 100)) ||
+          (accuracyValue !== undefined && Number(accuracyValue) < 0)) return false;
 
       telemetry = {
         ...telemetry,
