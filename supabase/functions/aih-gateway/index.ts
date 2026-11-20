@@ -67,17 +67,21 @@ Deno.serve(async (req) => {
         return json({
           aircraft: (aircraft || []).map((a: any) => ({
             id: a.id, name: a.name, model: a.model || "Unknown",
-            protocol: a.protocol || "aih", signal: 90,
+            protocol: a.protocol || "aih", signal: 0,
             firmware: a.manufacturer || "—", aircraftType: a.aircraft_type || "drone",
+            connectionAvailable: false, status: "registered_not_connected",
           })),
         });
       }
       case "connect": {
         if (!aircraftId) return json({ error: "aircraftId required" }, 400);
-        await supabase.from("drones").update({
-          status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
-        }).eq("id", aircraftId).eq("user_id", user.id);
-        return json({ ok: true, telemetry: null });
+        // Registry presence is not a hardware handshake. No live transport adapter
+        // is configured in this gateway, so never mark an aircraft connected.
+        return json({
+          error: "No live aircraft transport is configured. Registry-only connection is not supported.",
+          code: "HARDWARE_ADAPTER_UNAVAILABLE",
+          aircraftId,
+        }, 409);
       }
       case "disconnect": {
         if (aircraftId) await supabase.from("drones").update({ status: "offline" }).eq("id", aircraftId).eq("user_id", user.id);
@@ -97,18 +101,18 @@ Deno.serve(async (req) => {
       case "rth":
       case "hold":
       case "resume": {
-        // Command relay: persist intent + status; upstream protocol adapters
-        // (MAVLink/DJI/etc.) will subscribe to this in future iterations.
-        const statusMap: Record<string, string> = {
-          arm: "armed", takeoff: "flying", land: "landing",
-          rth: "returning", hold: "paused", resume: "flying", calibrate: "calibrating",
-        };
-        if (aircraftId) {
-          await supabase.from("drones").update({
-            status: statusMap[action] || "connected", last_handshake_at: new Date().toISOString(),
-          }).eq("id", aircraftId).eq("user_id", user.id);
-        }
-        return json({ ok: true, command: action, dispatched_at: new Date().toISOString() });
+        // A persisted command intent is not a dispatched aircraft command.
+        // Reject until a verified, authenticated protocol adapter is connected.
+        if (!aircraftId) return json({ error: "aircraftId required" }, 400);
+        const { data: aircraft } = await supabase.from("drones")
+          .select("id").eq("id", aircraftId).eq("user_id", user.id).maybeSingle();
+        if (!aircraft) return json({ error: "Aircraft not found" }, 404);
+        return json({
+          error: "Command rejected: no verified live aircraft transport is connected.",
+          code: "HARDWARE_ADAPTER_UNAVAILABLE",
+          command: action,
+          dispatched: false,
+        }, 409);
       }
       default:
         return json({ error: `Unknown action ${action}` }, 400);
