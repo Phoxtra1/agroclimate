@@ -986,39 +986,50 @@ export default function EnvironmentalMonitor() {
   // EXISTING ECOLOGICAL health API FETCH (PRESERVED)
   // ---------------------------------------------------------------------------
   const fetchAiAssessment = useCallback(async (force = false) => {
-    if (!forecast || forecast.length === 0 || !position.locationName) return;
+    if (!forecast?.length || !assessmentTarget.locationName) return;
+    if (!weatherUsable) {
+      setAiEnv(null);
+      setIsAiEnvLoading(false);
+      return;
+    }
 
-    const cacheKey = `agroclimate_ai_env_${position.locationName.replace(/[^a-zA-Z]/g, "").toLowerCase()}`;
+    const locationKey = assessmentTarget.locationName.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const cacheKey = `agroclimate_ai_env_${locationKey}_${weatherLastUpdated?.getTime() || "current"}`;
     if (!force) {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        try {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
           const parsed = JSON.parse(cached);
           if (Date.now() - parsed.timestamp < 4 * 60 * 60 * 1000) {
             setAiEnv(parsed.assessment);
             return;
           }
-        } catch { /* bad cache */ }
-      }
+        }
+      } catch { /* cache is optional */ }
     }
 
+    let active = true;
     setIsAiEnvLoading(true);
     try {
       const provider = getActiveProvider();
-      const data = await provider.generateEnvironmentalAssessment(position.locationName, forecast);
-      if (data && typeof data.ecologicalScore === "number") {
+      const data = await provider.generateEnvironmentalAssessment(assessmentTarget.locationName, forecast);
+      if (active && data && typeof data.ecologicalScore === "number") {
         setAiEnv(data);
-        sessionStorage.setItem(cacheKey, JSON.stringify({ assessment: data, timestamp: Date.now() }));
+        try { sessionStorage.setItem(cacheKey, JSON.stringify({ assessment: data, timestamp: Date.now() })); } catch { /* cache is optional */ }
       }
-    } catch (err: any) {
-      console.warn("AI Environmental Assessment failed:", err);
+    } catch (error) {
+      if (active) {
+        setAiEnv(null);
+        console.warn("[AgroRisk] AI environmental assessment unavailable:", error);
+      }
     } finally {
-      setIsAiEnvLoading(false);
+      if (active) setIsAiEnvLoading(false);
     }
-  }, [forecast, position.locationName]);
+    return () => { active = false; };
+  }, [forecast, assessmentTarget.locationName, weatherUsable, weatherLastUpdated]);
 
   useEffect(() => {
-    fetchAiAssessment();
+    void fetchAiAssessment();
   }, [fetchAiAssessment]);
 
   // Merge legacy disasters
