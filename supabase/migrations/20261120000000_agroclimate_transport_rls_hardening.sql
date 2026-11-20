@@ -132,6 +132,83 @@ CREATE POLICY "tracking_sessions_admin_delete"
   TO authenticated
   USING (public.has_role(auth.uid(), 'admin'));
 
+-- Transport agreements are shared only with the supplier, buyer, assigned driver and admins.
+ALTER TABLE public.transport_agreements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "transport_agreement_parties_read" ON public.transport_agreements;
+DROP POLICY IF EXISTS "transport_agreement_parties_write" ON public.transport_agreements;
+
+CREATE POLICY "transport_agreements_parties_select"
+  ON public.transport_agreements
+  FOR SELECT
+  TO authenticated
+  USING (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "transport_agreements_supplier_insert"
+  ON public.transport_agreements
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = supplier_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "transport_agreements_parties_update"
+  ON public.transport_agreements
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  )
+  WITH CHECK (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "transport_agreements_admin_delete"
+  ON public.transport_agreements
+  FOR DELETE
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Limit mutable columns so a party cannot rewrite the other parties, agreed fee or request linkage.
+REVOKE UPDATE ON public.delivery_jobs FROM authenticated;
+GRANT UPDATE (status, transport_agreement_id) ON public.delivery_jobs TO authenticated;
+REVOKE DELETE ON public.delivery_jobs FROM authenticated;
+
+REVOKE UPDATE ON public.transport_agreements FROM authenticated;
+GRANT UPDATE (delivery_status) ON public.transport_agreements TO authenticated;
+REVOKE DELETE ON public.transport_agreements FROM authenticated;
+
+-- Tracking clients may update location and lifecycle fields, but cannot reassign
+-- a session to a different driver or delivery job.
+REVOKE UPDATE ON public.tracking_sessions FROM authenticated;
+GRANT UPDATE (
+  current_lat,
+  current_lon,
+  speed_kn,
+  heading,
+  status,
+  eta,
+  distance_m,
+  route,
+  last_location_at,
+  location_accuracy_m,
+  location_source,
+  is_simulated
+) ON public.tracking_sessions TO authenticated;
+REVOKE DELETE ON public.tracking_sessions FROM authenticated;
+
 -- Platform-wide metric reads must be restricted to actual administrators.
 DROP POLICY IF EXISTS "Authenticated view all profiles for overview" ON public.profiles;
 DROP POLICY IF EXISTS "Authenticated view all drivers for overview" ON public.agtrans_drivers;
