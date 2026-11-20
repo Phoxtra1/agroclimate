@@ -17,6 +17,7 @@ import {
 import { format } from "date-fns";
 import agyenkwaIcon from "@/assets/agyenkwa-icon.png";
 import { HandlerDashboard } from "@/components/handler/HandlerDashboard";
+import { validateHandlerGpsFix } from "@/lib/handlerGps";
 
 export default function HandlerWorkspace() {
   const { user, signOut } = useAuth();
@@ -47,9 +48,14 @@ export default function HandlerWorkspace() {
     return new Promise((resolve) => {
       if (!navigator.geolocation) return resolve(null);
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (pos) => resolve(validateHandlerGpsFix(
+          pos.coords.latitude,
+          pos.coords.longitude,
+          pos.coords.accuracy,
+          pos.timestamp,
+        )),
         () => resolve(null),
-        { timeout: 10000 }
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
       );
     });
   };
