@@ -327,6 +327,7 @@ export class WebBluetoothPostHarvestAdapter implements HardwareAdapter {
   readonly protocol = "ble-gatt" as const;
   readonly components: readonly HardwareComponent[] = ["post-harvest"];
   private sessions = new Map<string, { device: BluetoothDeviceLike; characteristic: BluetoothCharacteristicLike; listener: (event: any) => void }>();
+  private pending = new Map<string, PostHarvestStationReading[]>();
 
   constructor(
     private readonly serviceUuid: string,
@@ -347,6 +348,7 @@ export class WebBluetoothPostHarvestAdapter implements HardwareAdapter {
     const selected = await this.bluetooth.bluetooth.requestDevice({ filters: [{ services: [this.serviceUuid] }] });
     if (!selected.gatt) return { connected: false, detail: "Selected station does not expose BLE GATT." };
     const server = await selected.gatt.connect();
+    this.pending.set(device.deviceId, this.readPending(device.deviceId));
     const service = await server.getPrimaryService(this.serviceUuid);
     const characteristic = await service.getCharacteristic(this.characteristicUuid);
     const listener = (event: any) => {
@@ -357,12 +359,43 @@ export class WebBluetoothPostHarvestAdapter implements HardwareAdapter {
       if (!reading || !Number.isFinite(reading.temperatureC) || !Number.isFinite(reading.humidityPct) ||
           reading.temperatureC < -40 || reading.temperatureC > 85 || reading.humidityPct < 0 || reading.humidityPct > 100 ||
           !reading.idempotencyKey.trim() || !Number.isFinite(Date.parse(reading.observedAt))) return;
-      void this.sink(device, reading);
+      const queue = this.pending.get(device.deviceId) ?? this.readPending(device.deviceId);
+      if (!queue.some((item) => item.idempotencyKey === reading.idempotencyKey)) queue.push(reading);
+      if (queue.length > 5000) queue.shift();
+      this.pending.set(device.deviceId, queue);
+      this.persistPending(device.deviceId);
+      void this.flushPending(device);
     };
     characteristic.addEventListener("characteristicvaluechanged", listener);
     await characteristic.startNotifications();
     this.sessions.set(device.deviceId, { device: selected, characteristic, listener });
+    void this.flushPending(device);
     return { connected: true, connectedAt: new Date().toISOString(), detail: "Dedicated Post-Harvest BLE station stream is active." };
+  }
+
+  private readPending(deviceId: string): PostHarvestStationReading[] {
+    if (typeof localStorage === "undefined") return [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(`agroclimate:post-harvest-queue:${deviceId}`) ?? "[]");
+      return Array.isArray(parsed) ? parsed as PostHarvestStationReading[] : [];
+    } catch { return []; }
+  }
+
+  private persistPending(deviceId: string): void {
+    if (typeof localStorage === "undefined") return;
+    try { localStorage.setItem(`agroclimate:post-harvest-queue:${deviceId}`, JSON.stringify(this.pending.get(deviceId) ?? [])); }
+    catch { /* in-memory delivery remains active for this session */ }
+  }
+
+  private async flushPending(device: DeviceRegistration): Promise<void> {
+    const queue = this.pending.get(device.deviceId) ?? [];
+    while (queue.length) {
+      try { await this.sink(device, queue[0]); }
+      catch { break; }
+      queue.shift();
+      this.pending.set(device.deviceId, queue);
+      this.persistPending(device.deviceId);
+    }
   }
 
   async disconnect(deviceId: string): Promise<void> {
