@@ -289,7 +289,7 @@ function ForecastRow({ day }: { day: WeatherDay }) {
       </div>
       <div className="flex items-center gap-1 text-xs w-14 justify-center">
         <Gauge className="h-3 w-3 text-amber-500" />
-        <span>{day.soilMoisture}%</span>
+        <span title={day.soilMoistureSource === "provider" ? "Provider-reported soil moisture" : day.soilMoistureSource === "estimated" ? "Estimated from forecast weather; not a ground sensor reading" : "Sample data"}>{day.soilMoisture}%</span>
       </div>
       <div className="text-sm font-medium text-right w-20">
         <span>{day.tempHigh}°</span>
@@ -407,7 +407,7 @@ export default function Weather() {
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Gauge className="h-5 w-5 mx-auto text-amber-600" />
                 <p className="text-lg font-bold mt-2">{today.soilMoisture ?? 0}%</p>
-                <p className="text-xs text-muted-foreground">Soil Moisture</p>
+                <p className="text-xs text-muted-foreground">{today.soilMoistureSource === "provider" ? "Soil Moisture · provider" : today.soilMoistureSource === "estimated" ? "Estimated Soil Moisture" : "Sample Soil Moisture"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Leaf className="h-5 w-5 mx-auto text-green-600" />
@@ -418,6 +418,9 @@ export default function Weather() {
 
             {/* ──────── IRRIGATION INTELLIGENCE PANEL ──────── */}
             <section>
+              <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+                Soil-moisture values may be modelled from weather conditions when no provider soil reading is available. Irrigation advisories based on modelled values are estimates, not ground measurements; verify field conditions or use a calibrated soil sensor before acting.
+              </p>
               <h2 className="font-bold mb-3 flex items-center gap-2">
                 <Droplets className="h-5 w-5 text-blue-500" />
                 Irrigation Intelligence
@@ -452,7 +455,7 @@ export default function Weather() {
                   </p>
                 </div>
                 <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-center border border-amber-100 dark:border-amber-900/40">
-                  <p className="text-xs text-muted-foreground">Avg Soil Moist.</p>
+                  <p className="text-xs text-muted-foreground">{forecast.some((day) => day.soilMoistureSource !== "provider") ? "Avg Soil Moist. · modelled" : "Avg Soil Moist. · provider"}</p>
                   <p className="text-lg font-bold text-amber-700 dark:text-amber-300">
                     {Math.round(summary.avgSoilMoisture)}%
                   </p>
@@ -590,7 +593,7 @@ export default function Weather() {
                 <li><strong>Kc</strong> = Crop coefficient (water need multiplier per crop)</li>
                 <li><strong>Crop ET</strong> = ET₀ × Kc (actual crop water demand)</li>
                 <li><strong>Irrigation Need</strong> = Crop ET − Effective Rain</li>
-                <li><strong>Soil Moisture</strong> = Live volumetric reading (top 10 cm)</li>
+                <li><strong>Soil Moisture</strong> = Provider-reported value when available; otherwise an estimate derived from forecast weather, not a ground sensor reading</li>
               </ul>
             </div>
           </div>
