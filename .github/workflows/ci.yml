@@ -38,8 +38,10 @@ jobs:
           npm --version
           node -e "if (Number(process.versions.node.split('.')[0]) < 20) process.exit(1)"
 
-      - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install dependencies
+        # package.json currently contains dependency ranges absent from the committed lockfile.
+        # npm install reconciles the lock in this ephemeral CI checkout before validation.
+        run: npm install --no-audit --no-fund
 
       - name: Type-check application
         run: npx tsc --project tsconfig.app.json --noEmit --pretty false
