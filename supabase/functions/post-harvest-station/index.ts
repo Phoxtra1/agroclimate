@@ -74,6 +74,30 @@ Deno.serve(async (req) => {
     return json({ device, device_token: token, token_notice: "Store this token securely. It is shown only once." }, 201);
   }
 
+  if (body.action === "revoke") {
+    const authorization = req.headers.get("Authorization");
+    if (!authorization) return json({ error: "Owner authentication required" }, 401);
+    const ownerClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false },
+    });
+    const { data: { user }, error: authError } = await ownerClient.auth.getUser();
+    if (authError || !user) return json({ error: "Invalid owner session" }, 401);
+    const deviceId = typeof body.device_id === "string" ? body.device_id : "";
+    if (!deviceId) return json({ error: "device_id required" }, 400);
+    const { data: device } = await admin.from("post_harvest_station_devices")
+      .select("id").eq("id", deviceId).eq("user_id", user.id).maybeSingle();
+    if (!device) return json({ error: "Station not found for this owner" }, 404);
+    const now = new Date().toISOString();
+    const { error: credentialError } = await admin.from("post_harvest_station_credentials")
+      .update({ revoked_at: now }).eq("device_id", deviceId);
+    if (credentialError) return json({ error: "Could not revoke device credential" }, 500);
+    const { error: deviceError } = await admin.from("post_harvest_station_devices")
+      .update({ status: "revoked" }).eq("id", deviceId).eq("user_id", user.id);
+    if (deviceError) return json({ error: "Could not update station status" }, 500);
+    return json({ revoked: true, device_id: deviceId });
+  }
+
   if (body.action === "ingest") {
     const token = req.headers.get("x-device-token");
     if (!token || token.length < 32 || token.length > 256) return json({ error: "Valid x-device-token required" }, 401);
