@@ -30,3 +30,6 @@ verify_jwt = true
 
 [functions.post-harvest-station]
 verify_jwt = false
+
+[functions.agroclimate-device-gateway]
+verify_jwt = false

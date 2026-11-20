@@ -2,6 +2,7 @@ import { ConnectionAdapter, DroneProtocol } from "./types";
 import { createSimulatorAdapter } from "./simulatorAdapter";
 import { createRealAdapter } from "./realAdapter";
 import { createAihAdapter } from "./aihAdapter";
+import { createMavlinkConnectionAdapter } from "./mavlinkAdapter";
 
 function createUnavailableAdapter(protocol: DroneProtocol): ConnectionAdapter {
   const unavailable = () => Promise.reject(new Error(`The ${protocol.toUpperCase()} adapter is not implemented or validated yet. Use the simulator or the read-only Custom JSON Telemetry Bridge.`));
@@ -30,6 +31,7 @@ export function getAdapter(protocol: DroneProtocol): ConnectionAdapter {
   if (protocol === "simulator") return createSimulatorAdapter();
   if (protocol === "aih") return createAihAdapter();
   if (protocol === "custom") return createRealAdapter({ protocol });
+  if (protocol === "mavlink") return createMavlinkConnectionAdapter();
   return createUnavailableAdapter(protocol);
 }
 
@@ -38,7 +40,7 @@ export const SUPPORTED_PROTOCOLS: { id: DroneProtocol; label: string; ready: boo
   { id: "custom", label: "Custom JSON Telemetry Bridge (read-only)", ready: true },
   { id: "aih", label: "Air Integration Hub", ready: false },
   { id: "wifi", label: "Wi-Fi Drone Adapter", ready: false },
-  { id: "mavlink", label: "MAVLink", ready: false },
+  { id: "mavlink", label: "MAVLink Serial (read-only)", ready: true },
   { id: "ardupilot", label: "ArduPilot", ready: false },
   { id: "pixhawk", label: "Pixhawk", ready: false },
   { id: "dji", label: "DJI SDK", ready: false },

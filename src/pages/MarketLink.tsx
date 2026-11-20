@@ -215,7 +215,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
       </div>
 
       <div className="sm:col-span-2"><Label>Description / Additional Batch Notes</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
-      <div className="sm:col-span-2"><Label className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Product Image</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></div>
+      <div className="sm:col-span-2"><Label className="flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Product Image</Label><Input type="file" accept="image/*" capture="environment" onChange={(e) => setFile(e.target.files?.[0] || null)} /></div>
       <div className="sm:col-span-2"><Button type="submit" disabled={busy} className="w-full h-11 font-bold">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Publish Batch &amp; Supply Listing"}</Button></div>
     </form>
   );

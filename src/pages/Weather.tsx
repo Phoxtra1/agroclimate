@@ -24,6 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import type { WeatherDay } from "@/data/mock-data";
+import { useHardwareObservations } from "@/hooks/useHardwareObservations";
+import type { ObservationMetric } from "@/services/hardware/types";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -324,6 +326,9 @@ export default function Weather() {
   );
 
   const today = forecast[0];
+  const { latestByMetric } = useHardwareObservations(["agroforecast"]);
+  const stationReadings = (["temperature", "relative_humidity", "rainfall", "wind_speed"] as ObservationMetric[])
+    .map((metric) => latestByMetric.get(metric)).filter((item) => item !== undefined);
   const currentMonth = new Date().getMonth() + 1;
   const season = getCurrentSeason(currentMonth);
   const recommendations = getSeasonalRecommendations(currentMonth);
@@ -395,6 +400,27 @@ export default function Weather() {
           {/* Main column */}
           <div className="lg:col-span-2 space-y-5">
             <TodayWeather weather={today} />
+
+            {stationReadings.length > 0 && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-semibold">Physical Weather Station</h2>
+                    <p className="text-xs text-muted-foreground">Measured device observations · separate from provider forecast</p>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-600/40 text-emerald-700">Live sensor data</Badge>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {stationReadings.map((reading) => (
+                    <div key={reading.eventId} className="rounded-lg bg-background/70 p-3">
+                      <p className="text-xs text-muted-foreground capitalize">{reading.metric.replace(/_/g, " ")}</p>
+                      <p className="text-lg font-bold">{reading.value} <span className="text-xs font-normal">{reading.unit}</span></p>
+                      <p className="text-[10px] text-muted-foreground">{new Date(reading.measuredAt).toLocaleTimeString()}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Quick stats — agricultural metrics */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

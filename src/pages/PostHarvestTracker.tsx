@@ -187,7 +187,7 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
           </div>
           <div>
             <Label className="flex items-center gap-2"><Camera className="h-4 w-4" /> Add photos</Label>
-            <Input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} />
+            <Input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} />
             {files.length > 0 && (
               <div className="flex gap-2 mt-2 flex-wrap">
                 {files.map((f, i) => (
