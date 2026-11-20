@@ -11,20 +11,11 @@ import {
 } from "lucide-react";
 import type { UseDroneState } from "@/hooks/useDroneState";
 import { useAIH } from "@/hooks/useAIH";
+import { SUPPORTED_PROTOCOLS } from "@/lib/drone/connectionManager";
 import { CopyButton } from "@/components/CopyButton";
 import { useToast } from "@/hooks/use-toast";
 
-const SUPPORTED_PROTOCOLS = [
-  { id: "simulator", label: "Built-in Simulator" },
-  { id: "wifi", label: "Wi-Fi Link (AgroNet)" },
-  { id: "mavlink", label: "MAVLink Port 8088" },
-  { id: "px4", label: "PX4 Companion SDK" },
-  { id: "ardupilot", label: "ArduPilot Radio" },
-  { id: "dji", label: "DJI Mobile SDK" },
-  { id: "adsb", label: "ADS-B Ingestion" },
-  { id: "rtsp", label: "RTSP Video Stream" },
-  { id: "custom", label: "Custom API Bridge" },
-];
+
 
 export function DroneConnectionCenter(props: UseDroneState) {
   const {
@@ -39,6 +30,8 @@ export function DroneConnectionCenter(props: UseDroneState) {
   const { toast } = useToast();
 
   const isConnected = !["disconnected", "connecting"].includes(status);
+  const isSimulator = protocol === "simulator";
+  const isReadOnlyLive = protocol === "custom";
   const isFlying = ["flying", "returning", "paused", "landing", "emergency"].includes(status);
 
   // Check if active aircraft is a manned commercial type (locked controls)
@@ -133,7 +126,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-slate-800 text-slate-300 font-mono">
               {SUPPORTED_PROTOCOLS.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
+                <SelectItem key={p.id} value={p.id} disabled={!p.ready}>
                   {p.label}
                 </SelectItem>
               ))}
@@ -147,6 +140,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
             <div className="min-w-0">
               <h3 className="font-mono font-bold text-sm text-cyan-400 truncate">{droneName}</h3>
               <p className="text-[9px] text-slate-500 font-mono uppercase">{activeDrone?.model || "No Connected Asset"}</p>
+              <p className="text-[8px] text-amber-400 font-mono uppercase">{isSimulator ? "SIMULATED TELEMETRY" : isReadOnlyLive ? "DEVICE-REPORTED · READ-ONLY" : "NO LIVE ADAPTER"}</p>
             </div>
             <Wifi className={`h-4 w-4 shrink-0 ${isConnected ? "text-emerald-500" : "text-slate-600"}`} />
           </div>
@@ -219,14 +213,14 @@ export function DroneConnectionCenter(props: UseDroneState) {
         <div className="grid grid-cols-2 gap-2">
           {!isConnected ? (
             <Button className="col-span-2 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs" onClick={handleConnect} disabled={status === "connecting"}>
-              <Wifi className="mr-1.5 h-4 w-4" /> {status === "connecting" ? "LINKING ASSET…" : "CONNECT AIRCRAFT"}
+              <Wifi className="mr-1.5 h-4 w-4" /> {status === "connecting" ? "WAITING FOR TELEMETRY…" : isSimulator ? "START SIMULATOR" : "CONNECT TELEMETRY BRIDGE"}
             </Button>
           ) : (
             <>
               <Button variant="outline" className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800 font-mono text-xs" onClick={disconnect} disabled={isFlying}>
                 <WifiOff className="mr-1.5 h-3.5 w-3.5" /> Disconnect
               </Button>
-              <Button variant="outline" className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800 font-mono text-xs" onClick={handleCalibrate} disabled={isFlying || status === "calibrating" || isMannedCommercial}>
+              <Button variant="outline" className="border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-800 font-mono text-xs" onClick={handleCalibrate} disabled={isFlying || status === "calibrating" || isMannedCommercial || isReadOnlyLive}>
                 <Crosshair className="mr-1.5 h-3.5 w-3.5" /> Calibrate
               </Button>
             </>
@@ -237,7 +231,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
         {isConnected && (
           <div className={`space-y-2 pt-3 border-t border-slate-800 ${isMannedCommercial ? "opacity-50" : ""}`}>
             <p className="text-[10px] font-mono text-slate-500 uppercase flex items-center gap-1">
-              Flight Operation Controllers
+              {isReadOnlyLive && <span className="text-amber-300">READ-ONLY · COMMANDS DISABLED</span>} Flight Operation Controllers
               {isMannedCommercial && <Lock className="h-3 w-3 text-amber-500" />}
             </p>
             
@@ -245,7 +239,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
               <Button
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono h-11 text-[10px]"
                 onClick={() => startMission()}
-                disabled={isFlying || isMannedCommercial}
+                disabled={isFlying || isMannedCommercial || isReadOnlyLive}
               >
                 <PlaneTakeoff className="h-4 w-4 mr-1" /> LAUNCH
               </Button>
@@ -254,7 +248,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
                 <Button
                   className="bg-cyan-600 hover:bg-cyan-500 text-white font-mono h-11 text-[10px]"
                   onClick={resumeMission}
-                  disabled={isMannedCommercial}
+                  disabled={isMannedCommercial || isReadOnlyLive}
                 >
                   <Play className="h-4 w-4 mr-1" /> RESUME
                 </Button>
@@ -262,7 +256,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
                 <Button
                   className="bg-amber-600 hover:bg-amber-500 text-white font-mono h-11 text-[10px]"
                   onClick={pauseMission}
-                  disabled={status !== "flying" || isMannedCommercial}
+                  disabled={status !== "flying" || isMannedCommercial || isReadOnlyLive}
                 >
                   <Pause className="h-4 w-4 mr-1" /> PAUSE
                 </Button>
@@ -271,7 +265,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
               <Button
                 className="bg-blue-600 hover:bg-blue-500 text-white font-mono h-11 text-[10px]"
                 onClick={returnToHome}
-                disabled={!isFlying || isMannedCommercial}
+                disabled={!isFlying || isMannedCommercial || isReadOnlyLive}
               >
                 <HomeIcon className="h-4 w-4 mr-1" /> RTH (HOME)
               </Button>
@@ -289,7 +283,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
               variant="destructive"
               className="w-full font-mono bg-red-950/60 hover:bg-red-900/80 text-red-200 border border-red-800 text-xs"
               onClick={emergencyLand}
-              disabled={!isFlying || isMannedCommercial}
+              disabled={!isFlying || isMannedCommercial || isReadOnlyLive}
             >
               <ShieldAlert className="mr-1.5 h-4 w-4" /> EMERGENCY HARD LAND
             </Button>
