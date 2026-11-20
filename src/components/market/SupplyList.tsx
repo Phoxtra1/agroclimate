@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,15 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
   const [draft, setDraft] = useState<Partial<SupplyRow>>({});
   const { user } = useAuth();
 
-  const load = async () => {
+  const requestVersion = useRef(0);
+  const load = useCallback(async () => {
+    const version = ++requestVersion.current;
+    if (ownerOnly && !user) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+    setItems([]);
     setLoading(true);
     let query = supabase
       .from("farmer_inputs" as any)
@@ -48,35 +56,32 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(200);
-      
-    if (ownerOnly && user) {
-      query = query.eq("user_id", user.id);
+    if (ownerOnly) query = query.eq("user_id", user!.id);
+    const { data, error } = await query;
+    if (version !== requestVersion.current) return;
+    if (error) {
+      console.error("[SupplyList] listings could not be loaded", error);
+      setItems([]);
+    } else {
+      setItems((data as any) || []);
     }
-    
-    const { data } = await query;
-    setItems((data as any) || []);
     setLoading(false);
-  };
+  }, [ownerOnly, user?.id]);
 
   useEffect(() => {
-    load();
-    // Real-time stream — apply INSERT/UPDATE/DELETE locally so new
-    // listings appear instantly without re-fetching the whole table.
+    void load();
     const ch = supabase
-      .channel("supply-public-stream")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "farmer_inputs" },
-        (payload: any) => {
+      .channel(ownerOnly ? `supply-owner-${user?.id || "signed-out"}` : "supply-public-stream")
+      .on("postgres_changes", { event: "*", schema: "public", table: "farmer_inputs" }, (payload: any) => {
+        if (ownerOnly) {
+          void load();
+          return;
+        }
+        if (payload.eventType === "INSERT") {
           const row = payload.new as SupplyRow;
           if (!row || row.status === "cancelled") return;
           setItems((prev) => (prev.some((p) => p.id === row.id) ? prev : [row, ...prev]));
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "farmer_inputs" },
-        (payload: any) => {
+        } else if (payload.eventType === "UPDATE") {
           const row = payload.new as SupplyRow;
           if (!row) return;
           setItems((prev) => {
@@ -84,20 +89,17 @@ export function SupplyList({ requireAuthForChat = true, allowOwnerActions = fals
             const exists = prev.some((p) => p.id === row.id);
             return exists ? prev.map((p) => (p.id === row.id ? row : p)) : [row, ...prev];
           });
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "farmer_inputs" },
-        (payload: any) => {
+        } else if (payload.eventType === "DELETE") {
           const row = payload.old as SupplyRow;
-          if (!row) return;
-          setItems((prev) => prev.filter((p) => p.id !== row.id));
+          if (row?.id) setItems((prev) => prev.filter((p) => p.id !== row.id));
         }
-      )
+      })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, []);
+    return () => {
+      requestVersion.current += 1;
+      void supabase.removeChannel(ch);
+    };
+  }, [load, ownerOnly, user?.id]);
 
   const filtered = useMemo(() => {
     let res = items.filter((s) => {
