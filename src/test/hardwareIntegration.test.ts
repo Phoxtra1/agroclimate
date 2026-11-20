@@ -58,11 +58,55 @@ describe("AgroClimate hardware integration contracts", () => {
     expect(result.issues).toHaveLength(3);
   });
 
+  it("rejects impossible physical ranges for common agricultural sensor metrics", () => {
+    expect(validateDeviceObservation({
+      ...observation, metric: "relative_humidity", value: 105, unit: "%RH",
+    }).issues).toContain("relative_humidity must be between 0 and 100.");
+    expect(validateDeviceObservation({
+      ...observation, metric: "soil_moisture", value: 1.4, unit: "m³/m³",
+    }).issues).toContain("soil_moisture in m³/m³ must be between 0 and 1.");
+    expect(validateDeviceObservation({
+      ...observation, metric: "soil_ph", value: 15, unit: "pH",
+    }).issues).toContain("soil_ph must be between 0 and 14.");
+    expect(validateDeviceObservation({
+      ...observation, metric: "wind_speed", value: -1, unit: "m/s",
+    }).issues).toContain("wind_speed cannot be negative.");
+  });
+
   it("rejects half-specified and out-of-range coordinates", () => {
     expect(validateDeviceObservation({ ...observation, latitude: 91, longitude: 0 }).valid).toBe(false);
     expect(validateDeviceObservation({ ...observation, latitude: 5.6 }).issues).toContain(
       "latitude and longitude must be supplied together.",
     );
+  });
+
+  it("rejects future measurement timestamps beyond the allowed clock skew", () => {
+    expect(validateDeviceObservation({
+      ...observation,
+      measuredAt: "2026-11-20T08:08:00Z",
+    }, Date.parse("2026-11-20T08:02:00Z")).issues).toContain(
+      "measuredAt cannot be more than five minutes in the future.",
+    );
+  });
+
+  it("bounds identifiers and metadata payloads", () => {
+    const tooLarge = {
+      ...observation,
+      eventId: "e".repeat(161),
+      metadata: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`key-${index}`, "value"])),
+    };
+    const result = validateDeviceObservation(tooLarge, Date.parse("2026-11-20T08:02:00Z"));
+    expect(result.issues).toContain("eventId is required and must not exceed 160 characters.");
+    expect(result.issues).toContain("metadata cannot contain more than 20 entries.");
+  });
+
+  it("rejects non-finite metadata numbers and oversized metadata strings", () => {
+    const result = validateDeviceObservation({
+      ...observation,
+      metadata: { sensor_value: Number.POSITIVE_INFINITY, note: "x".repeat(257) },
+    }, Date.parse("2026-11-20T08:02:00Z"));
+    expect(result.issues).toContain("metadata numbers must be finite.");
+    expect(result.issues).toContain("metadata string values must not exceed 256 characters.");
   });
 
   it("rejects observations marked rejected and future receipt timestamps", () => {
