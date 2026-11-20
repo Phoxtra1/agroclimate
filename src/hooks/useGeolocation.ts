@@ -10,6 +10,7 @@ export interface GeoPosition {
   region: string;
   country: string;
   source: "gps" | "cached" | "default";
+  updatedAt?: number;
 }
 
 const DEFAULT_POSITION: GeoPosition = {
@@ -45,6 +46,7 @@ function readGeoCache(): GeoPosition | null {
       region: typeof parsed.region === "string" ? parsed.region : "",
       country: typeof parsed.country === "string" ? parsed.country : "",
       source: "cached",
+      updatedAt: typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0,
     };
   } catch {
     return null;
@@ -100,6 +102,7 @@ export function useGeolocation() {
           region: "",
           country: "",
           source: "gps",
+          updatedAt: Date.now(),
         };
 
         try {
