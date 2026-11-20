@@ -50,9 +50,7 @@ export function createMavlinkConnectionAdapter(): ConnectionAdapter {
     id: "mavlink",
     label: "MAVLink Serial (read-only)",
     async scan(): Promise<DiscoveredDrone[]> {
-      if (!("serial" in navigator)) {
-        throw new Error("Web Serial is unavailable in this browser. Use a supported desktop Chromium browser over HTTPS.");
-      }
+      if (!("serial" in navigator)) return [];
       return [{
         id: deviceId,
         name: "USB MAVLink telemetry source",
