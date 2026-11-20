@@ -87,7 +87,7 @@ export class DeviceIntegrationRuntime {
   acceptObservation(item: DeviceObservation): void {
     const device = this.registrations.get(item.deviceId);
     if (!device || device.state === "revoked") throw new Error("Observation source is not an active registered device.");
-    if (device.tenantId !== item.tenantId || device.component !== item.component) throw new Error("Observation tenant or component does not match its registered device.");
+    if (device.tenantId !== item.tenantId || device.component !== item.component || device.protocol !== item.sourceProtocol) throw new Error("Observation tenant, component or protocol does not match its registered device.");
     this.delivery.enqueue(item);
     void this.delivery.flush();
   }
