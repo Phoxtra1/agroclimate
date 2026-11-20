@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { CircleMarker, GeoJSON, MapContainer, Marker, Polygon, Popup, ScaleControl, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { SatelliteMapControls } from "@/components/satellite/SatelliteMapControls";
 import L from "leaflet";
@@ -2141,6 +2142,7 @@ export default function Satellite() {
           </div>
         </div>
       )}
+      <SharedDevicePanel component="satellite" />
     </div>
   );
 }
