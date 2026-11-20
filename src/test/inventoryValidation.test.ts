@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateInventoryRecord } from "@/lib/inventoryValidation";
+import { normalizeInventoryRecord } from "@/hooks/useInventory";
 
 describe("Agro Inventory record validation", () => {
   it("requires the core identity fields for stock inputs", () => {
