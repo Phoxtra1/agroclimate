@@ -99,3 +99,13 @@ export function createPostHarvestStationSink(
     if (error || data?.accepted !== true) throw new Error(data?.error || error?.message || "Post-Harvest station reading was not accepted.");
   };
 }
+
+export function toPostHarvestDeviceRegistration(device: ProvisionedPostHarvestStation, ownerUserId: string): DeviceRegistration {
+  return {
+    deviceId: device.id, tenantId: device.user_id, ownerUserId,
+    component: "post-harvest", deviceClass: device.device_name,
+    manufacturer: "Unknown", model: device.model ?? "Unknown", protocol: "ble-gatt",
+    capabilities: ["temperature", "relative-humidity"],
+    registeredAt: device.created_at, state: device.status === "active" ? "registered" : "revoked",
+  };
+}
