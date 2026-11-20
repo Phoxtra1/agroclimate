@@ -11,6 +11,8 @@ import { AIAgroRiskAssessment, AIEnvironmentalAssessment, RiskLevel } from "@/li
 import { calculateAgroRiskLocal, LocalAgroRiskResult } from "@/lib/riskEngine";
 import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/services/satellite/geospatial";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
+import { useHardwareObservations } from "@/hooks/useHardwareObservations";
+import type { ObservationMetric } from "@/services/hardware/types";
 import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -582,6 +584,9 @@ export default function EnvironmentalMonitor() {
   const { position } = useGeolocation();
   const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
+  const { latestByMetric: latestFieldMetrics } = useHardwareObservations(["agrorisk", "agroforecast"]);
+  const fieldSensorReadings = (["soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity", "rainfall", "water_level"] as ObservationMetric[])
+    .map((metric) => latestFieldMetrics.get(metric)).filter((item) => item !== undefined);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<"sensors" | "agrorisk">("sensors");
@@ -1050,6 +1055,27 @@ export default function EnvironmentalMonitor() {
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
         AgroRisk scores are model-based estimates using weather-provider forecasts or fallback sample data, coordinate-based terrain heuristics and incident reports saved in this browser. They are not field-sensor measurements, surveyed terrain results or verified hazard boundaries. Confirm local conditions before making operational decisions.
       </div>
+
+      {fieldSensorReadings.length > 0 && (
+        <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center justify-between gap-2">
+              Calibrated Field Sensor Readings
+              <Badge variant="outline" className="border-emerald-600/40 text-emerald-700">Measured · device reported</Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Physical observations are shown separately from weather-provider forecasts and model-based AgroRisk estimates.</p>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {fieldSensorReadings.map((reading) => (
+              <div key={reading.eventId} className="rounded-lg bg-background/70 p-3">
+                <p className="text-[11px] text-muted-foreground capitalize">{reading.metric.replace(/_/g, " ")}</p>
+                <p className="text-lg font-bold">{reading.value} <span className="text-xs font-normal">{reading.unit}</span></p>
+                <p className="text-[10px] text-muted-foreground">{new Date(reading.measuredAt).toLocaleString()}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* =======================================================================
           TAB 1: ENVIRONMENT SENSORS (RAW DATA LAYER - PRESERVED & ENHANCED)
