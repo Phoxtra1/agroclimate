@@ -523,3 +523,60 @@ END;
 $;
 
 GRANT EXECUTE ON FUNCTION public.update_agtrans_tracking_location(uuid, double precision, double precision, numeric, timestamptz, numeric, numeric, text, numeric, jsonb) TO authenticated;
+
+-- Notifications can be created for another participant only when both sender
+-- and recipient belong to the referenced AGTrans request.
+CREATE OR REPLACE FUNCTION public.create_agtrans_notification(
+  p_user_id uuid,
+  p_type text,
+  p_title text,
+  p_message text,
+  p_data jsonb DEFAULT '{}'::jsonb
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  r public.agtrans_requests%ROWTYPE;
+  request_key uuid;
+  notification_id uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF p_user_id IS NULL OR COALESCE(length(trim(p_type)), 0) = 0
+     OR COALESCE(length(trim(p_title)), 0) = 0
+     OR COALESCE(length(trim(p_message)), 0) = 0 THEN
+    RAISE EXCEPTION 'Notification recipient, type, title and message are required';
+  END IF;
+
+  BEGIN
+    request_key := NULLIF(p_data->>'request_id', '')::uuid;
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'Invalid AGTrans request reference';
+  END;
+  IF request_key IS NULL THEN RAISE EXCEPTION 'An AGTrans request reference is required'; END IF;
+
+  SELECT * INTO r FROM public.agtrans_requests WHERE id = request_key;
+  IF NOT FOUND THEN RAISE EXCEPTION 'AGTrans request not found'; END IF;
+
+  IF auth.uid() IS DISTINCT FROM r.supplier_id
+     AND auth.uid() IS DISTINCT FROM r.buyer_id
+     AND auth.uid() IS DISTINCT FROM r.driver_id
+     AND NOT public.has_role(auth.uid(), 'admin') THEN
+    RAISE EXCEPTION 'Sender is not a participant in this AGTrans request';
+  END IF;
+  IF p_user_id IS DISTINCT FROM r.supplier_id
+     AND p_user_id IS DISTINCT FROM r.buyer_id
+     AND p_user_id IS DISTINCT FROM r.driver_id THEN
+    RAISE EXCEPTION 'Recipient is not a participant in this AGTrans request';
+  END IF;
+
+  INSERT INTO public.transport_notifications (user_id, type, title, message, data)
+  VALUES (p_user_id, p_type, p_title, p_message, COALESCE(p_data, '{}'::jsonb))
+  RETURNING id INTO notification_id;
+  RETURN notification_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.create_agtrans_notification(uuid, text, text, text, jsonb) TO authenticated;
