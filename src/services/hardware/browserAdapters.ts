@@ -2,6 +2,8 @@ import type {
   AdapterConnection, DeviceObservation, DeviceRegistration, HardwareAdapter,
   HardwareComponent, DeviceProtocol, ObservationMetric,
 } from "./types";
+import { TelemetryGateway } from "@/services/aih/telemetryGateway";
+import type { AircraftType, FlightMode } from "@/services/aih/types";
 
 export type ObservationSink = (observation: DeviceObservation) => void | Promise<void>;
 
@@ -470,6 +472,7 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
   constructor(
     private readonly context: AdapterContext,
     private readonly baudRate = 57600,
+    private readonly aircraftType: AircraftType = "drone",
     private readonly serial: MavlinkSerialNavigator = typeof navigator !== "undefined" ? navigator as unknown as MavlinkSerialNavigator : {},
   ) {}
 
@@ -486,6 +489,7 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
     if (!port.readable) { await port.close(); return { connected: false, detail: "MAVLink serial port has no readable stream." }; }
     const session: MavlinkSession = { port, reader: port.readable.getReader(), closed: false };
     this.sessions.set(device.deviceId, session);
+    TelemetryGateway.updateTelemetry(device.deviceId, { aircraftId: device.deviceId, aircraftType: this.aircraftType, connectionStatus: "connected", flightMode: "manual" as FlightMode });
     void this.readTelemetry(device, session);
     return { connected: true, connectedAt: new Date().toISOString(), detail: "MAVLink v1/v2 read-only telemetry stream opened." };
   }
@@ -505,18 +509,37 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
           if (frame.messageId === 24 && p.byteLength >= 30) {
             const fixType = p.getUint8(28);
             if (fixType >= 2) {
-              emit("latitude", p.getInt32(8, true) / 1e7, "°");
-              emit("longitude", p.getInt32(12, true) / 1e7, "°");
+              const latitude = p.getInt32(8, true) / 1e7;
+              const longitude = p.getInt32(12, true) / 1e7;
+              emit("latitude", latitude, "°");
+              emit("longitude", longitude, "°");
+              TelemetryGateway.updateTelemetry(device.deviceId, { latitude, longitude, gpsStatus: fixType >= 4 ? "rtk" : fixType === 3 ? "3d" : "2d", connectionStatus: "connected" });
             }
           } else if (frame.messageId === 33 && p.byteLength >= 28) {
-            emit("latitude", p.getInt32(4, true) / 1e7, "°");
-            emit("longitude", p.getInt32(8, true) / 1e7, "°");
-            emit("aircraft_altitude", p.getInt32(12, true) / 1000, "m");
+            const latitude = p.getInt32(4, true) / 1e7;
+            const longitude = p.getInt32(8, true) / 1e7;
+            const altitude = p.getInt32(12, true) / 1000;
+            const vx = p.getInt16(20, true) / 100;
+            const vy = p.getInt16(22, true) / 100;
+            const headingRaw = p.getUint16(26, true);
+            emit("latitude", latitude, "°");
+            emit("longitude", longitude, "°");
+            emit("aircraft_altitude", altitude, "m");
+            TelemetryGateway.updateTelemetry(device.deviceId, { latitude, longitude, altitude, speed: Math.hypot(vx, vy), heading: headingRaw === 65535 ? 0 : headingRaw / 100, gpsStatus: "3d", connectionStatus: "connected" });
           } else if (frame.messageId === 74 && p.byteLength >= 20) {
-            emit("aircraft_altitude", p.getFloat32(8, true), "m");
+            const speed = p.getFloat32(4, true);
+            const altitude = p.getFloat32(8, true);
+            const heading = p.getInt16(16, true);
+            emit("aircraft_altitude", altitude, "m");
+            TelemetryGateway.updateTelemetry(device.deviceId, { speed, altitude, heading, connectionStatus: "connected" });
+          } else if (frame.messageId === 30 && p.byteLength >= 28) {
+            TelemetryGateway.updateTelemetry(device.deviceId, { roll: p.getFloat32(4, true), pitch: p.getFloat32(8, true), yaw: p.getFloat32(12, true), connectionStatus: "connected" });
           } else if (frame.messageId === 1 && p.byteLength >= 31) {
             const battery = p.getInt8(30);
-            if (battery >= 0 && battery <= 100) emit("aircraft_battery", battery, "%");
+            if (battery >= 0 && battery <= 100) {
+              emit("aircraft_battery", battery, "%");
+              TelemetryGateway.updateTelemetry(device.deviceId, { batteryFuelStatus: battery, connectionStatus: "connected" });
+            }
           }
         }
       }
