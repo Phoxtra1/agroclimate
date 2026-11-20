@@ -23,7 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
-import { WeatherDay } from "@/data/mock-data";
+import type { WeatherDay } from "@/data/mock-data";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
