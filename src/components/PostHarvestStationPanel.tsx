@@ -38,14 +38,12 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
     if (!userId) {
       setDevices([]);
       setObservations([]);
-      setIssuedToken(null);
       setLoading(false);
       return;
     }
     // Do not retain a previous account's station list or one-time device credential.
     setDevices([]);
     setObservations([]);
-    setIssuedToken(null);
     setLoading(true);
     const [deviceResult, observationResult] = await Promise.all([
       supabase.from("post_harvest_station_devices" as any)
@@ -64,9 +62,10 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   }, [user?.id]);
 
   useEffect(() => {
+    setIssuedToken(null);
     void refresh();
     return () => { requestVersion.current += 1; };
-  }, [refresh]);
+  }, [refresh, user?.id]);
   useEffect(() => {
     if (!user) return;
     const channel = supabase.channel("post-harvest-station-live")
