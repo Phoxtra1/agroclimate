@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useAGTrans, TransportRequest, DeliveryJob, DriverProfile, AvailabilityStatus } from "@/hooks/useAGTrans";
@@ -703,6 +704,7 @@ export default function DriverDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <SharedDevicePanel component="agtrans" />
     </div>
   );
 }
