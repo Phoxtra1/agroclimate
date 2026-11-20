@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
     const idempotencyKey = typeof body.idempotency_key === "string" ? body.idempotency_key.trim() : "";
     const sequenceNo = body.sequence_no == null ? null : body.sequence_no;
     const timestampIsExplicitAndValid = !!observedAt &&
-      /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$/.test(observedAtValue) &&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(observedAtValue) &&
       Number.isFinite(observedAt.getTime());
     if (typeof temperature !== "number" || !Number.isFinite(temperature) || temperature < -40 || temperature > 85 ||
         typeof humidity !== "number" || !Number.isFinite(humidity) || humidity < 0 || humidity > 100 ||
