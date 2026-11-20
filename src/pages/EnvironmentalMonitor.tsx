@@ -140,7 +140,7 @@ const THRESHOLDS = {
   PRESSURE_DROP_STORM: 1005,
 } as const;
 
-// Preset hazard zones for overlay (Volta floodplains and steep ranges)
+// Approximate reference overlays only; not surveyed hazard boundaries.
 const HAZARD_OVERLAYS = [
   { name: "Lower Volta Floodplain", coords: [[6.4, 0.2], [6.0, 0.3], [5.9, -0.1], [6.3, -0.1]], color: "#dc2626", fillOpacity: 0.25, risk: "CRITICAL FLOOD ZONE" },
   { name: "Kwahu Steep Mountain Slopes", coords: [[6.7, -0.8], [6.5, -0.6], [6.4, -0.9], [6.6, -1.1]], color: "#f97316", fillOpacity: 0.2, risk: "HIGH EROSION & LANDSLIDE ZONE" },
@@ -580,7 +580,7 @@ function useEnvironmentState(forecast: any[]): EnvironmentState | null {
 // =============================================================================
 export default function EnvironmentalMonitor() {
   const { position } = useGeolocation();
-  const { forecast } = useWeather(position.lat, position.lon);
+  const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
 
   // Tab State
@@ -608,7 +608,7 @@ export default function EnvironmentalMonitor() {
   const [aiAgroRisk, setAiAgroRisk] = useState<AIAgroRiskAssessment | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Incident reporting state
+  // Incident reporting state (currently local to this browser; not a shared alert feed)
   const [incidentType, setIncidentType] = useState<IncidentReport["type"]>("Flooding");
   const [incidentDesc, setIncidentDesc] = useState("");
 
@@ -621,7 +621,7 @@ export default function EnvironmentalMonitor() {
   const [isAiEnvLoading, setIsAiEnvLoading] = useState(false);
 
   // ---------------------------------------------------------------------------
-  // DATA SYNC: FARMS & INCIDENTS (DATABASE WITH LOCALSTORAGE FALLBACK)
+  // DATA SYNC: FARM RECORDS IN DATABASE; INCIDENT REPORTS IN LOCAL BROWSER STORAGE
   // ---------------------------------------------------------------------------
   const reloadFarms = useCallback(async () => {
     setLoadingFarms(true);
@@ -713,7 +713,7 @@ export default function EnvironmentalMonitor() {
       }
     } catch (err: any) {
       console.warn("AgroRisk AI assessment offline/failed:", err);
-      setAiError("Advanced AI recommendations offline. Viewing high-fidelity local risk calculation.");
+      setAiError("Advanced AI recommendations are unavailable. Viewing a local rule-based risk estimate.");
     } finally {
       setIsAiLoading(false);
     }
@@ -1026,7 +1026,7 @@ export default function EnvironmentalMonitor() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Raw Sensors
+              Weather &amp; Environment
             </button>
             <button
               onClick={() => setActiveTab("agrorisk")}
@@ -1042,9 +1042,13 @@ export default function EnvironmentalMonitor() {
           </div>
           <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground">
             <RefreshCw className="h-3 w-3" />
-            <span>Updated {envState.lastUpdated.toLocaleTimeString()}</span>
+            <span>Weather input: {weatherSource === "live" ? "Live provider" : weatherSource === "cache" ? "Cached provider" : "Sample fallback"} · Updated {envState.lastUpdated.toLocaleTimeString()}</span>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+        AgroRisk scores are model-based estimates using weather-provider forecasts or fallback sample data, coordinate-based terrain heuristics and incident reports saved in this browser. They are not field-sensor measurements, surveyed terrain results or verified hazard boundaries. Confirm local conditions before making operational decisions.
       </div>
 
       {/* =======================================================================
@@ -1352,7 +1356,7 @@ export default function EnvironmentalMonitor() {
                       <MapPin className="h-4 w-4 text-primary" />
                       AgroRisk Interactive Map Layer
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground">Select a mode below to analyze terrain and safety overlays.</p>
+                    <p className="text-xs text-muted-foreground">Risk estimates combine weather-provider data or fallback forecasts, terrain calculations and user-reported incidents. No field sensor network is connected.</p>
                   </div>
                   {/* Mode select buttons */}
                   <div className="flex flex-wrap gap-1 bg-background p-1 rounded-md border text-xs">
@@ -1385,7 +1389,7 @@ export default function EnvironmentalMonitor() {
                 </div>
               </CardHeader>
 
-              <CardContent className="p-0 relative">
+              <CardContent className="p-0 relative">\n                <div className="border-b bg-amber-500/5 px-4 py-2 text-xs text-muted-foreground">Reference hazard polygons are illustrative geographic context, not live satellite detections or official hazard boundaries. Reported incidents are user-submitted and are not independently verified.</div>
                 {/* Information bar depending on active mode */}
                 <div className="bg-primary/10 border-b border-primary/20 px-4 py-2.5 text-xs text-foreground flex items-center justify-between z-10 relative">
                   {activeMode === "quick" && (
@@ -1440,7 +1444,7 @@ export default function EnvironmentalMonitor() {
                       </Marker>
                     )}
 
-                    {/* Preset color-coded Hazard Overlays */}
+                    {/* Approximate reference overlays only; not surveyed hazard boundaries. */}
                     {HAZARD_OVERLAYS.map(ho => (
                       <Polygon
                         key={ho.name}
@@ -1454,8 +1458,9 @@ export default function EnvironmentalMonitor() {
                       >
                         <Popup>
                           <div className="text-xs p-1">
-                            <Badge variant="destructive" className="mb-1 text-[8px]">{ho.risk}</Badge>
+                            <Badge variant="outline" className="mb-1 text-[8px]">Reference overlay · not live-verified</Badge><p className="font-semibold text-[10px] text-destructive">{ho.risk}</p>
                             <p className="font-bold">{ho.name}</p>
+                            <p className="mt-1">Illustrative reference area only; not a verified boundary or current hazard observation.</p>
                           </div>
                         </Popup>
                       </Polygon>
@@ -1731,13 +1736,13 @@ export default function EnvironmentalMonitor() {
                     
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <Badge className={`${getRiskClassification(overallScore).color} border-transparent animate-pulse text-[9px] py-0 px-2`}>
+                        <Badge className={`${getRiskClassification(overallScore).color} border-transparent text-[9px] py-0 px-2`}>
                           {getRiskClassification(overallScore).label}
                         </Badge>
                       </div>
                       <p className="text-sm font-bold text-foreground">Farm Vulnerability Score</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Calculated from terrain elevation differentials, current weather forecast patterns, and community logs.
+                        Rule-based vulnerability estimate using terrain calculations, {weatherSource === "live" ? "live provider weather" : weatherSource === "cache" ? "cached provider weather" : "sample fallback weather"}, and user-reported incident records. This is not a direct sensor measurement or an official hazard warning.
                       </p>
                     </div>
                   </CardContent>
