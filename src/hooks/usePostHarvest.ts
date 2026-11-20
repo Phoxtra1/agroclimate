@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -63,17 +63,30 @@ export function usePostHarvest() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<HarvestEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const fetchEntries = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!user) { setEntries([]); setLoading(false); return; }
+    setEntries([]);
     setLoading(true);
-    const { data, error } = await supabase
-      .from("post_harvest_entries" as any)
-      .select("*")
-      .eq("user_id", user.id)
-      .order("harvest_date", { ascending: false });
-    if (!error && data) setEntries(data as unknown as HarvestEntry[]);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from("post_harvest_entries" as any)
+        .select("*")
+        .eq("user_id", user.id)
+        .order("harvest_date", { ascending: false });
+      if (version !== requestVersion.current) return;
+      if (error) throw error;
+      setEntries((data || []) as unknown as HarvestEntry[]);
+    } catch (error) {
+      if (version === requestVersion.current) {
+        console.error("Post-harvest records could not be loaded", error);
+        setEntries([]);
+      }
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
@@ -111,11 +124,24 @@ export function usePostHarvest() {
   };
 
   const deleteEntry = async (id: string) => {
-    await supabase.from("post_harvest_entries" as any).delete().eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const { error } = await supabase.from("post_harvest_entries" as any)
+      .delete().eq("id", id).eq("user_id", user.id);
+    if (error) throw error;
+    await fetchEntries();
   };
 
   const updateEntry = async (id: string, patch: Partial<HarvestEntry>) => {
-    await supabase.from("post_harvest_entries" as any).update(patch as any).eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const safePatch = { ...patch } as Record<string, unknown>;
+    delete safePatch.id;
+    delete safePatch.user_id;
+    delete safePatch.created_at;
+    delete safePatch.updated_at;
+    const { error } = await supabase.from("post_harvest_entries" as any)
+      .update(safePatch as any).eq("id", id).eq("user_id", user.id);
+    if (error) throw error;
+    await fetchEntries();
   };
 
   return { entries, loading, fetchEntries, addEntry, deleteEntry, updateEntry };
