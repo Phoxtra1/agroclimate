@@ -170,3 +170,33 @@ This is a proposed contract, not a claim that these columns or tables exist. Bef
 - Replacing the current PWA/browser experience with a native mobile application.
 
 **Decision:** Begin with the existing Android phone/tablet workflow for Farm Handler and one documented temperature/humidity logger for Post-Harvest Tracker. Device-specific implementation starts only after the exact hardware models and interfaces are verified.
+
+## 10. Initial market scan — candidate loggers (not yet approved for purchase)
+
+A first-pass scan of manufacturer documentation identifies the following candidates for a controlled Post-Harvest Tracker proof of concept:
+
+| Candidate | Verified from published documentation | Integration assessment | Current decision |
+|---|---|---|---|
+| T&D TR43A | BLE 4.2; temperature and relative humidity; logger stores readings; T&D mobile app retrieves data and can upload to T&D WebStorage; sensor range 0–55°C and 10–95% RH; IP64 logger body (sensor itself is not water-resistant) | Strong candidate for a BLE/mobile field test. Public material reviewed confirms app-mediated retrieval and cloud upload, but does not yet establish an approved direct AgroClimate API or raw BLE GATT contract. | **First candidate to request a vendor integration/API answer for.** Do not promise direct ingestion yet. |
+| LogTag HAXO-16BT | BLE; Android 7.0+ / iOS 15.6+ app support; 16,000 paired readings; configurable 1–60 minute interval; up to 40 m stated wireless range; LogTag Link app and LogTag Online | Useful alternative with explicit local logging and mobile retrieval. Direct third-party API / export automation still needs confirmation. | Reserve candidate; compare data export and gateway options with vendor. |
+| Hioki LR8514 | Bluetooth data retrieval; 500,000 points per channel; requires separate temperature/humidity sensors; dedicated Android app | More configurable instrumentation, but sensor selection and total system cost/complexity are higher. | Not the first pilot choice; retain for a later multi-point or more demanding installation. |
+
+Manufacturer references:
+- T&D TR43A: https://tandd.com/product/tr43a/
+- T&D TR4A series specifications: https://tandd.com/product/pdf/spec_tr4a-eng.pdf
+- LogTag HAXO-16BT: https://www.logtag-recorders.com/en/hardware/haxo-16bt/
+- Hioki LR8514: https://www.hioki.com/global/products/compact-data-loggers/wireless-compact/id_6070
+
+### Farm Handler device selection
+
+No separate Farm Handler hardware purchase is required for the first test. Use an existing Android smartphone/tablet that meets the baseline in section 3. If field conditions require a dedicated shared unit, choose a rugged Android device only after confirming:
+- supported Android and Chrome versions;
+- camera quality and camera permission behavior;
+- GPS accuracy under local field conditions;
+- battery life and replaceability/power-bank support;
+- storage capacity for evidence queued before upload;
+- repairability, local warranty, and replacement availability.
+
+### Purchase and integration gate
+
+This scan is not a purchase approval. Before buying any logger, obtain a current quotation and confirm supply to Ghana, warranty, replacement sensor availability, calibration service, app support, export formats, BLE protocol documentation, and whether a supported third-party API or gateway exists. A logger that only exports through a vendor app may still be useful for a manual pilot, but it must not be represented as an automated AgroClimate integration.
