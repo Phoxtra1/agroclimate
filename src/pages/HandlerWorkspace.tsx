@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,7 @@ export default function HandlerWorkspace() {
   const [completionQty, setCompletionQty] = useState("");
   const [evidenceCounts, setEvidenceCounts] = useState<Record<string, number>>({});
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
+  const fetchVersion = useRef(0);
 
   const getGPS = (): Promise<{ lat: number; lon: number } | null> => {
     return new Promise((resolve) => {
@@ -52,6 +53,7 @@ export default function HandlerWorkspace() {
   };
 
   const fetchData = useCallback(async () => {
+    const version = ++fetchVersion.current;
     if (!user) {
       setHandler(null);
       setTasks([]);
@@ -68,6 +70,7 @@ export default function HandlerWorkspace() {
     setEvidenceCounts({});
 
     const { data: h, error: handlerError } = await supabase.from("handlers").select("*").eq("user_id", user.id).maybeSingle();
+    if (version !== fetchVersion.current) return;
     if (handlerError || !h) {
       if (handlerError) toast({ title: "Could not load handler profile", description: handlerError.message, variant: "destructive" });
       setLoading(false);
@@ -81,6 +84,7 @@ export default function HandlerWorkspace() {
       supabase.from("task_evidence").select("task_id,evidence_type").eq("handler_id", h.id),
     ]);
 
+    if (version !== fetchVersion.current) return;
     if (t.error || s.error || e.error) {
       const messages = [t.error, s.error, e.error].filter(Boolean).map((error) => error?.message);
       toast({ title: "Some handler records could not be loaded", description: messages.join("; "), variant: "destructive" });
@@ -89,14 +93,30 @@ export default function HandlerWorkspace() {
     setEvidenceCounts((e.data || []).reduce((counts: Record<string, number>, item: { task_id: string; evidence_type: string }) => { if (item.evidence_type === "photo" || item.evidence_type === "video") counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
     setActiveSession(s.data?.[0] || null);
     setLoading(false);
-  }, [user]);
+  }, [user?.id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    void fetchData();
+    return () => { fetchVersion.current += 1; };
+  }, [fetchData]);
 
   const clockIn = async () => {
     if (!handler) return;
     setClockingIn(true);
     const gps = await getGPS();
+    const { data: existing, error: lookupError } = await supabase.from("work_sessions").select("id")
+      .eq("handler_id", handler.id).is("clock_out", null).limit(1).maybeSingle();
+    if (lookupError) {
+      toast({ title: "Could not verify attendance state", description: lookupError.message, variant: "destructive" });
+      setClockingIn(false);
+      return;
+    }
+    if (existing) {
+      toast({ title: "Already clocked in", description: "An active work session already exists." });
+      await fetchData();
+      setClockingIn(false);
+      return;
+    }
     const { error } = await supabase.from("work_sessions").insert({
       handler_id: handler.id,
       gps_lat: gps?.lat ?? null,
@@ -109,10 +129,12 @@ export default function HandlerWorkspace() {
   };
 
   const clockOut = async () => {
-    if (!activeSession) return;
+    if (!activeSession || !handler) return;
     setClockingIn(true);
-    const { error } = await supabase.from("work_sessions").update({ clock_out: new Date().toISOString() }).eq("id", activeSession.id);
+    const { data, error } = await supabase.from("work_sessions").update({ clock_out: new Date().toISOString() })
+      .eq("id", activeSession.id).eq("handler_id", handler.id).is("clock_out", null).select("id").maybeSingle();
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else if (!data) toast({ title: "Session already closed", description: "Refresh your workspace to see the latest session." });
     else toast({ title: "Clocked Out!", description: "Session ended." });
     setClockingIn(false);
     fetchData();
@@ -120,7 +142,14 @@ export default function HandlerWorkspace() {
 
   const completeTask = async (taskId: string) => {
     const task = tasks.find((item) => item.id === taskId);
-    if (!task || !handler) return;
+    if (!task || !handler || !["pending", "in_progress"].includes(task.status)) return;
+    if (completionQty.trim()) {
+      const completed = Number(completionQty);
+      if (!Number.isFinite(completed) || completed < 0) {
+        toast({ title: "Invalid completed quantity", description: "Enter a valid non-negative number.", variant: "destructive" });
+        return;
+      }
+    }
     if (task.evidence_required && (evidenceCounts[taskId] || 0) < 1) {
       toast({ title: "Evidence required", description: "Upload at least one photo or video before completing this task.", variant: "destructive" });
       return;
@@ -142,13 +171,14 @@ export default function HandlerWorkspace() {
       }
     }
 
-    const { error } = await supabase.from("handler_tasks").update({
+    const { data: updatedTask, error } = await supabase.from("handler_tasks").update({
       status: "completed",
       completed_at: new Date().toISOString(),
       quantity_completed: completionQty ? Number(completionQty) : null,
-    }).eq("id", taskId);
+    }).eq("id", taskId).eq("handler_id", handler.id).in("status", ["pending", "in_progress"]).select("id").maybeSingle();
 
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else if (!updatedTask) toast({ title: "Task could not be completed", description: "It may have been reassigned or completed already. Refresh and try again.", variant: "destructive" });
     else {
       toast({ title: "Task completed!" });
       setCompletingTask(null);
