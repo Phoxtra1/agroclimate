@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/offlineQueue";
 import { buildHarvestPhotoPath, createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
+import { validateHarvestEntry } from "@/lib/postHarvestValidation";
 
 export interface HarvestEntry {
   id: string;
@@ -124,11 +125,9 @@ export function usePostHarvest() {
   const addEntry = async (input: Omit<HarvestEntry, "id" | "user_id" | "created_at" | "updated_at" | "photos" | "risk_override"> & { photos?: string[]; client_idempotency_key?: string }) => {
     if (!user?.id || user.id !== currentUserId.current) throw new Error("Your session changed. Sign in again before saving.");
     const userId = user.id;
+    const validationError = validateHarvestEntry(input);
+    if (validationError) throw new Error(validationError);
     const quantity = Number(input.quantity);
-    if (!input.crop_name?.trim()) throw new Error("Crop name is required.");
-    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Harvest quantity must be greater than zero.");
-    if (!input.unit?.trim()) throw new Error("Harvest unit is required.");
-    if (!input.harvest_date || Number.isNaN(Date.parse(input.harvest_date))) throw new Error("A valid harvest date is required.");
     const clientKey = input.client_idempotency_key || createHarvestIdempotencyKey();
     const { data: existing, error: lookupError } = await supabase
       .from("post_harvest_entries" as any)
