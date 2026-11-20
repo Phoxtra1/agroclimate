@@ -66,10 +66,13 @@ export function usePostHarvest() {
   const [entries, setEntries] = useState<HarvestEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const requestVersion = useRef(0);
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
 
   const fetchEntries = useCallback(async () => {
-    const version = ++requestVersion.current;
     const userId = user?.id;
+    if ((userId ?? null) !== currentUserId.current) return;
+    const version = ++requestVersion.current;
     if (!userId) { setEntries([]); setLoading(false); return; }
     setEntries([]);
     setLoading(true);
@@ -79,16 +82,16 @@ export function usePostHarvest() {
         .select("*")
         .eq("user_id", userId)
         .order("harvest_date", { ascending: false });
-      if (version !== requestVersion.current) return;
+      if (version !== requestVersion.current || userId !== currentUserId.current) return;
       if (error) throw error;
       setEntries((data as unknown as HarvestEntry[]) || []);
     } catch (error) {
-      if (version === requestVersion.current) {
+      if (version === requestVersion.current && userId === currentUserId.current) {
         setEntries([]);
         console.error("[PostHarvest] Could not load harvest entries", error);
       }
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (version === requestVersion.current && userId === currentUserId.current) setLoading(false);
     }
   }, [user?.id]);
 
@@ -149,7 +152,7 @@ export function usePostHarvest() {
   };
 
   const deleteEntry = async (id: string) => {
-    if (!user?.id) throw new Error("Not signed in");
+    if (!user?.id || user.id !== currentUserId.current) throw new Error("Your session changed. Refresh and try again.");
     const { data, error } = await supabase.from("post_harvest_entries" as any)
       .delete().eq("id", id).eq("user_id", user.id).select("id").maybeSingle();
     if (error) throw error;
@@ -158,7 +161,7 @@ export function usePostHarvest() {
   };
 
   const updateEntry = async (id: string, patch: Partial<HarvestEntry>) => {
-    if (!user?.id) throw new Error("Not signed in");
+    if (!user?.id || user.id !== currentUserId.current) throw new Error("Your session changed. Refresh and try again.");
     const safePatch = { ...patch } as Record<string, unknown>;
     for (const key of ["id", "user_id", "created_at", "updated_at", "client_idempotency_key"]) delete safePatch[key];
     const { data, error } = await supabase.from("post_harvest_entries" as any)
