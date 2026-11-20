@@ -468,20 +468,22 @@ export function useAGTrans() {
 
     }
 
-    const { data, error } = await supabase
-      .from("agtrans_drivers")
-      .upsert({
-        ...driverPayload,
-        license_url,
-        user_id: user.id,
-        offer_status: "paused",
-        availability_status: "offline",
-        vehicle_features: [],
-        cargo_types_accepted: [],
-      } as any, { onConflict: "user_id" })
-      .select()
-      .single();
+    const { data: existingProfile, error: lookupError } = await supabase
+      .from("agtrans_drivers").select("id").eq("user_id", user.id).maybeSingle();
+    if (lookupError) throw lookupError;
 
+    const profileQuery = existingProfile
+      ? supabase.from("agtrans_drivers").update({ ...driverPayload, license_url } as any).eq("user_id", user.id)
+      : supabase.from("agtrans_drivers").insert({
+          ...driverPayload,
+          license_url,
+          user_id: user.id,
+          offer_status: "paused",
+          availability_status: "offline",
+          vehicle_features: [],
+          cargo_types_accepted: [],
+        } as any);
+    const { data, error } = await profileQuery.select().single();
     if (error) throw error;
 
     const { error: roleError } = await supabase
