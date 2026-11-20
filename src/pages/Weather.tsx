@@ -443,10 +443,12 @@ export default function Weather() {
                 </Badge>
               </h2>
 
+              {advisoryAvailable ? (
+                <>
               {/* Summary metrics row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 text-center border border-blue-100 dark:border-blue-900/40">
-                  <p className="text-xs text-muted-foreground">Ref. ET₀</p>
+                  <p className="text-xs text-muted-foreground">Ref. ET₀ · {forecast.every((day) => day.evapotranspirationSource === "provider") ? "provider" : "estimated"}</p>
                   <p className="text-lg font-bold text-blue-700 dark:text-blue-300">
                     {summary.avgET.toFixed(1)} <span className="text-xs font-normal text-muted-foreground">mm/d</span>
                   </p>
@@ -464,7 +466,7 @@ export default function Weather() {
                   </p>
                 </div>
                 <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 text-center border border-orange-100 dark:border-orange-900/40">
-                  <p className="text-xs text-muted-foreground">Avg Soil Temp</p>
+                  <p className="text-xs text-muted-foreground">{forecast.every((day) => day.soilTemperatureSource === "provider") ? "Avg Soil Temp · provider" : "Avg Soil Temp · estimated"}</p>
                   <p className="text-lg font-bold text-orange-700 dark:text-orange-300">
                     {Math.round(summary.avgSoilTemp)}°C
                   </p>
@@ -511,12 +513,19 @@ export default function Weather() {
                   ))
                 )}
               </div>
+
+                </>
+              ) : (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-muted-foreground">
+                  Current live weather or a recent provider cache is unavailable. Demo values are shown for layout only; AgroClimate will not issue irrigation recommendations from sample or stale weather data. Refresh the forecast or enable GPS location and try again.
+                </p>
+              )}
             </section>
 
             {/* 7-day forecast */}
             <section className="space-y-4">
               <div>
-                <h2 className="font-bold mb-1">7-Day Agricultural Forecast</h2>
+                <h2 className="font-bold mb-1">{forecast.length}-Day Agricultural Forecast</h2>
                 <p className="text-xs text-muted-foreground">Daily evapotranspiration and soil moisture projections.</p>
               </div>
               <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
@@ -572,9 +581,10 @@ export default function Weather() {
               </ul>
             </div>
 
-            {/* Dynamic farmer tip based on live data */}
+            {advisoryAvailable && (
+
             <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4">
-              <p className="text-sm font-semibold text-green-800 dark:text-green-200">💡 Live Farmer Tip</p>
+              <p className="text-sm font-semibold text-green-800 dark:text-green-200">💡 Weather-derived Farmer Guidance</p>
               <p className="text-sm text-green-700 dark:text-green-300 mt-1">
                 {summary.overallNeed === "critical"
                   ? `${summary.criticalCrops} crop(s) at critical soil moisture. Irrigate immediately — ET₀ is ${summary.avgET.toFixed(1)} mm/day with only ${summary.effectiveRain.toFixed(1)} mm effective rain.`
@@ -585,6 +595,8 @@ export default function Weather() {
                   : `Conditions are balanced. Rain is meeting most crop needs. Monitor soil moisture daily for changes.`}
               </p>
             </div>
+
+            )}
 
             {/* ET explanation card */}
             <div className="bg-card rounded-xl p-4 shadow-sm border border-border/40">
