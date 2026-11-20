@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Activity, CheckCircle2, Clock3, Copy, Loader2, Plus, RefreshCw, ShieldAlert, Unplug, Wifi, WifiOff } from "lucide-react";
+import { Activity, Clock3, Copy, Loader2, Plus, RefreshCw, ShieldAlert, Unplug, Wifi, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,7 +69,21 @@ export function SharedDevicePanel({ component }: { component: SharedDeviceCompon
     }
   }, [component, user?.id, toast]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    if (!user) return;
+    const channel = (supabase as any).channel(`shared-device-panel-${component}-${user.id}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "agroclimate_devices",
+        filter: `user_id=eq.${user.id}`,
+      }, () => { void refresh(); })
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "agroclimate_device_observations",
+        filter: `user_id=eq.${user.id}`,
+      }, () => { void refresh(); })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [refresh, component, user?.id]);
 
   const submitRegistration = async (event: React.FormEvent) => {
     event.preventDefault();
