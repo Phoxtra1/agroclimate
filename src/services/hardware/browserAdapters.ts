@@ -193,28 +193,29 @@ export class WebBluetoothSensorAdapter implements HardwareAdapter {
     if (!selected.gatt) return { connected: false, detail: "Selected BLE device does not expose GATT." };
     const server = await selected.gatt.connect();
     const subscriptions: Array<{ characteristic: BluetoothCharacteristicLike; listener: (event: any) => void }> = [];
-    try {
-      for (const mapping of mappings) {
+    for (const mapping of mappings) {
+      try {
         const service = await server.getPrimaryService(mapping.serviceUuid);
         const characteristic = await service.getCharacteristic(mapping.characteristicUuid);
         const listener = (event: any) => {
           const view = event?.target?.value as DataView | undefined;
           if (!view) return;
-          const value = mapping.decode(view);
+          let value: number | null = null;
+          try { value = mapping.decode(view); } catch { return; }
           if (value === null || !Number.isFinite(value)) return;
           void this.context.onObservation(observation(device, mapping.metric, value, mapping.unit, this.protocol, this.context.now?.() ?? new Date()));
         };
         characteristic.addEventListener("characteristicvaluechanged", listener);
         await characteristic.startNotifications();
         subscriptions.push({ characteristic, listener });
+      } catch {
+        // A standard profile may expose only a subset of mapped services.
+        // Skip unsupported characteristics and retain any successful subscriptions.
       }
-    } catch (error) {
-      for (const item of subscriptions) {
-        item.characteristic.removeEventListener("characteristicvaluechanged", item.listener);
-        try { await item.characteristic.stopNotifications(); } catch { /* partial setup cleanup */ }
-      }
+    }
+    if (!subscriptions.length) {
       selected.gatt.disconnect();
-      throw error;
+      return { connected: false, detail: "The selected BLE device did not expose any configured measurement characteristics." };
     }
     this.sessions.set(device.deviceId, { device: selected, subscriptions });
     return { connected: true, connectedAt: new Date().toISOString(), detail: `BLE GATT notifications active for ${subscriptions.length} configured characteristics.` };
