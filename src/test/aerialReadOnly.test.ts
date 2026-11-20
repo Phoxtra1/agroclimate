@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getAdapter, SUPPORTED_PROTOCOLS } from "@/lib/drone/connectionManager";
+import { validateTelemetryBridgeUrl } from "@/lib/drone/realAdapter";
 
 describe("Aerial Console read-only hardware boundary", () => {
   it("exposes only the simulator and generic read-only bridge as ready", () => {
@@ -22,5 +23,18 @@ describe("Aerial Console read-only hardware boundary", () => {
     await expect(adapter.resumeMission()).rejects.toThrow(/read-only/i);
     await expect(adapter.returnToHome()).rejects.toThrow(/read-only/i);
     await expect(adapter.emergencyLand()).rejects.toThrow(/read-only/i);
+  });
+
+  it("requires secure telemetry bridge endpoints outside loopback development", () => {
+    expect(validateTelemetryBridgeUrl("wss://telemetry.example.com/feed"))
+      .toBe("wss://telemetry.example.com/feed");
+    expect(validateTelemetryBridgeUrl("ws://localhost:8765/telemetry"))
+      .toBe("ws://localhost:8765/telemetry");
+    expect(() => validateTelemetryBridgeUrl("http://telemetry.example.com/feed"))
+      .toThrow(/must use wss/i);
+    expect(() => validateTelemetryBridgeUrl("ws://telemetry.example.com/feed"))
+      .toThrow(/only to localhost/i);
+    expect(() => validateTelemetryBridgeUrl("wss://user:secret@telemetry.example.com/feed"))
+      .toThrow(/Do not embed usernames or passwords/i);
   });
 });
