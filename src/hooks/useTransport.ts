@@ -362,6 +362,12 @@ export function useAGTrans() {
 
   const createRequest = async (payload: Partial<TransportRequest>) => {
     if (!user) throw new Error("Not authenticated");
+    if (!cleanText(payload.product_type) || !cleanText(payload.pickup_location) || !cleanText(payload.delivery_location)) {
+      throw new Error("Cargo description, pickup location and delivery location are required.");
+    }
+    if (!Number.isFinite(Number(payload.quantity)) || Number(payload.quantity) <= 0) {
+      throw new Error("Cargo quantity must be greater than zero.");
+    }
 
     const tracking_code = "AGT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -624,6 +630,16 @@ export function useAGTrans() {
   }) => {
     if (!user) throw new Error("Not authenticated");
     const { offer, order } = params;
+    if (offer.approval_status !== "approved" || offer.admin_suspended || offer.offer_status !== "published" || offer.availability_status !== "online") {
+      throw new Error("This driver is not currently available for transport requests.");
+    }
+    if (!Number.isFinite(Number(order.quantity)) || Number(order.quantity) <= 0) throw new Error("Cargo quantity must be greater than zero.");
+    if (!cleanText(order.pickup || offer.current_location_text) || !cleanText(order.delivery || offer.destination)) {
+      throw new Error("Pickup and delivery locations are required.");
+    }
+    if (params.supplier_offer_price !== undefined && (!Number.isFinite(params.supplier_offer_price) || params.supplier_offer_price < 0)) {
+      throw new Error("Transport offer price must be a valid non-negative amount.");
+    }
 
     const tracking_code = "AGT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
 
@@ -692,6 +708,9 @@ export function useAGTrans() {
     }
 
     if (action === "counter") {
+      if (payload?.counter_price === undefined || !Number.isFinite(payload.counter_price) || payload.counter_price < 0) {
+        throw new Error("Enter a valid non-negative counter-offer amount.");
+      }
       const { error } = await supabase
         .from("agtrans_requests")
         .update({
@@ -742,6 +761,9 @@ export function useAGTrans() {
     if (request.supplier_id !== user.id) throw new Error("Only the supplier who created this request can respond to the driver's counter-offer.");
 
     if (action === "counter") {
+      if (payload?.supplier_offer_price === undefined || !Number.isFinite(payload.supplier_offer_price) || payload.supplier_offer_price < 0) {
+        throw new Error("Enter a valid non-negative supplier counter-offer amount.");
+      }
       const { error } = await supabase
         .from("agtrans_requests")
         .update({
