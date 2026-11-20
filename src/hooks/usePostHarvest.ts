@@ -65,25 +65,37 @@ export function usePostHarvest() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<HarvestEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const activeUserIdRef = useRef<string | null>(null);
+  const requestVersion = useRef(0);
 
   const fetchEntries = useCallback(async () => {
-    if (!user) { setEntries([]); activeUserIdRef.current = null; setLoading(false); return; }
+    const version = ++requestVersion.current;
+    const userId = user?.id;
+    if (!userId) { setEntries([]); setLoading(false); return; }
+    setEntries([]);
     setLoading(true);
-    if (activeUserIdRef.current !== user.id) {
-      setEntries([]);
-      activeUserIdRef.current = user.id;
+    try {
+      const { data, error } = await supabase
+        .from("post_harvest_entries" as any)
+        .select("*")
+        .eq("user_id", userId)
+        .order("harvest_date", { ascending: false });
+      if (version !== requestVersion.current) return;
+      if (error) throw error;
+      setEntries((data as unknown as HarvestEntry[]) || []);
+    } catch (error) {
+      if (version === requestVersion.current) {
+        setEntries([]);
+        console.error("[PostHarvest] Could not load harvest entries", error);
+      }
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
     }
-    const { data, error } = await supabase
-      .from("post_harvest_entries" as any)
-      .select("*")
-      .eq("user_id", user.id)
-      .order("harvest_date", { ascending: false });
-    if (!error && data) setEntries(data as unknown as HarvestEntry[]);
-    setLoading(false);
-  }, [user]);
+  }, [user?.id]);
 
-  useEffect(() => { fetchEntries(); }, [fetchEntries]);
+  useEffect(() => {
+    void fetchEntries();
+    return () => { requestVersion.current += 1; };
+  }, [fetchEntries]);
 
   // Realtime: re-fetch on any change to this user's entries
   useEffect(() => {
@@ -97,7 +109,7 @@ export function usePostHarvest() {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, fetchEntries]);
+  }, [user?.id, fetchEntries]);
 
   // Re-tick every minute so "days since" and risk update without refresh
   const [, setTick] = useState(0);
@@ -137,11 +149,23 @@ export function usePostHarvest() {
   };
 
   const deleteEntry = async (id: string) => {
-    await supabase.from("post_harvest_entries" as any).delete().eq("id", id);
+    if (!user?.id) throw new Error("Not signed in");
+    const { data, error } = await supabase.from("post_harvest_entries" as any)
+      .delete().eq("id", id).eq("user_id", user.id).select("id").maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Harvest entry not found or access denied");
+    await fetchEntries();
   };
 
   const updateEntry = async (id: string, patch: Partial<HarvestEntry>) => {
-    await supabase.from("post_harvest_entries" as any).update(patch as any).eq("id", id);
+    if (!user?.id) throw new Error("Not signed in");
+    const safePatch = { ...patch } as Record<string, unknown>;
+    for (const key of ["id", "user_id", "created_at", "updated_at", "client_idempotency_key"]) delete safePatch[key];
+    const { data, error } = await supabase.from("post_harvest_entries" as any)
+      .update(safePatch as any).eq("id", id).eq("user_id", user.id).select("id").maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Harvest entry not found or access denied");
+    await fetchEntries();
   };
 
   return { entries, loading, fetchEntries, addEntry, deleteEntry, updateEntry };
