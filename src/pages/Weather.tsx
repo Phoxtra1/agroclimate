@@ -318,7 +318,7 @@ function SoilStatusBadge({ status }: { status: CropWaterAdvisory["soilStatus"] }
 // ────────────────────────────────────────────────────────────
 export default function Weather() {
   const { position, loading: geoLoading, retry: retryLocation } = useGeolocation();
-  const { forecast, source, loading: weatherLoading, lastUpdated, refresh } = useWeather(
+  const { forecast, source, forecastLocation, loading: weatherLoading, lastUpdated, refresh } = useWeather(
     position?.lat,
     position?.lon
   );
@@ -337,7 +337,9 @@ export default function Weather() {
   const currentCrops = CROPS.filter((c) => c.season.includes(currentMonth));
   const isLoading = geoLoading || weatherLoading;
   const locationIsFresh = position?.source === "gps" || (position?.source === "cached" && !!position.updatedAt && Date.now() - position.updatedAt < 24 * 60 * 60 * 1000);
-  const advisoryAvailable = locationIsFresh && (source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000));
+  const forecastMatchesLocation = !!forecastLocation && Math.abs(forecastLocation.lat - position.lat) < 0.1 && Math.abs(forecastLocation.lon - position.lon) < 0.1;
+  const forecastSource = forecastMatchesLocation ? source : "none";
+  const advisoryAvailable = forecastMatchesLocation && locationIsFresh && (forecastSource === "live" || (forecastSource === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000));
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
@@ -375,8 +377,8 @@ export default function Weather() {
           )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className={source === "live" ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
-            {source === "live" ? "Live provider data" : source === "cache" ? "Cached provider data" : "Demo sample data"}
+          <span className={forecastSource === "live" ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+            {!forecastMatchesLocation ? "Updating location forecast" : forecastSource === "live" ? "Live provider data" : forecastSource === "cache" ? "Cached provider data" : "Demo sample data"}
           </span>
           {lastUpdated && (
             <span>
