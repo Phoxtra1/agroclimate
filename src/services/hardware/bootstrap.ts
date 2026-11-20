@@ -15,6 +15,7 @@ export interface AgroClimateHardwareRuntimeOptions {
   decodeHidScaleReport?: (data: DataView) => number | null;
   hidScaleUnit?: string;
   mavlinkBaudRate?: number;
+  aircraftType?: import("@/services/aih/types").AircraftType;
   postHarvest?: { serviceUuid: string; characteristicUuid: string; decodeReading: (value: DataView) => PostHarvestStationReading | null };
 }
 
@@ -28,7 +29,7 @@ export function createAgroClimateHardwareRuntime(options: AgroClimateHardwareRun
   if (options.bleMappings?.length) runtime.registerAdapter(new WebBluetoothSensorAdapter(context, options.bleMappings));
   if (options.serialOptions) runtime.registerAdapter(new WebSerialSensorAdapter(context, options.serialOptions));
   if (options.decodeHidScaleReport) runtime.registerAdapter(new WebHidScaleAdapter(context, options.decodeHidScaleReport, options.hidScaleUnit ?? "kg"));
-  runtime.registerAdapter(new WebSerialMavlinkAdapter(context, options.mavlinkBaudRate ?? 57600));
+  runtime.registerAdapter(new WebSerialMavlinkAdapter(context, options.mavlinkBaudRate ?? 57600, options.aircraftType ?? "drone"));
   if (options.postHarvest) runtime.registerAdapter(new WebBluetoothPostHarvestAdapter(options.postHarvest.serviceUuid, options.postHarvest.characteristicUuid, options.postHarvest.decodeReading, createPostHarvestStationSink(options.resolveDeviceToken)));
   return runtime;
 }
