@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { WeatherDay, weeklyForecast } from "@/data/mock-data";
+import { weeklyForecast, type WeatherDay } from "@/data/mock-data";
 
 const CACHE_KEY = "agroclimate_weather_cache";
 const CACHE_DURATION = 15 * 60 * 1000;
