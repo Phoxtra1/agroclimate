@@ -904,9 +904,13 @@ export default function EnvironmentalMonitor() {
       return;
     }
     if (!farmName.trim()) return;
-    if (activeMode === "boundary" && drawnBoundary.length < 3) {
-      alert("Please draw at least 3 vertices on the map for your farm boundary.");
-      return;
+    if (activeMode === "boundary") {
+      const uniquePoints = new Set(drawnBoundary.map(([lat, lon]) => `${lat.toFixed(7)},${lon.toFixed(7)}`));
+      const invalidPoint = drawnBoundary.some(([lat, lon]) => !Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180);
+      if (drawnBoundary.length < 3 || uniquePoints.size < 3 || invalidPoint) {
+        alert("Please draw a valid farm boundary with at least three distinct WGS84 points.");
+        return;
+      }
     }
     if (!clickPoint) return;
 
@@ -928,6 +932,7 @@ export default function EnvironmentalMonitor() {
         boundary,
       };
     } catch (error) {
+      if (currentUserId.current !== user.id) return;
       console.warn("[AgroRisk] Database farm save failed; storing a private local fallback:", error);
       savedFarm = {
         id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -963,8 +968,8 @@ export default function EnvironmentalMonitor() {
       alert("Please click a location on the map to specify the incident point.");
       return;
     }
-    if (!incidentDesc.trim()) {
-      alert("Please provide a description of the incident.");
+    if (!incidentDesc.trim() || incidentDesc.trim().length > 2000) {
+      alert("Please provide an incident description between 1 and 2,000 characters.");
       return;
     }
 
@@ -989,6 +994,7 @@ export default function EnvironmentalMonitor() {
         source: "user_report",
       };
     } catch (error) {
+      if (currentUserId.current !== user.id) return;
       console.warn("[AgroRisk] Incident report database save failed; storing a private local fallback:", error);
       newIncident = {
         id: `local_incident_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -1693,9 +1699,10 @@ export default function EnvironmentalMonitor() {
                       >
                         <Popup>
                           <div className="text-xs p-1">
-                            <Badge variant="destructive" className="mb-1 text-[9px]">{inc.type} Incident</Badge>
+                            <Badge variant="destructive" className="mb-1 text-[9px]">{inc.type} · User Report</Badge>
+                            <Badge variant="outline" className="mb-1 ml-1 text-[8px]">Unverified</Badge>
                             <p className="font-semibold">{inc.description}</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Reported: {inc.date}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Reported: {new Date(inc.date).toLocaleString()}</p>
                           </div>
                         </Popup>
                       </Marker>
