@@ -58,6 +58,21 @@ describe("AgroClimate hardware integration contracts", () => {
     expect(result.issues).toHaveLength(3);
   });
 
+  it("rejects impossible physical ranges for common agricultural sensor metrics", () => {
+    expect(validateDeviceObservation({
+      ...observation, metric: "relative_humidity", value: 105, unit: "%RH",
+    }).issues).toContain("relative_humidity must be between 0 and 100.");
+    expect(validateDeviceObservation({
+      ...observation, metric: "soil_moisture", value: 1.4, unit: "m³/m³",
+    }).issues).toContain("soil_moisture in m³/m³ must be between 0 and 1.");
+    expect(validateDeviceObservation({
+      ...observation, metric: "soil_ph", value: 15, unit: "pH",
+    }).issues).toContain("soil_ph must be between 0 and 14.");
+    expect(validateDeviceObservation({
+      ...observation, metric: "wind_speed", value: -1, unit: "m/s",
+    }).issues).toContain("wind_speed cannot be negative.");
+  });
+
   it("rejects half-specified and out-of-range coordinates", () => {
     expect(validateDeviceObservation({ ...observation, latitude: 91, longitude: 0 }).valid).toBe(false);
     expect(validateDeviceObservation({ ...observation, latitude: 5.6 }).issues).toContain(
