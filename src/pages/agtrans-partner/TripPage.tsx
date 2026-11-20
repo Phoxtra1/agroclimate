@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { MapPin, Navigation, CheckCircle, AlertTriangle, Phone, Navigation2, Compass, ShieldAlert, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
+import { useHardwareObservations } from "@/hooks/useHardwareObservations";
 
 
 export default function TripPage() {
@@ -16,6 +17,13 @@ export default function TripPage() {
   const navigate = useNavigate();
   const { requests, deliveryJobs, trackingSessions, updateDeliveryJobStatus, updateTrackingSessionLocation, handleCancelTrip } = useAGTrans();
   const { user } = useAuth();
+  const { latestByMetric: trackerMetrics } = useHardwareObservations(["agtrans"]);
+  const trackerLatitude = trackerMetrics.get("latitude");
+  const trackerLongitude = trackerMetrics.get("longitude");
+  const trackerSpeed = trackerMetrics.get("vehicle_speed");
+  const trackerTimestamp = trackerLatitude && trackerLongitude
+    ? Math.min(Date.parse(trackerLatitude.measuredAt), Date.parse(trackerLongitude.measuredAt)) : 0;
+  const trackerIsFresh = trackerTimestamp > 0 && Date.now() - trackerTimestamp < 120000;
   const [gpsSharing, setGpsSharing] = useState(false);
   const [gpsFix, setGpsFix] = useState<{ lat: number; lon: number; accuracyM: number; capturedAt: string } | null>(null);
   const [gpsError, setGpsError] = useState("");
@@ -218,6 +226,28 @@ export default function TripPage() {
                   </div>
                 )}
                 {gpsError && <p className="text-[10px] text-amber-700">{gpsError}</p>}
+              </div>
+              <div className="sm:col-span-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-semibold">DEDICATED VEHICLE TRACKER</div>
+                    <p className="text-[11px] text-muted-foreground">NMEA 0183 serial tracker feed, separate from the driver's phone GPS.</p>
+                  </div>
+                  <Badge variant="outline" className={trackerIsFresh ? "border-emerald-600/40 text-emerald-700" : "text-muted-foreground"}>{trackerIsFresh ? "LIVE DEVICE FEED" : "NO RECENT FIX"}</Badge>
+                </div>
+                {trackerLatitude && trackerLongitude ? (
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                    <span>{trackerLatitude.value.toFixed(6)}, {trackerLongitude.value.toFixed(6)}</span>
+                    {trackerSpeed && <span>Speed: {trackerSpeed.value} {trackerSpeed.unit}</span>}
+                    <span>{new Date(trackerTimestamp).toLocaleTimeString()}</span>
+                    <OpenInSatelliteButton lat={trackerLatitude.value} lon={trackerLongitude.value} label="Dedicated AG Trans vehicle tracker position" zoom={17}>
+                      Inspect tracker position in Satellite
+                    </OpenInSatelliteButton>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">No validated NMEA position has been received in this trip view yet. Connect a supported NMEA 0183 tracker through the managed device runtime.</p>
+                )}
+                <p className="text-[10px] text-muted-foreground">This feed is displayed independently. The shared trip location continues to use the assigned driver's verified phone GPS until server-side tracker binding is implemented.</p>
               </div>
             </CardContent>
           </Card>
