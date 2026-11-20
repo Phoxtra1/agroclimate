@@ -1,6 +1,20 @@
-
+import { describe, expect, it } from "vitest";
 import { BarcodeScanBuffer, BrowserGeolocationAdapter } from "@/services/hardware/browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
+import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
+
+const device: DeviceRegistration = {
+  deviceId: "logger-001", tenantId: "tenant-001", ownerUserId: "user-001",
+  component: "post-harvest", deviceClass: "temperature-humidity-logger",
+  manufacturer: "Example", model: "Model-A", protocol: "ble-gatt",
+  capabilities: ["temperature", "relative-humidity"], registeredAt: "2026-11-20T08:00:00Z", state: "registered",
+};
+const observation: DeviceObservation = {
+  eventId: "evt-001", deviceId: "logger-001", tenantId: "tenant-001",
+  component: "post-harvest", metric: "temperature", value: 23.5, unit: "°C",
+  measuredAt: "2026-11-20T08:00:00Z", receivedAt: "2026-11-20T08:01:00Z",
+  quality: "valid", sourceProtocol: "ble-gatt",
+};
 
 describe("hardware runtime and browser adapters", () => {
   it("turns keyboard-wedge scanner keystrokes into complete barcode events", () => {
@@ -34,17 +48,12 @@ describe("hardware runtime and browser adapters", () => {
   it("keeps queued observations until the server sink accepts them and deduplicates event IDs", async () => {
     let fail = true;
     const persisted: DeviceObservation[][] = [];
-    const store = {
-      read: () => [],
-      write: (items: DeviceObservation[]) => persisted.push([...items]),
-    };
-    const delivery = new ResilientObservationDelivery(async () => {
-      if (fail) throw new Error("offline");
-    }, store);
+    const store = { read: () => [], write: (items: DeviceObservation[]) => { persisted.push(items.slice()); } };
+    const delivery = new ResilientObservationDelivery(async () => { if (fail) throw new Error("offline"); }, store);
     delivery.enqueue(observation);
     delivery.enqueue(observation);
     expect(delivery.pending()).toHaveLength(1);
-    expect(persisted.at(-1)).toHaveLength(1);
+    expect(persisted[persisted.length - 1]).toHaveLength(1);
     fail = false;
     expect(await delivery.flush()).toEqual({ delivered: 1, remaining: 0 });
   });
