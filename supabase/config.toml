@@ -18,3 +18,6 @@ verify_jwt = true
 
 [functions.satellite-field-monitor]
 verify_jwt = false
+
+[functions.test-mode]
+verify_jwt = true

@@ -27,7 +27,6 @@ import { MARKET_UNITS, parseMarketPrice, formatMarketPrice } from "@/lib/market"
 import { estimateMarketPrice } from "@/lib/pricingEngine";
 import { AGTransSupplierPanel } from "@/components/market/AGTransSupplierPanel";
 import { PotentialBuyersPanel } from "@/components/market/PotentialBuyersPanel";
-import { LogisticsMatcherPanel } from "@/components/market/LogisticsMatcherPanel";
 import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
@@ -431,22 +430,17 @@ export default function MarketLink() {
       <OverviewCards totalSupply={m.totalSupply} totalDemand={m.totalDemand} activeContracts={m.activeContracts} balance={m.balance} />
 
       <Tabs defaultValue="supply" className="w-full">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 w-full h-auto p-1 gap-1">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 w-full h-auto p-1 gap-1">
           <TabsTrigger value="supply">Supply</TabsTrigger>
           <TabsTrigger value="order-listing">Order Listing</TabsTrigger>
           <TabsTrigger value="produce-safety">Produce &amp; Safety</TabsTrigger>
           <TabsTrigger value="contracts">Contracts</TabsTrigger>
           <TabsTrigger value="prices">Prices</TabsTrigger>
-          <TabsTrigger value="logistics-matcher">Logistics Matcher</TabsTrigger>
-          <TabsTrigger value="agtrans">AGTrans</TabsTrigger>
+          <TabsTrigger value="agtrans">Transport &amp; Logistics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="produce-safety" className="mt-3">
           <ProduceSafety />
-        </TabsContent>
-
-        <TabsContent value="logistics-matcher" className="mt-3">
-          <LogisticsMatcherPanel />
         </TabsContent>
 
         {/*

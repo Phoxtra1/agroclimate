@@ -84,6 +84,13 @@ export async function queueHarvest(
   entry: Omit<PendingHarvest, "id" | "photo_keys" | "queued_at">,
   files: File[],
 ): Promise<PendingHarvest> {
+  // A queued record must belong to the currently authenticated account.
+  // getSession reads the persisted session locally, so this check also works offline.
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session?.user || session.user.id !== entry.user_id) {
+    throw new Error("Sign in with the farm account before saving offline harvest records.");
+  }
+
   const photos = readPhotos();
   const photo_keys: string[] = [];
   for (const f of files) {
@@ -127,18 +134,24 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
   syncing = true;
   let synced = 0, failed = 0;
   try {
+    // Do not upload a previous user's pending records under a different signed-in
+    // account on shared farm devices. Preserve other accounts' records untouched.
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return { synced: 0, failed: 0 };
+
     const queue = readQueue();
     if (!queue.length) return { synced: 0, failed: 0 };
     const photos = readPhotos();
-    const remaining: PendingHarvest[] = [];
+    const remaining: PendingHarvest[] = queue.filter((item) => item.user_id !== user.id);
+    const accountQueue = queue.filter((item) => item.user_id === user.id);
 
-    for (const item of queue) {
+    for (const item of accountQueue) {
       try {
         // CONFLICT-SAFE: skip if server already has a newer entry for this same
         // user/crop/harvest_date that was created AFTER we queued it offline.
         // This prevents an offline edit from clobbering newer server data.
         const queuedAt = new Date(item.queued_at).toISOString();
-        const { data: newer } = await supabase
+        const { data: newer, error: newerError } = await supabase
           .from("post_harvest_entries" as any)
           .select("id, updated_at")
           .eq("user_id", item.user_id)
@@ -146,6 +159,7 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
           .eq("harvest_date", item.harvest_date)
           .gt("updated_at", queuedAt)
           .limit(1);
+        if (newerError) throw newerError;
         if (newer && newer.length > 0) {
           // Server has fresher data → drop this stale offline copy and free its photos
           for (const k of item.photo_keys) delete photos[k];

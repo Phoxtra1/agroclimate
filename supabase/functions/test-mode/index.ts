@@ -45,15 +45,25 @@ Deno.serve(async (req) => {
     if (action !== "set") return json({ state: await readState() });
 
     // --- write path ---
-    // The admin workspace is the system manager surface: no role or permission
-    // check is applied here. A session is used only to record who made the change.
+    // Test Mode bypasses paid-feature gates globally. Only a server-verified
+    // administrator may change it; never trust client metadata or localStorage.
     const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    let actorId: string | null = null;
-    if (token) {
-      const { data: userData } = await admin.auth.getUser(token);
-      actorId = userData?.user?.id ?? null;
-    }
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!token) return json({ error: "Authentication required." }, 401);
+
+    const { data: userData, error: userError } = await admin.auth.getUser(token);
+    const actorId = userData?.user?.id;
+    if (userError || !actorId) return json({ error: "A valid signed-in session is required." }, 401);
+
+    const { data: adminRole, error: roleError } = await admin
+      .from("user_roles")
+      .select("user_id")
+      .eq("user_id", actorId)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (roleError) return json({ error: "Administrator permissions could not be verified." }, 500);
+    if (!adminRole) return json({ error: "Administrator permission is required to change Test Mode." }, 403);
 
     const value = {
       enabled,

@@ -1,0 +1,280 @@
+-- Restrict transport records and admin-only overview data to their intended parties.
+-- The earlier logistics migration granted all authenticated users unrestricted
+-- access to delivery_jobs/tracking_sessions. The admin overview migration also
+-- added platform-wide SELECT policies for every authenticated user.
+
+-- Remove unrestricted transport policies.
+DROP POLICY IF EXISTS "authenticated_select_delivery_jobs" ON public.delivery_jobs;
+DROP POLICY IF EXISTS "authenticated_all_delivery_jobs" ON public.delivery_jobs;
+DROP POLICY IF EXISTS "authenticated_select_tracking_sessions" ON public.tracking_sessions;
+DROP POLICY IF EXISTS "authenticated_all_tracking_sessions" ON public.tracking_sessions;
+
+-- Delivery records are visible only to their supplier, buyer, assigned driver or admins.
+CREATE POLICY "delivery_jobs_parties_select"
+  ON public.delivery_jobs
+  FOR SELECT
+  TO authenticated
+  USING (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+-- The supplier creates the job after the transport terms are accepted.
+CREATE POLICY "delivery_jobs_supplier_insert"
+  ON public.delivery_jobs
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = supplier_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+-- Supplier, buyer and assigned driver can update operational status; admins can manage all fields.
+CREATE POLICY "delivery_jobs_parties_update"
+  ON public.delivery_jobs
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  )
+  WITH CHECK (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "delivery_jobs_admin_delete"
+  ON public.delivery_jobs
+  FOR DELETE
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Tracking is visible only to parties attached to the linked delivery job.
+CREATE POLICY "tracking_sessions_parties_select"
+  ON public.tracking_sessions
+  FOR SELECT
+  TO authenticated
+  USING (
+    auth.uid() = driver_id
+    OR EXISTS (
+      SELECT 1
+      FROM public.delivery_jobs job
+      WHERE job.id = tracking_sessions.delivery_job_id
+        AND (
+          auth.uid() = job.supplier_id
+          OR auth.uid() = job.buyer_id
+          OR auth.uid() = job.driver_id
+        )
+    )
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+-- A supplier creates the initial tracking record with the accepted delivery job.
+CREATE POLICY "tracking_sessions_job_party_insert"
+  ON public.tracking_sessions
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = driver_id
+    OR EXISTS (
+      SELECT 1
+      FROM public.delivery_jobs job
+      WHERE job.id = tracking_sessions.delivery_job_id
+        AND (
+          auth.uid() = job.supplier_id
+          OR auth.uid() = job.driver_id
+        )
+    )
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+-- Only the supplier, assigned driver or admin can change tracking state/positions.
+CREATE POLICY "tracking_sessions_job_party_update"
+  ON public.tracking_sessions
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.uid() = driver_id
+    OR EXISTS (
+      SELECT 1
+      FROM public.delivery_jobs job
+      WHERE job.id = tracking_sessions.delivery_job_id
+        AND (
+          auth.uid() = job.supplier_id
+          OR auth.uid() = job.driver_id
+        )
+    )
+    OR public.has_role(auth.uid(), 'admin')
+  )
+  WITH CHECK (
+    auth.uid() = driver_id
+    OR EXISTS (
+      SELECT 1
+      FROM public.delivery_jobs job
+      WHERE job.id = tracking_sessions.delivery_job_id
+        AND (
+          auth.uid() = job.supplier_id
+          OR auth.uid() = job.driver_id
+        )
+    )
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "tracking_sessions_admin_delete"
+  ON public.tracking_sessions
+  FOR DELETE
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Transport agreements are shared only with the supplier, buyer, assigned driver and admins.
+ALTER TABLE public.transport_agreements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "transport_agreement_parties_read" ON public.transport_agreements;
+DROP POLICY IF EXISTS "transport_agreement_parties_write" ON public.transport_agreements;
+
+CREATE POLICY "transport_agreements_parties_select"
+  ON public.transport_agreements
+  FOR SELECT
+  TO authenticated
+  USING (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "transport_agreements_supplier_insert"
+  ON public.transport_agreements
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = supplier_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "transport_agreements_parties_update"
+  ON public.transport_agreements
+  FOR UPDATE
+  TO authenticated
+  USING (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  )
+  WITH CHECK (
+    auth.uid() = supplier_id
+    OR auth.uid() = buyer_id
+    OR auth.uid() = driver_id
+    OR public.has_role(auth.uid(), 'admin')
+  );
+
+CREATE POLICY "transport_agreements_admin_delete"
+  ON public.transport_agreements
+  FOR DELETE
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+-- Limit mutable columns so a party cannot rewrite the other parties, agreed fee or request linkage.
+REVOKE UPDATE ON public.delivery_jobs FROM authenticated;
+GRANT UPDATE (status, transport_agreement_id) ON public.delivery_jobs TO authenticated;
+REVOKE DELETE ON public.delivery_jobs FROM authenticated;
+
+REVOKE UPDATE ON public.transport_agreements FROM authenticated;
+GRANT UPDATE (delivery_status) ON public.transport_agreements TO authenticated;
+REVOKE DELETE ON public.transport_agreements FROM authenticated;
+
+-- Tracking clients may update location and lifecycle fields, but cannot reassign
+-- a session to a different driver or delivery job.
+REVOKE UPDATE ON public.tracking_sessions FROM authenticated;
+GRANT UPDATE (
+  current_lat,
+  current_lon,
+  speed_kn,
+  heading,
+  status,
+  eta,
+  distance_m,
+  route,
+  last_location_at,
+  location_accuracy_m,
+  location_source,
+  is_simulated
+) ON public.tracking_sessions TO authenticated;
+REVOKE DELETE ON public.tracking_sessions FROM authenticated;
+
+-- Global Test Mode disables product paywalls, so it must never be writable
+-- directly by ordinary authenticated clients. The test-mode Edge Function uses
+-- the service role for writes and performs its own administrator check.
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+REVOKE INSERT, UPDATE, DELETE ON public.system_settings FROM anon, authenticated;
+GRANT SELECT ON public.system_settings TO authenticated;
+
+DO $
+DECLARE policy_row RECORD;
+BEGIN
+  FOR policy_row IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'system_settings'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.system_settings', policy_row.policyname);
+  END LOOP;
+END $;
+
+CREATE POLICY "Authenticated can read only Test Mode setting"
+  ON public.system_settings
+  FOR SELECT
+  TO authenticated
+  USING (key = 'test_mode');
+
+-- Platform-wide metric reads must be restricted to actual administrators.
+DROP POLICY IF EXISTS "Authenticated view all profiles for overview" ON public.profiles;
+DROP POLICY IF EXISTS "Authenticated view all drivers for overview" ON public.agtrans_drivers;
+DROP POLICY IF EXISTS "Authenticated view all requests for overview" ON public.agtrans_requests;
+DROP POLICY IF EXISTS "Authenticated view all agreements for overview" ON public.transport_agreements;
+DROP POLICY IF EXISTS "Authenticated view activity for overview" ON public.activity;
+DROP POLICY IF EXISTS "Authenticated view all alerts for overview" ON public.disaster_alerts;
+
+CREATE POLICY "Admins view all profiles for overview"
+  ON public.profiles
+  FOR SELECT
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins view all drivers for overview"
+  ON public.agtrans_drivers
+  FOR SELECT
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins view all requests for overview"
+  ON public.agtrans_requests
+  FOR SELECT
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins view all agreements for overview"
+  ON public.transport_agreements
+  FOR SELECT
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins view activity for overview"
+  ON public.activity
+  FOR SELECT
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+
+CREATE POLICY "Admins view all alerts for overview"
+  ON public.disaster_alerts
+  FOR SELECT
+  TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
