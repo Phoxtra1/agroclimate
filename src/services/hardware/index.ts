@@ -4,3 +4,4 @@ export * from "./observation";
 export * from "./adapterRegistry";
 export * from "./browserAdapters";
 export * from "./deviceRuntime";
+export * from "./supabaseGateway";
