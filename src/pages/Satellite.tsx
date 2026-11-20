@@ -574,6 +574,9 @@ export default function Satellite() {
     if (basemap !== "sentinel") return;
     const controller = new AbortController();
     setSceneLoading(true);
+    // Never leave a scene from the previous map location selectable while a new search is pending.
+    setScenes([]);
+    setSceneId("");
     searchSentinelScenes({
       point: { lat: mapCenter[0], lon: mapCenter[1] },
       daysBack: Number(daysBack),
@@ -584,7 +587,15 @@ export default function Satellite() {
         setScenes(results);
         setSceneId(results[0]?.id ?? "");
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setScenes([]);
+          setSceneId("");
+          toast.error("Sentinel scene search failed", {
+            description: error instanceof Error ? error.message : "No verified scene metadata was returned for this location.",
+          });
+        }
+      })
       .finally(() => {
         if (!controller.signal.aborted) setSceneLoading(false);
       });
