@@ -70,7 +70,10 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
       const providedNumericKeys = numericKeys.filter((key) => p[key] !== undefined && p[key] !== null);
       // JSON telemetry measurements must be JSON numbers. Do not coerce strings,
       // booleans, or empty values into plausible zero-valued flight readings.
-      if (!providedNumericKeys.length || providedNumericKeys.some((key) => typeof p[key] !== "number" || !Number.isFinite(p[key]))) return false;
+      if (!providedNumericKeys.length || providedNumericKeys.some((key) => {
+        const value = p[key];
+        return typeof value !== "number" || !Number.isFinite(value);
+      })) return false;
 
       const lat = p.lat == null ? telemetry.lat : Number(p.lat);
       const lng = p.lng == null ? telemetry.lng : Number(p.lng);
