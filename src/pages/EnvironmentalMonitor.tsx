@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useGeolocation } from "@/hooks/useGeolocation";
+import { useAuth } from "@/hooks/useAuth";
 import { useWeather } from "@/hooks/useWeather";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { getActiveProvider } from "@/lib/aiProviders/registry";
 import { AIAgroRiskAssessment, AIEnvironmentalAssessment, RiskLevel } from "@/lib/aiProviders/index";
 import { calculateAgroRiskLocal, LocalAgroRiskResult } from "@/lib/riskEngine";
-import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/services/satellite/geospatial";
+import { saveFarm as dbSaveFarm, listFarms as dbListFarms, deleteFarm as dbDeleteFarm, saveAgroRiskIncident as dbSaveIncident, listAgroRiskIncidents as dbListIncidents } from "@/services/satellite/geospatial";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
@@ -104,6 +105,8 @@ interface IncidentReport {
   type: "Flooding" | "Waterlogging" | "Soil Erosion" | "Landslide" | "Drought";
   description: string;
   date: string;
+  status: "unverified";
+  source: "user_report";
 }
 
 interface SavedFarm {
@@ -579,9 +582,38 @@ function useEnvironmentState(forecast: any[]): EnvironmentState | null {
 // MAIN ENVIRONMENTAL & AGRORISK COMPONENT
 // =============================================================================
 export default function EnvironmentalMonitor() {
+  const { user } = useAuth();
   const { position } = useGeolocation();
-  const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
+  const [assessmentTarget, setAssessmentTarget] = useState<{
+    lat: number; lon: number; locationName: string; boundary?: [number, number][]; manual: boolean;
+  }>(() => ({
+    lat: position.lat, lon: position.lon, locationName: position.locationName, manual: false,
+  }));
+  const { forecast, source: weatherSource, lastUpdated: weatherLastUpdated } = useWeather(
+    assessmentTarget.lat,
+    assessmentTarget.lon,
+  );
+  const locationIsFresh = assessmentTarget.manual ||
+    position.source === "gps" ||
+    (position.source === "cached" && !!position.updatedAt && Date.now() - position.updatedAt < 24 * 60 * 60 * 1000);
+  const weatherIsFresh = weatherSource === "live" ||
+    (weatherSource === "cache" && !!weatherLastUpdated && Date.now() - weatherLastUpdated.getTime() < 60 * 60 * 1000);
+  const weatherUsable = locationIsFresh && weatherIsFresh;
   const envState = useEnvironmentState(forecast);
+
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
+  const farmRequestVersion = useRef(0);
+  const incidentRequestVersion = useRef(0);
+
+  useEffect(() => {
+    setAssessmentTarget((current) => current.manual ? current : {
+      lat: position.lat,
+      lon: position.lon,
+      locationName: position.locationName,
+      manual: false,
+    });
+  }, [position.lat, position.lon, position.locationName]);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<"sensors" | "agrorisk">("sensors");
