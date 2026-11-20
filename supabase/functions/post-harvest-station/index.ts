@@ -30,8 +30,13 @@ Deno.serve(async (req) => {
   if (!url || !serviceKey || !anonKey) return json({ error: "Device gateway is not configured" }, 503);
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") return json({ error: "A JSON body is required" }, 400);
+  const declaredLength = Number(req.headers.get("content-length") || 0);
+  if (declaredLength > 16_384) return json({ error: "Request body is too large" }, 413);
+  const rawBody = await req.text();
+  if (rawBody.length > 16_384) return json({ error: "Request body is too large" }, 413);
+  let body: any = null;
+  try { body = JSON.parse(rawBody); } catch { return json({ error: "A valid JSON body is required" }, 400); }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return json({ error: "A JSON object is required" }, 400);
 
   if (body.action === "register") {
     const authorization = req.headers.get("Authorization");
@@ -45,7 +50,7 @@ Deno.serve(async (req) => {
 
     const deviceName = typeof body.device_name === "string" ? body.device_name.trim() : "";
     const hardwareId = typeof body.hardware_id === "string" ? body.hardware_id.trim() : "";
-    const model = typeof body.model === "string" ? body.model.trim() : null;
+    const model = typeof body.model === "string" ? body.model.trim().slice(0, 100) : null;
     const harvestEntryId = typeof body.harvest_entry_id === "string" ? body.harvest_entry_id : null;
     if (!deviceName || deviceName.length > 100 || !hardwareId || hardwareId.length > 160) {
       return json({ error: "device_name and hardware_id are required (maximum 100 and 160 characters)" }, 400);
@@ -134,7 +139,10 @@ Deno.serve(async (req) => {
         device_id: device.id, user_id: device.user_id, harvest_entry_id: harvestEntryId,
         observed_at: observedAt.toISOString(), temperature_c: temperature, humidity_pct: humidity,
         sequence_no: sequenceNo, idempotency_key: idempotencyKey,
-        raw_payload: { firmware: body.firmware ?? null, sensor_model: body.sensor_model ?? null },
+        raw_payload: {
+          firmware: typeof body.firmware === "string" ? body.firmware.slice(0, 80) : null,
+          sensor_model: typeof body.sensor_model === "string" ? body.sensor_model.slice(0, 100) : null,
+        },
       })
       .select("id,device_id,harvest_entry_id,observed_at,received_at,temperature_c,humidity_pct,sequence_no")
       .maybeSingle();
@@ -147,12 +155,16 @@ Deno.serve(async (req) => {
         console.error("[post-harvest-station] duplicate lookup failed", lookupError);
         return json({ error: "The duplicate reading could not be confirmed. Retry with the same idempotency_key." }, 503);
       }
+      const { error: touchError } = await admin.from("post_harvest_station_devices")
+        .update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
+      if (touchError) return json({ error: "Duplicate reading is stored, but device signal time could not be refreshed" }, 500);
       return json({ accepted: true, duplicate: true, observation: existing });
     }
     if (insertError) return json({ error: "Could not persist sensor observation" }, 500);
 
-    await admin.from("post_harvest_station_devices")
+    const { error: touchError } = await admin.from("post_harvest_station_devices")
       .update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
+    if (touchError) return json({ error: "Observation is stored, but device signal time could not be refreshed" }, 500);
     return json({ accepted: true, duplicate: false, observation: inserted }, 201);
   }
 
