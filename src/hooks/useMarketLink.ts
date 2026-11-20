@@ -82,6 +82,8 @@ export function useMarketLink() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    // Contracts are private to the signed-in parties; clear them before an account transition.
+    setContracts([]);
     try {
       const [s, o, c, p] = await Promise.all([
         supabase.from("farmer_inputs" as any).select("*").order("created_at", { ascending: false }),
@@ -89,16 +91,24 @@ export function useMarketLink() {
         supabase.from("market_contracts" as any).select("*").order("created_at", { ascending: false }),
         supabase.from("price_intelligence" as any).select("*").order("crop_name", { ascending: true }),
       ]);
+      if (s.error) console.error("[MarketLink] supply load failed:", s.error);
+      if (o.error) console.error("[MarketLink] orders load failed:", o.error);
+      if (c.error) console.error("[MarketLink] contracts load failed:", c.error);
+      if (p.error) console.error("[MarketLink] prices load failed:", p.error);
       setSupply((s.data as any) || []);
       setOrders((o.data as any) || []);
       setContracts((c.data as any) || []);
       setPrices((p.data as any) || []);
     } catch (err) {
       console.error("[MarketLink] fetchAll failed:", err);
+      setSupply([]);
+      setOrders([]);
+      setContracts([]);
+      setPrices([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
