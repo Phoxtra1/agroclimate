@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,12 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   const [model, setModel] = useState("");
   const [harvestEntryId, setHarvestEntryId] = useState("");
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  const requestVersion = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (!user) {
+    const version = ++requestVersion.current;
+    const userId = user?.id;
+    if (!userId) {
       setDevices([]);
       setObservations([]);
       setIssuedToken(null);
@@ -47,19 +50,23 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
     const [deviceResult, observationResult] = await Promise.all([
       supabase.from("post_harvest_station_devices" as any)
         .select("id,device_name,hardware_id,model,status,harvest_entry_id,last_seen_at,created_at")
-        .eq("user_id", user.id).order("created_at", { ascending: false }),
+        .eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("post_harvest_station_observations" as any)
         .select("id,device_id,harvest_entry_id,observed_at,received_at,temperature_c,humidity_pct,sequence_no")
-        .eq("user_id", user.id).order("observed_at", { ascending: false }).limit(20),
+        .eq("user_id", userId).order("observed_at", { ascending: false }).limit(20),
     ]);
+    if (version !== requestVersion.current) return;
     if (deviceResult.error) toast.error("Could not load station registry", { description: deviceResult.error.message });
     else setDevices((deviceResult.data || []) as unknown as StationDevice[]);
     if (observationResult.error) toast.error("Could not load station readings", { description: observationResult.error.message });
     else setObservations((observationResult.data || []) as unknown as StationObservation[]);
     setLoading(false);
-  }, [user]);
+  }, [user?.id]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => { requestVersion.current += 1; };
+  }, [refresh]);
   useEffect(() => {
     if (!user) return;
     const channel = supabase.channel("post-harvest-station-live")
@@ -67,11 +74,12 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
       .on("postgres_changes", { event: "*", schema: "public", table: "post_harvest_station_observations", filter: `user_id=eq.${user.id}` }, () => void refresh())
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [user, refresh]);
+  }, [user?.id, refresh]);
 
   const register = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!deviceName.trim() || !hardwareId.trim()) return;
+    if (!user?.id) { toast.error("Sign in to register a station."); return; }
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke("post-harvest-station", {
@@ -93,15 +101,17 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
 
   const revokeDevice = async (device: StationDevice) => {
     if (!confirm(`Revoke access for "${device.device_name}"? The station will no longer be able to upload readings.`)) return;
-    const { data, error } = await supabase.functions.invoke("post-harvest-station", {
-      body: { action: "revoke", device_id: device.id },
-    });
-    if (error || !data?.revoked) {
-      toast.error("Could not revoke station", { description: data?.error || error?.message || "Request failed" });
-      return;
+    if (!user?.id) { toast.error("Sign in to revoke a station."); return; }
+    try {
+      const { data, error } = await supabase.functions.invoke("post-harvest-station", {
+        body: { action: "revoke", device_id: device.id },
+      });
+      if (error || !data?.revoked) throw new Error(data?.error || error?.message || "Request failed");
+      toast.success("Station credential revoked");
+      await refresh();
+    } catch (error) {
+      toast.error("Could not revoke station", { description: error instanceof Error ? error.message : "Request failed" });
     }
-    toast.success("Station credential revoked");
-    await refresh();
   };
 
   const copyToken = async () => {
