@@ -139,28 +139,35 @@ export const useDroneState = () => {
     // Persist aircraft-type hint so AGNav marker + other views can react in real time
     try { localStorage.setItem("aih_active_type", (target.type || target.aircraftType || "drone") as string); } catch { /* Storage may be unavailable in private browsing or restricted contexts. */ }
     await adapterRef.current.connect(target.id);
-    // Best-effort: mark the registered row as connected so admin/registry views update immediately
-    try {
-      await supabase.from("drones").update({
-        status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
-      }).eq("id", target.id);
-    } catch { /* Registry updates are best-effort; the hardware connection is authoritative. */ }
-  }, [available, scan]);
+    // Simulator sessions must never be written as physical aircraft connections.
+    if (protocol !== "simulator") {
+      try {
+        await supabase.from("drones").update({
+          status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
+        }).eq("id", target.id);
+      } catch { /* Registry updates are best-effort; telemetry transport remains authoritative. */ }
+    }
+  }, [available, scan, protocol]);
 
   const disconnect = useCallback(async () => {
     const priorId = activeDrone?.id;
     await adapterRef.current?.disconnect();
-    if (priorId) { try { await supabase.from("drones").update({ status: "offline", last_seen_at: new Date().toISOString() }).eq("id", priorId); } catch { /* Keep local disconnect successful if the registry is offline. */ } }
+    if (priorId && protocol !== "simulator") { try { await supabase.from("drones").update({ status: "offline", last_seen_at: new Date().toISOString() }).eq("id", priorId); } catch { /* Keep local disconnect successful if the registry is offline. */ } }
     setActiveDrone(null);
     setMissionId(null);
-  }, [activeDrone]);
+  }, [activeDrone, protocol]);
 
   const calibrate = useCallback(async () => { await adapterRef.current?.calibrate(); }, []);
 
   const startMission = useCallback(async (config?: { missionType?: string; name?: string; altitude_m?: number }) => {
     if (!adapterRef.current) return;
     await adapterRef.current.startMission();
-    // Persist mission record
+    // Simulator missions are local test runs, not physical aircraft missions.
+    if (protocol === "simulator") {
+      setMissionId(null);
+      return;
+    }
+    // Persist only verified non-simulator mission records.
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -177,7 +184,7 @@ export const useDroneState = () => {
         if (data?.id) setMissionId(data.id);
       }
     } catch (e) { /* offline ok */ }
-  }, [telemetry.altitude, telemetry.lat, telemetry.lng]);
+  }, [telemetry.altitude, telemetry.lat, telemetry.lng, protocol]);
 
   const pauseMission = useCallback(async () => { await adapterRef.current?.pauseMission(); }, []);
   const resumeMission = useCallback(async () => { await adapterRef.current?.resumeMission(); }, []);
@@ -194,7 +201,7 @@ export const useDroneState = () => {
 
   // Persist telemetry breadcrumbs while flying
   useEffect(() => {
-    if (status !== "flying" || !missionId) return;
+    if (protocol === "simulator" || status !== "flying" || !missionId) return;
     const t = setInterval(async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -210,7 +217,7 @@ export const useDroneState = () => {
       } catch { /* Telemetry logging must not interrupt flight control when offline. */ }
     }, 5000);
     return () => clearInterval(t);
-  }, [status, missionId, telemetry]);
+  }, [status, missionId, telemetry, protocol]);
 
   const droneName = activeDrone?.name || "No Drone";
 
