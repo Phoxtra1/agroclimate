@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BarcodeScanBuffer, BrowserGeolocationAdapter } from "@/services/hardware/browserAdapters";
+import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter } from "@/services/hardware/browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
 import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
 
@@ -43,6 +43,24 @@ describe("hardware runtime and browser adapters", () => {
     expect(emitted.map((item) => item.metric)).toEqual(["latitude", "longitude"]);
     await adapter.disconnect(locationDevice.deviceId);
     expect(cleared).toBe(17);
+  });
+
+
+  it("opens and releases the camera stream for field evidence capture", async () => {
+    let stopped = 0;
+    const track = { stop: () => { stopped += 1; } };
+    const stream = { getTracks: () => [track] } as unknown as MediaStream;
+    const camera = new BrowserCameraAdapter({ getUserMedia: async () => stream });
+    const cameraDevice: DeviceRegistration = {
+      ...device, deviceId: "field-camera", component: "farm-handler",
+      protocol: "browser-camera", capabilities: ["image-capture"],
+    };
+    expect(camera.supports(cameraDevice)).toBe(true);
+    expect((await camera.connect(cameraDevice)).connected).toBe(true);
+    expect(camera.getStream(cameraDevice.deviceId)).toBe(stream);
+    await camera.disconnect(cameraDevice.deviceId);
+    expect(stopped).toBe(1);
+    expect(camera.getStream(cameraDevice.deviceId)).toBeNull();
   });
 
   it("keeps queued observations until the server sink accepts them and deduplicates event IDs", async () => {
