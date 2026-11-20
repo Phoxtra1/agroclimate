@@ -1240,13 +1240,13 @@ export default function EnvironmentalMonitor() {
           </div>
           <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground">
             <RefreshCw className="h-3 w-3" />
-            <span>Weather input: {weatherSource === "live" ? "Live provider" : weatherSource === "cache" ? "Cached provider" : "Sample fallback"} · Updated {envState.lastUpdated.toLocaleTimeString()}</span>
+            <span>Weather input: {!forecastMatchesTarget ? "Updating selected location" : weatherSource === "live" ? "Live provider" : weatherSource === "cache" ? "Cached provider" : "Sample fallback"} · Updated {envState.lastUpdated.toLocaleTimeString()}</span>
           </div>
         </div>
       </div>
 
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-        AgroRisk scores are model-based estimates using weather-provider forecasts or fallback sample data, coordinate-based terrain heuristics and incident reports saved in this browser. They are not field-sensor measurements, surveyed terrain results or verified hazard boundaries. Confirm local conditions before making operational decisions.
+        AgroRisk scores are model-based estimates using the forecast for the selected coordinates, weather-derived soil proxies, coordinate-based terrain heuristics and private user-submitted incident reports. Soil moisture is not a soil-sensor reading; terrain is not a DEM/survey; incident reports are unverified and only recent reports influence the estimate. These outputs are not official warnings. AI analysis is withheld when provider weather or a recent/selected location basis is unavailable.
       </div>
 
       {/* =======================================================================
@@ -1941,7 +1941,7 @@ export default function EnvironmentalMonitor() {
                       </div>
                       <p className="text-sm font-bold text-foreground">Farm Vulnerability Score</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Rule-based vulnerability estimate using terrain calculations, {weatherSource === "live" ? "live provider weather" : weatherSource === "cache" ? "cached provider weather" : "sample fallback weather"}, and user-reported incident records. This is not a direct sensor measurement or an official hazard warning.
+                        Rule-based vulnerability estimate using coordinate terrain heuristics, {weatherSource === "live" ? "live provider weather" : weatherSource === "cache" ? "cached provider weather" : "sample fallback weather"}, and recent unverified user reports. This is not a direct sensor measurement or an official hazard warning.
                       </p>
                     </div>
                   </CardContent>
