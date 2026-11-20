@@ -13,23 +13,63 @@ export interface CropAdvisory {
   tip: string;
 }
 
-const ADVISORY_CACHE_KEY = "agroclimate_advisory_cache";
+const ADVISORY_CACHE_PREFIX = "agroclimate_advisory_cache";
 const ADVISORY_CACHE_DURATION = 6 * 60 * 60 * 1000;
 
-export function useCropAdvisory() {
-  const [advisory, setAdvisory] = useState<CropAdvisory | null>(() => {
-    const cached = localStorage.getItem(ADVISORY_CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Date.now() - parsed.timestamp < ADVISORY_CACHE_DURATION) return parsed.data;
+interface CachedAdvisory {
+  data: CropAdvisory;
+  timestamp: number;
+}
+
+function cacheKey(userId: string, locationName: string, position?: GeoPosition) {
+  const location = [
+    position?.community,
+    position?.district,
+    position?.region,
+    locationName,
+  ].filter(Boolean).join("|").toLowerCase().trim();
+  return `${ADVISORY_CACHE_PREFIX}:${encodeURIComponent(userId)}:${encodeURIComponent(location)}`;
+}
+
+function readCachedAdvisory(key: string): CropAdvisory | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedAdvisory;
+    if (
+      !cached ||
+      typeof cached.timestamp !== "number" ||
+      !cached.data ||
+      Date.now() - cached.timestamp < 0 ||
+      Date.now() - cached.timestamp >= ADVISORY_CACHE_DURATION
+    ) {
+      localStorage.removeItem(key);
+      return null;
     }
+    return cached.data;
+  } catch {
+    // A malformed or unavailable browser cache must never prevent the advisory UI loading.
+    try { localStorage.removeItem(key); } catch { /* storage may be unavailable */ }
     return null;
-  });
+  }
+}
+
+export function useCropAdvisory() {
+  const [advisory, setAdvisory] = useState<CropAdvisory | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchAdvisory = async (weather: WeatherDay, locationName: string, position?: GeoPosition) => {
     setLoading(true);
     try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        throw new Error("Sign in to retrieve a personal crop advisory.");
+      }
+
+      const key = cacheKey(authData.user.id, locationName, position);
+      const cachedAdvisory = readCachedAdvisory(key);
+      if (cachedAdvisory) setAdvisory(cachedAdvisory);
+
       const { data, error } = await supabase.functions.invoke("crop-advisory", {
         body: {
           weatherData: weather,
@@ -46,7 +86,11 @@ export function useCropAdvisory() {
 
       if (data?.advisory) {
         setAdvisory(data.advisory);
-        localStorage.setItem(ADVISORY_CACHE_KEY, JSON.stringify({ data: data.advisory, timestamp: Date.now() }));
+        try {
+          localStorage.setItem(key, JSON.stringify({ data: data.advisory, timestamp: Date.now() }));
+        } catch (storageError) {
+          console.warn("Crop advisory cache unavailable:", storageError);
+        }
       }
     } catch (err) {
       console.warn("Crop advisory unavailable:", err);
