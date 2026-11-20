@@ -114,17 +114,23 @@ Deno.serve(async (req) => {
     const device = (credential as any).post_harvest_station_devices;
     if (device.status !== "active") return json({ error: "Device is not active" }, 403);
 
-    const temperature = Number(body.temperature_c);
-    const humidity = Number(body.humidity_pct);
-    const observedAt = typeof body.observed_at === "string" ? new Date(body.observed_at) : new Date();
+    // Do not coerce strings, null, or empty values into numeric measurements:
+    // Number("") and Number(null) both become zero and could create false readings.
+    const temperature = body.temperature_c;
+    const humidity = body.humidity_pct;
+    const observedAtValue = body.observed_at;
+    const observedAt = typeof observedAtValue === "string" ? new Date(observedAtValue) : null;
     const idempotencyKey = typeof body.idempotency_key === "string" ? body.idempotency_key.trim() : "";
-    const sequenceNo = body.sequence_no == null ? null : Number(body.sequence_no);
-    if (!Number.isFinite(temperature) || temperature < -40 || temperature > 85 ||
-        !Number.isFinite(humidity) || humidity < 0 || humidity > 100 ||
-        Number.isNaN(observedAt.getTime()) || observedAt.getTime() > Date.now() + 5 * 60_000 ||
+    const sequenceNo = body.sequence_no == null ? null : body.sequence_no;
+    const timestampIsExplicitAndValid = !!observedAt &&
+      /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$/.test(observedAtValue) &&
+      Number.isFinite(observedAt.getTime());
+    if (typeof temperature !== "number" || !Number.isFinite(temperature) || temperature < -40 || temperature > 85 ||
+        typeof humidity !== "number" || !Number.isFinite(humidity) || humidity < 0 || humidity > 100 ||
+        !timestampIsExplicitAndValid || observedAt!.getTime() > Date.now() + 5 * 60_000 ||
         !idempotencyKey || idempotencyKey.length > 160 ||
-        (sequenceNo !== null && (!Number.isSafeInteger(sequenceNo) || sequenceNo < 0))) {
-      return json({ error: "Invalid reading. Supply temperature_c (-40..85), humidity_pct (0..100), valid observed_at, idempotency_key and optional non-negative integer sequence_no." }, 400);
+        (sequenceNo !== null && (typeof sequenceNo !== "number" || !Number.isSafeInteger(sequenceNo) || sequenceNo < 0))) {
+      return json({ error: "Invalid reading. Supply numeric temperature_c (-40..85), numeric humidity_pct (0..100), a timezone-aware ISO 8601 observed_at, idempotency_key and optional non-negative integer sequence_no." }, 400);
     }
 
     const harvestEntryId = typeof body.harvest_entry_id === "string" ? body.harvest_entry_id : device.harvest_entry_id;
