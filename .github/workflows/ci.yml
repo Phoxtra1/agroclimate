@@ -78,6 +78,7 @@ jobs:
           src/lib/offlineQueue.ts
           src/components/drone/DroneConnectionCenter.tsx
           src/lib/drone/connectionManager.ts
+          src/lib/drone/mavlinkAdapter.ts
           src/lib/drone/realAdapter.ts
           src/components/PostHarvestStationPanel.tsx
           src/pages/Satellite.tsx
