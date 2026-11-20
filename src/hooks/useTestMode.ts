@@ -39,11 +39,15 @@ export function useTestMode() {
           note: val.note ?? undefined,
           updatedAt: val.updated_at ?? undefined,
         });
-      } else if (!error && !data) {
+      } else {
+        // Test Mode is a server-controlled global entitlement. Never trust a
+        // localStorage value when the authoritative setting cannot be read.
         apply(DEFAULT_TEST_MODE);
+        if (error) console.warn("[testMode] backend setting unavailable; failing closed", error);
       }
     } catch (err) {
-      console.warn("[testMode] load failed, using local state", err);
+      console.warn("[testMode] load failed; disabling local Test Mode", err);
+      apply(DEFAULT_TEST_MODE);
     } finally {
       setLoading(false);
     }
