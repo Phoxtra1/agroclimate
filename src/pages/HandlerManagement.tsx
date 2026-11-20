@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +93,7 @@ export default function HandlerManagement() {
   const [farmQRs, setFarmQRs] = useState<FarmQR[]>([]);
   const [evidence, setEvidence] = useState<TaskEvidence[]>([]);
   const [loading, setLoading] = useState(true);
+  const fetchVersion = useRef(0);
 
   // Create handler dialog
   const [showCreate, setShowCreate] = useState(false);
@@ -110,35 +111,46 @@ export default function HandlerManagement() {
   const [newFarm, setNewFarm] = useState({ name: "", location: "" });
 
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    const version = ++fetchVersion.current;
+    if (!user) {
+      setHandlers([]); setTasks([]); setSessions([]); setIssues([]); setFarmQRs([]); setEvidence([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setHandlers([]); setTasks([]); setSessions([]); setIssues([]); setFarmQRs([]); setEvidence([]);
 
     const [h, t, s, i, q, e] = await Promise.all([
       supabase.from("handlers").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
       supabase.from("handler_tasks").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("work_sessions").select("*").order("clock_in", { ascending: false }).limit(50),
+      supabase.from("work_sessions").select("*").order("clock_in", { ascending: false }).limit(100),
       supabase.from("handler_issues").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
       supabase.from("farm_qr_codes").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("task_evidence").select("*").order("created_at", { ascending: false }),
+      supabase.from("task_evidence").select("*").order("created_at", { ascending: false }).limit(500),
     ]);
+    if (version !== fetchVersion.current) return;
 
-    if (h.data) setHandlers(h.data);
-    if (t.data) setTasks(t.data);
-    if (s.data) {
-      const handlerIds = (h.data || []).map(x => x.id);
-      setSessions(s.data.filter(x => handlerIds.includes(x.handler_id)));
+    const errors = [h.error, t.error, s.error, i.error, q.error, e.error].filter(Boolean);
+    if (errors.length) {
+      toast({ title: "Some handler records could not be loaded", description: errors.map((error) => error?.message).join("; "), variant: "destructive" });
     }
-    if (i.data) setIssues(i.data);
-    if (q.data) setFarmQRs(q.data);
-    if (e.data) {
-      const handlerIds = (h.data || []).map((item) => item.id);
-      const taskIds = (t.data || []).map((item) => item.id);
-      setEvidence(e.data.filter((item) => taskIds.includes(item.task_id) || handlerIds.includes(item.handler_id)));
-    }
+    const handlerRows = h.data || [];
+    const taskRows = t.data || [];
+    const handlerIds = handlerRows.map((item) => item.id);
+    const taskIds = taskRows.map((item) => item.id);
+    setHandlers(handlerRows);
+    setTasks(taskRows);
+    setSessions((s.data || []).filter((item) => handlerIds.includes(item.handler_id)));
+    setIssues(i.data || []);
+    setFarmQRs(q.data || []);
+    setEvidence((e.data || []).filter((item) => taskIds.includes(item.task_id) && handlerIds.includes(item.handler_id)));
     setLoading(false);
-  }, [user]);
+  }, [user?.id, toast]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    void fetchData();
+    return () => { fetchVersion.current += 1; };
+  }, [fetchData]);
 
   const createHandler = async () => {
     if (!user || !newHandler.name || !newHandler.email || !newHandler.password) return;
