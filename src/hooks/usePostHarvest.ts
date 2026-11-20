@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { compressImage } from "@/lib/offlineQueue";
+import { buildHarvestPhotoPath, createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
 
 export interface HarvestEntry {
   id: string;
@@ -63,10 +65,15 @@ export function usePostHarvest() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<HarvestEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const activeUserIdRef = useRef<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
-    if (!user) { setEntries([]); setLoading(false); return; }
+    if (!user) { setEntries([]); activeUserIdRef.current = null; setLoading(false); return; }
     setLoading(true);
+    if (activeUserIdRef.current !== user.id) {
+      setEntries([]);
+      activeUserIdRef.current = user.id;
+    }
     const { data, error } = await supabase
       .from("post_harvest_entries" as any)
       .select("*")
@@ -99,13 +106,32 @@ export function usePostHarvest() {
     return () => clearInterval(i);
   }, []);
 
-  const addEntry = async (input: Omit<HarvestEntry, "id" | "user_id" | "created_at" | "updated_at" | "photos" | "risk_override"> & { photos?: string[] }) => {
+  const addEntry = async (input: Omit<HarvestEntry, "id" | "user_id" | "created_at" | "updated_at" | "photos" | "risk_override"> & { photos?: string[]; client_idempotency_key?: string }) => {
     if (!user) throw new Error("Not signed in");
+    const clientKey = input.client_idempotency_key || createHarvestIdempotencyKey();
+    const { data: existing, error: lookupError } = await supabase
+      .from("post_harvest_entries" as any)
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("client_idempotency_key", clientKey)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (existing) return existing;
+
     const { data, error } = await supabase
       .from("post_harvest_entries" as any)
-      .insert({ ...input, user_id: user.id, photos: input.photos || [] } as any)
+      .insert({ ...input, client_idempotency_key: clientKey, user_id: user.id, photos: input.photos || [] } as any)
       .select()
       .single();
+    if (error?.code === "23505") {
+      const { data: duplicate, error: duplicateError } = await supabase
+        .from("post_harvest_entries" as any)
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("client_idempotency_key", clientKey)
+        .maybeSingle();
+      if (!duplicateError && duplicate) return duplicate;
+    }
     if (error) throw error;
     return data;
   };
@@ -121,12 +147,15 @@ export function usePostHarvest() {
   return { entries, loading, fetchEntries, addEntry, deleteEntry, updateEntry };
 }
 
-export async function uploadHarvestPhoto(userId: string, file: File): Promise<string> {
-  const ext = file.name.split(".").pop() || "jpg";
-  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error } = await supabase.storage.from("harvest-photos").upload(path, file, {
+export async function uploadHarvestPhoto(userId: string, file: File, idempotencyKey?: string, photoIndex = 0): Promise<string> {
+  const prepared = await compressImage(file);
+  const mimeType = prepared.type || file.type || "image/jpeg";
+  const ext = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
+  const path = buildHarvestPhotoPath(userId, idempotencyKey || createHarvestIdempotencyKey(), photoIndex, ext);
+  const { error } = await supabase.storage.from("harvest-photos").upload(path, prepared, {
     cacheControl: "3600",
-    upsert: false,
+    contentType: mimeType,
+    upsert: true,
   });
   if (error) throw error;
   const { data } = supabase.storage.from("harvest-photos").getPublicUrl(path);

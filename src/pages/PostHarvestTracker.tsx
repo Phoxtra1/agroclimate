@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,10 +18,12 @@ import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { createGeoFeature } from "@/services/satellite/geospatial";
 import { PostHarvestStationPanel } from "@/components/PostHarvestStationPanel";
+import { createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
 const STORAGE_METHODS = ["Bagged", "Crib", "Open space", "Sealed container", "Cold storage", "Silo"];
+const createSubmissionKey = createHarvestIdempotencyKey;
 
 function riskBadge(level: RiskLevel) {
   if (level === "danger") return <Badge className="bg-red-500 hover:bg-red-500/90 text-white">High Risk</Badge>;
@@ -66,70 +68,68 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
   const [notes, setNotes] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  const submissionKeyRef = useRef(createSubmissionKey());
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cropName || !quantity) { toast.error("Crop name and quantity are required"); return; }
     if (!user) { toast.error("Please sign in"); return; }
     setSaving(true);
+    const idempotencyKey = submissionKeyRef.current;
+    const harvestInput = {
+      user_id: user.id,
+      crop_name: cropName,
+      quantity: Number(quantity),
+      unit,
+      harvest_date: date,
+      storage_location: location || null,
+      storage_method: method || null,
+      notes: notes || null,
+    };
     try {
-      const offline = !navigator.onLine;
-      if (offline) {
-        await queueHarvest({
-          user_id: user.id,
-          crop_name: cropName,
-          quantity: Number(quantity),
-          unit, harvest_date: date,
-          storage_location: location || null,
-          storage_method: method || null,
-          notes: notes || null,
-        }, files);
+      if (!navigator.onLine) {
+        await queueHarvest(harvestInput, files, idempotencyKey);
         toast.success("Saved offline — will sync automatically when online");
       } else {
         const photoUrls: string[] = [];
-        const failedPhotos: File[] = [];
-        for (const f of files) {
-          try { photoUrls.push(await uploadHarvestPhoto(user.id, f)); }
-          catch { failedPhotos.push(f); }
-        }
-        try {
-          await addEntry({
-            crop_name: cropName,
-            quantity: Number(quantity),
-            unit, harvest_date: date,
-            storage_location: location || null,
-            storage_method: method || null,
-            notes: notes || null,
-            photos: photoUrls,
-          });
-          if (failedPhotos.length) {
-            // Queue remaining photos as a follow-up entry? simpler: queue full retry
-            toast.message(`Saved. ${failedPhotos.length} photo(s) will retry when online.`);
-            await queueHarvest({
-              user_id: user.id,
-              crop_name: `${cropName} (photos)`,
-              quantity: 0, unit, harvest_date: date,
-              storage_location: location || null,
-              storage_method: null, notes: "Photo-only retry",
-            }, failedPhotos);
-          } else {
-            toast.success("Harvest saved");
+        let photoUploadFailed = false;
+        for (let index = 0; index < files.length; index++) {
+          try {
+            photoUrls.push(await uploadHarvestPhoto(user.id, files[index], idempotencyKey, index));
+          } catch {
+            photoUploadFailed = true;
           }
-        } catch {
-          // Network failure — queue the whole thing
-          await queueHarvest({
-            user_id: user.id,
-            crop_name: cropName,
-            quantity: Number(quantity),
-            unit, harvest_date: date,
-            storage_location: location || null,
-            storage_method: method || null,
-            notes: notes || null,
-          }, files);
-          toast.success("Saved offline — will sync automatically when online");
+        }
+
+        if (photoUploadFailed) {
+          // Queue the entire record with the same key. Successful uploads are
+          // overwritten at the same deterministic paths during retry.
+          await queueHarvest(harvestInput, files, idempotencyKey);
+          toast.success("Harvest queued for reliable retry because one or more photos could not upload.");
+        } else {
+          try {
+            await addEntry({
+              crop_name: cropName,
+              quantity: Number(quantity),
+              unit,
+              harvest_date: date,
+              storage_location: location || null,
+              storage_method: method || null,
+              notes: notes || null,
+              photos: photoUrls,
+              client_idempotency_key: idempotencyKey,
+            });
+            toast.success("Harvest saved");
+          } catch {
+            // The insert may have succeeded even if its response was lost.
+            // Reusing the same key makes the queued retry safe.
+            await queueHarvest(harvestInput, files, idempotencyKey);
+            toast.success("Saved for automatic retry — duplicate records are prevented.");
+          }
         }
       }
       setCropName(""); setQuantity(""); setLocation(""); setNotes(""); setFiles([]);
+      submissionKeyRef.current = createSubmissionKey();
       onAdded();
     } catch (err: any) {
       toast.error(err.message || "Could not save");
@@ -314,16 +314,17 @@ function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; ope
 }
 
 export default function PostHarvestTracker() {
+  const { user } = useAuth();
   const { entries, loading, deleteEntry, fetchEntries } = usePostHarvest();
   const [adviceEntry, setAdviceEntry] = useState<HarvestEntry | null>(null);
-  const [pending, setPending] = useState(getPendingCount());
+  const [pending, setPending] = useState(() => getPendingCount(user?.id));
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [syncing, setSyncing] = useState(false);
   const [capturingEntryId, setCapturingEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     installOfflineSync();
-    const refresh = () => setPending(getPendingCount());
+    const refresh = () => setPending(getPendingCount(user?.id));
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
     window.addEventListener("agc:queue-changed", refresh);
@@ -336,7 +337,7 @@ export default function PostHarvestTracker() {
       window.removeEventListener("offline", onOffline);
       clearInterval(t);
     };
-  }, []);
+  }, [user?.id]);
 
   const dangerCount = entries.filter((e) => computeRisk(e).level === "danger").length;
   const latestMappedStorage = entries.find((entry) => entry.storage_location?.trim())?.storage_location;
@@ -409,7 +410,7 @@ export default function PostHarvestTracker() {
     setSyncing(true);
     const r = await syncPendingHarvests();
     setSyncing(false);
-    setPending(getPendingCount());
+    setPending(getPendingCount(user?.id));
     if (r.synced) { toast.success(`Synced ${r.synced} entr${r.synced === 1 ? "y" : "ies"}`); fetchEntries(); }
     if (r.failed) toast.error(`${r.failed} still pending — will retry`);
     if (!r.synced && !r.failed) toast.message("Nothing to sync");

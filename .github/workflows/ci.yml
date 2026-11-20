@@ -71,6 +71,10 @@ jobs:
           src/pages/EnvironmentalMonitor.tsx
           src/pages/LiveTracking.tsx
           src/pages/PostHarvestTracker.tsx
+          src/test/harvestIdempotency.test.ts
+          src/hooks/usePostHarvest.ts
+          src/lib/harvestIdempotency.ts
+          src/lib/offlineQueue.ts
           src/components/drone/DroneConnectionCenter.tsx
           src/lib/drone/connectionManager.ts
           src/lib/drone/realAdapter.ts

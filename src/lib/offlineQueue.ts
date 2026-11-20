@@ -3,6 +3,7 @@
 // Auto-syncs when the browser regains connectivity.
 
 import { supabase } from "@/integrations/supabase/client";
+import { buildHarvestPhotoPath, createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
 
 const QUEUE_KEY = "agc_pending_harvests_v1";
 const PHOTOS_KEY = "agc_pending_photos_v1";
@@ -53,7 +54,7 @@ function fileToDataUrl(file: File | Blob): Promise<string> {
 }
 
 // Downscale + JPEG-compress an image to reduce storage and upload time
-async function compressImage(file: File, maxEdge = 1280, quality = 0.7): Promise<Blob> {
+export async function compressImage(file: File, maxEdge = 1280, quality = 0.7): Promise<Blob> {
   if (!file.type.startsWith("image/")) return file;
   try {
     const dataUrl = await fileToDataUrl(file);
@@ -83,6 +84,7 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
 export async function queueHarvest(
   entry: Omit<PendingHarvest, "id" | "photo_keys" | "queued_at">,
   files: File[],
+  idempotencyKey?: string,
 ): Promise<PendingHarvest> {
   // A queued record must belong to the currently authenticated account.
   // getSession reads the persisted session locally, so this check also works offline.
@@ -91,16 +93,23 @@ export async function queueHarvest(
     throw new Error("Sign in with the farm account before saving offline harvest records.");
   }
 
+  const itemId = idempotencyKey || createHarvestIdempotencyKey();
+  const queue = readQueue();
+  const existing = queue.find((item) => item.user_id === entry.user_id && item.id === itemId);
+  if (existing) return existing;
+
   const photos = readPhotos();
   const photo_keys: string[] = [];
   for (const f of files) {
     const key = `${entry.user_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const compressed = await compressImage(f);
+    const mimeType = compressed.type || f.type || "image/jpeg";
+    const extension = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
     photos[key] = {
       key,
       user_id: entry.user_id,
-      filename: (f.name || "photo.jpg").replace(/\.[^.]+$/, "") + ".jpg",
-      type: "image/jpeg",
+      filename: (f.name || "photo").replace(/\.[^.]+$/, "") + "." + extension,
+      type: mimeType,
       data_url: await fileToDataUrl(compressed),
     };
     photo_keys.push(key);
@@ -109,18 +118,18 @@ export async function queueHarvest(
 
   const item: PendingHarvest = {
     ...entry,
-    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: itemId,
     photo_keys,
     queued_at: Date.now(),
   };
-  const queue = readQueue();
   queue.push(item);
   writeQueue(queue);
   return item;
 }
 
-export function getPendingCount(): number {
-  return readQueue().length;
+export function getPendingCount(userId?: string): number {
+  const queue = readQueue();
+  return userId ? queue.filter((item) => item.user_id === userId).length : queue.length;
 }
 
 export function getPendingItems(): PendingHarvest[] {
@@ -147,6 +156,21 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
 
     for (const item of accountQueue) {
       try {
+        // Idempotency lookup runs before photo uploads and conflict heuristics.
+        // This handles a prior successful insert whose HTTP response was lost.
+        const { data: alreadySaved, error: idempotencyError } = await supabase
+          .from("post_harvest_entries" as any)
+          .select("id")
+          .eq("user_id", item.user_id)
+          .eq("client_idempotency_key", item.id)
+          .maybeSingle();
+        if (idempotencyError) throw idempotencyError;
+        if (alreadySaved) {
+          for (const k of item.photo_keys) delete photos[k];
+          synced++;
+          continue;
+        }
+
         // CONFLICT-SAFE: skip if server already has a newer entry for this same
         // user/crop/harvest_date that was created AFTER we queued it offline.
         // This prevents an offline edit from clobbering newer server data.
@@ -168,22 +192,24 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
 
         // Upload photos first
         const photoUrls: string[] = [];
-        for (const k of item.photo_keys) {
+        for (let photoIndex = 0; photoIndex < item.photo_keys.length; photoIndex++) {
+          const k = item.photo_keys[photoIndex];
           const cached = photos[k];
           if (!cached) continue;
           const blob = await dataUrlToBlob(cached.data_url);
           const ext = (cached.filename.split(".").pop() || "jpg").toLowerCase();
-          const path = `${cached.user_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const path = buildHarvestPhotoPath(cached.user_id, item.id, photoIndex, ext);
           const { error: upErr } = await supabase.storage
             .from("harvest-photos")
-            .upload(path, blob, { contentType: cached.type, upsert: false });
+            .upload(path, blob, { contentType: cached.type, upsert: true });
           if (upErr) throw upErr;
           const { data } = supabase.storage.from("harvest-photos").getPublicUrl(path);
           photoUrls.push(data.publicUrl);
         }
 
-        const { error } = await supabase.from("post_harvest_entries" as any).insert({
+        const { error } = await supabase.from("post_harvest_entries" as any).upsert({
           user_id: item.user_id,
+          client_idempotency_key: item.id,
           crop_name: item.crop_name,
           quantity: item.quantity,
           unit: item.unit,
@@ -192,7 +218,7 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
           storage_method: item.storage_method,
           notes: item.notes,
           photos: photoUrls,
-        } as any);
+        } as any, { onConflict: "user_id,client_idempotency_key", ignoreDuplicates: true });
         if (error) throw error;
 
         // Cleanup cached photos
