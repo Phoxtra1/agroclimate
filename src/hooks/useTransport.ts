@@ -844,25 +844,18 @@ export function useAGTrans() {
     if (!Number.isFinite(capturedAtMs) || ageMs > 90000 || ageMs < -15000) {
       throw new Error("The GPS fix is stale or has an invalid capture time. Request a fresh device GPS position.");
     }
-    const { data, error } = await supabase
-      .from("tracking_sessions")
-      .update({
-        current_lat: locationData.lat,
-        current_lon: locationData.lon,
-        speed_kn: locationData.speed_kn ?? null,
-        heading: locationData.heading ?? null,
-        last_location_at: locationData.capturedAt,
-        location_accuracy_m: locationData.accuracyM,
-        location_source: locationData.source,
-        is_simulated: false,
-        eta: locationData.eta,
-        distance_m: locationData.distance_m,
-        route: locationData.route,
-      } as any)
-      .eq("delivery_job_id", jobId)
-      .eq("driver_id", user.id)
-      .select("id")
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("update_agtrans_tracking_location", {
+      p_job_id: jobId,
+      p_lat: locationData.lat,
+      p_lon: locationData.lon,
+      p_accuracy_m: locationData.accuracyM,
+      p_captured_at: locationData.capturedAt,
+      p_speed_kmh: locationData.speed_kn ?? null,
+      p_heading: locationData.heading ?? null,
+      p_eta: locationData.eta ?? null,
+      p_distance_m: locationData.distance_m ?? null,
+      p_route: locationData.route ?? null,
+    } as any);
 
     if (error) {
       console.error("Error updating live location:", error);
