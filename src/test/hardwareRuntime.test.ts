@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric, STANDARD_BLE_SENSOR_MAPPINGS, decodeMavlinkGpsRawInt } from "@/services/hardware/browserAdapters";
+import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric, STANDARD_BLE_SENSOR_MAPPINGS, decodeMavlinkGpsRawInt, decodeNmea0183Line } from "@/services/hardware/browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
 import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
 
@@ -39,6 +39,30 @@ describe("MAVLink GPS_RAW_INT decoder", () => {
     view.setInt32(13, 0, true);
     expect(decodeMavlinkGpsRawInt(view)).toBeNull();
     expect(decodeMavlinkGpsRawInt(new DataView(new ArrayBuffer(12)))).toBeNull();
+  });
+});
+
+describe("NMEA 0183 vehicle tracker decoder", () => {
+  const sentence = (body: string) => {
+    let checksum = 0;
+    for (const character of body) checksum ^= character.charCodeAt(0);
+    return `${body}*${checksum.toString(16).toUpperCase().padStart(2, "0")}`;
+  };
+
+  it("decodes checked RMC position and speed in knots", () => {
+    const decoded = decodeNmea0183Line(sentence("GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W"));
+    expect(decoded).toEqual([
+      { metric: "latitude", value: 48.1173, unit: "°" },
+      { metric: "longitude", value: 11.516666666666667, unit: "°" },
+      { metric: "vehicle_speed", value: 22.4, unit: "kn" },
+    ]);
+  });
+
+  it("decodes valid GGA fixes and rejects bad checksums or no-fix records", () => {
+    const valid = sentence("GNGGA,123519,0542.222,N,00011.220,W,1,08,0.9,12.0,M,46.9,M,,");
+    expect(decodeNmea0183Line(valid).map((item) => item.metric)).toEqual(["latitude", "longitude"]);
+    expect(decodeNmea0183Line(valid.slice(0, -2) + "00")).toEqual([]);
+    expect(decodeNmea0183Line(sentence("GPGGA,123519,0542.222,N,00011.220,W,0,00,9.9,0.0,M,0.0,M,,"))).toEqual([]);
   });
 });
 
