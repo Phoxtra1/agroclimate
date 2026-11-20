@@ -65,8 +65,7 @@ Deno.serve(async (req) => {
       .single();
     if (insertError) return json({ error: insertError.code === "23505" ? "A device with this hardware_id is already registered to this account" : insertError.message }, 400);
 
-    const { error: credentialError } = await admin.schema("private")
-      .from("post_harvest_station_credentials")
+    const { error: credentialError } = await admin.from("post_harvest_station_credentials")
       .insert({ device_id: device.id, token_hash: tokenHash });
     if (credentialError) {
       await admin.from("post_harvest_station_devices").delete().eq("id", device.id);
@@ -79,8 +78,7 @@ Deno.serve(async (req) => {
     const token = req.headers.get("x-device-token");
     if (!token || token.length < 32 || token.length > 256) return json({ error: "Valid x-device-token required" }, 401);
     const tokenHash = await sha256(token);
-    const { data: credential } = await admin.schema("private")
-      .from("post_harvest_station_credentials")
+    const { data: credential } = await admin.from("post_harvest_station_credentials")
       .select("device_id,revoked_at,post_harvest_station_devices!inner(id,user_id,status,harvest_entry_id)")
       .eq("token_hash", tokenHash).maybeSingle();
     if (!credential || credential.revoked_at) return json({ error: "Invalid or revoked device token" }, 401);
