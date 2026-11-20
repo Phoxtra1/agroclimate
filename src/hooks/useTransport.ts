@@ -217,6 +217,7 @@ export function useAGTrans() {
 
   const seenRequestsRef = useRef<Set<string>>(new Set());
   const initialLoadRef = useRef(true);
+  const activeUserIdRef = useRef<string | null>(null);
 
   const safeSelect = async <T,>(table: string, opts?: { order?: boolean; limit?: number }) => {
     try {
@@ -245,19 +246,23 @@ export function useAGTrans() {
       setHistory(null);
       seenRequestsRef.current.clear();
       initialLoadRef.current = true;
+      activeUserIdRef.current = null;
       setLoading(false);
       return;
     }
     setLoading(true);
-    // Clear private transport state immediately when switching accounts.
-    setRequests([]);
-    setDeliveryJobs([]);
-    setTrackingSessions([]);
-    setDrivers([]);
-    setDriverProfile(null);
-    setHistory(null);
-    seenRequestsRef.current.clear();
-    initialLoadRef.current = true;
+    // Clear private transport state only on an actual account transition, not on every realtime refresh.
+    if (activeUserIdRef.current !== user.id) {
+      setRequests([]);
+      setDeliveryJobs([]);
+      setTrackingSessions([]);
+      setDrivers([]);
+      setDriverProfile(null);
+      setHistory(null);
+      seenRequestsRef.current.clear();
+      initialLoadRef.current = true;
+      activeUserIdRef.current = user.id;
+    }
     try {
       const { data: dp } = await supabase
         .from("agtrans_drivers")
