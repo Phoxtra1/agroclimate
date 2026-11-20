@@ -81,7 +81,8 @@ export type ObservationMetric =
   | "aircraft_altitude"
   | "aircraft_battery"
   | "latitude"
-  | "longitude";
+  | "longitude"
+  | "barcode_count";
 
 export type ObservationQuality = "valid" | "suspect" | "rejected";
 
