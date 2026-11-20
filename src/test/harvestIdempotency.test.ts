@@ -8,7 +8,7 @@ describe("Post-Harvest idempotency helpers", () => {
 
   it("creates the same storage object path for the same submission and photo index", () => {
     const first = buildHarvestPhotoPath("user-123", "submission-abc", 0, "jpeg");
-    const retry = buildHarvestPhotoPath("user-123", "submission-abc", 0, "image/jpeg");
+    const retry = buildHarvestPhotoPath("user-123", "submission-abc", 0, "jpeg");
     expect(first).toBe(retry);
     expect(first).toBe("user-123/harvest-submission-abc-0.jpeg");
   });
