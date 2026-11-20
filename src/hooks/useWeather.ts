@@ -83,6 +83,8 @@ function mapTomorrowToWeatherDay(daily: any, index: number): WeatherDay {
     evapotranspiration: vals.evapotranspiration !== undefined ? Math.round(vals.evapotranspiration * 100) / 100 : agro.evapotranspiration,
     soilMoisture: vals.soilMoistureVolumetric0To10 !== undefined ? Math.round(vals.soilMoistureVolumetric0To10 * 100) : agro.soilMoisture,
     soilTemperature: vals.soilTemperature0To10 !== undefined ? Math.round(vals.soilTemperature0To10) : agro.soilTemperature,
+    soilMoistureSource: typeof vals.soilMoistureVolumetric0To10 === "number" ? "provider" : "estimated",
+    soilTemperatureSource: typeof vals.soilTemperature0To10 === "number" ? "provider" : "estimated",
   };
 }
 
@@ -116,6 +118,8 @@ function mapRealtimeToWeatherDay(realtime: any): WeatherDay {
     evapotranspiration: agro.evapotranspiration,
     soilMoisture: agro.soilMoisture,
     soilTemperature: agro.soilTemperature,
+    soilMoistureSource: "estimated",
+    soilTemperatureSource: "estimated",
   };
 }
 
@@ -149,20 +153,31 @@ export function useWeather(lat?: number, lon?: number) {
 
     // Show cached conditions instantly, then keep refreshing in the background
     let servedFromCache = false;
+    let fallbackCache: CachedWeather | null = null;
     const cached = localStorage.getItem(CACHE_KEY);
-    if (cached && refreshTrigger === 0) {
+    if (cached) {
       try {
         const parsed: CachedWeather = JSON.parse(cached);
         const sameArea = Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
-        if (sameArea && Date.now() - parsed.timestamp < CACHE_DURATION) {
-          setForecast(parsed.data);
-          setIsLive(false);
-          setLastUpdated(new Date(parsed.timestamp));
-          setObservedAt(parsed.observedAt ? new Date(parsed.observedAt) : null);
-          setSource("cache");
-          servedFromCache = true;
+        if (sameArea && Array.isArray(parsed.data) && parsed.data.length > 0) {
+          fallbackCache = parsed;
+          if (refreshTrigger === 0 && Date.now() - parsed.timestamp < CACHE_DURATION) {
+            setForecast(parsed.data);
+            setIsLive(false);
+            setLastUpdated(new Date(parsed.timestamp));
+            setObservedAt(parsed.observedAt ? new Date(parsed.observedAt) : null);
+            setSource("cache");
+            servedFromCache = true;
+          }
         }
       } catch { /* ignore bad cache */ }
+    }
+    if (!fallbackCache && !servedFromCache) {
+      setForecast(weeklyForecast);
+      setIsLive(false);
+      setLastUpdated(null);
+      setObservedAt(null);
+      setSource("none");
     }
 
     const fetchWeather = async () => {
@@ -203,9 +218,11 @@ export function useWeather(lat?: number, lon?: number) {
         }
       } catch (err) {
         console.warn("Weather API unavailable, using fallback data:", err);
-        setForecast(prev => prev.length > 0 ? prev : weeklyForecast);
+        setForecast(fallbackCache?.data || weeklyForecast);
         setIsLive(false);
-        setSource(localStorage.getItem(CACHE_KEY) ? "cache" : "none");
+        setLastUpdated(fallbackCache ? new Date(fallbackCache.timestamp) : null);
+        setObservedAt(fallbackCache?.observedAt ? new Date(fallbackCache.observedAt) : null);
+        setSource(fallbackCache ? "cache" : "none");
       } finally {
         setLoading(false);
       }
