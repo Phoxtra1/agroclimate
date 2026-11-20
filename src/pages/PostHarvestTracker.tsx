@@ -25,7 +25,7 @@ const STORAGE_METHODS = ["Bagged", "Crib", "Open space", "Sealed container", "Co
 function riskBadge(level: RiskLevel) {
   if (level === "danger") return <Badge className="bg-red-500 hover:bg-red-500/90 text-white">High Risk</Badge>;
   if (level === "warning") return <Badge className="bg-yellow-500 hover:bg-yellow-500/90 text-black">Warning</Badge>;
-  return <Badge className="bg-green-600 hover:bg-green-600/90 text-white">Safe</Badge>;
+  return <Badge className="bg-green-600 hover:bg-green-600/90 text-white">No age-based warning</Badge>;
 }
 
 function OverviewPanel({ entries }: { entries: HarvestEntry[] }) {
@@ -216,7 +216,7 @@ function HarvestList({ entries, onAdvice, onDelete, onCaptureLocation, capturing
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Stored harvests</CardTitle>
+        <CardTitle className="text-base">Stored harvests</CardTitle><p className="text-xs text-muted-foreground">Risk labels are age-based estimates, not live temperature/humidity readings or confirmation that produce is safe.</p>
         <div className="flex gap-2 mt-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -226,7 +226,7 @@ function HarvestList({ entries, onAdvice, onDelete, onCaptureLocation, capturing
             <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All risks</SelectItem>
-              <SelectItem value="safe">Safe</SelectItem>
+              <SelectItem value="safe">No age-based warning</SelectItem>
               <SelectItem value="warning">Warning</SelectItem>
               <SelectItem value="danger">High Risk</SelectItem>
             </SelectContent>
@@ -301,7 +301,7 @@ function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; ope
           <p><b>Storage method:</b> {entry.storage_method || "N/A"}</p>
           <p><b>Risk level:</b> {riskBadge(risk.level)}</p>
           <div className="p-3 bg-muted rounded-md text-xs leading-relaxed">
-            <strong>Dipa Background Intelligence:</strong> {risk.message} Store in a cool, hermetically sealed container. Check moisture levels before extended storage.
+            <strong>Rule-based storage estimate (not sensor-verified):</strong> {risk.message} This estimate uses elapsed time and recorded storage method only. It does not measure storage conditions or establish food safety. Inspect produce and measure actual conditions before making safety decisions.
           </div>
         </div>
         <DialogFooter>
