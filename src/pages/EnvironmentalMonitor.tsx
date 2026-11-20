@@ -621,6 +621,7 @@ export default function EnvironmentalMonitor() {
   currentUserId.current = user?.id ?? null;
   const farmRequestVersion = useRef(0);
   const incidentRequestVersion = useRef(0);
+  const aiEnvRequestVersion = useRef(0);
 
   useEffect(() => {
     setAssessmentTarget((current) => current.manual ? current : {
@@ -1008,28 +1009,28 @@ export default function EnvironmentalMonitor() {
       } catch { /* cache is optional */ }
     }
 
-    let active = true;
+    const requestVersion = ++aiEnvRequestVersion.current;
     setIsAiEnvLoading(true);
     try {
       const provider = getActiveProvider();
       const data = await provider.generateEnvironmentalAssessment(assessmentTarget.locationName, forecast);
-      if (active && data && typeof data.ecologicalScore === "number") {
+      if (requestVersion === aiEnvRequestVersion.current && data && typeof data.ecologicalScore === "number") {
         setAiEnv(data);
         try { sessionStorage.setItem(cacheKey, JSON.stringify({ assessment: data, timestamp: Date.now() })); } catch { /* cache is optional */ }
       }
     } catch (error) {
-      if (active) {
+      if (requestVersion === aiEnvRequestVersion.current) {
         setAiEnv(null);
         console.warn("[AgroRisk] AI environmental assessment unavailable:", error);
       }
     } finally {
-      if (active) setIsAiEnvLoading(false);
+      if (requestVersion === aiEnvRequestVersion.current) setIsAiEnvLoading(false);
     }
-    return () => { active = false; };
   }, [forecast, assessmentTarget.locationName, weatherUsable, weatherLastUpdated]);
 
   useEffect(() => {
     void fetchAiAssessment();
+    return () => { aiEnvRequestVersion.current += 1; };
   }, [fetchAiAssessment]);
 
   // Merge legacy disasters
