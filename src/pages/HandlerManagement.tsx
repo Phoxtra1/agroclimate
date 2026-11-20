@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +93,7 @@ export default function HandlerManagement() {
   const [farmQRs, setFarmQRs] = useState<FarmQR[]>([]);
   const [evidence, setEvidence] = useState<TaskEvidence[]>([]);
   const [loading, setLoading] = useState(true);
+  const fetchVersion = useRef(0);
 
   // Create handler dialog
   const [showCreate, setShowCreate] = useState(false);
@@ -109,36 +110,60 @@ export default function HandlerManagement() {
   const [showQR, setShowQR] = useState(false);
   const [newFarm, setNewFarm] = useState({ name: "", location: "" });
 
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
+
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    const farmerId = user?.id;
+    if ((farmerId ?? null) !== currentUserId.current) return;
+    const version = ++fetchVersion.current;
+    if (!farmerId) {
+      setHandlers([]); setTasks([]); setSessions([]); setIssues([]); setFarmQRs([]); setEvidence([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setHandlers([]); setTasks([]); setSessions([]); setIssues([]); setFarmQRs([]); setEvidence([]);
 
-    const [h, t, s, i, q, e] = await Promise.all([
-      supabase.from("handlers").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("handler_tasks").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("work_sessions").select("*").order("clock_in", { ascending: false }).limit(50),
-      supabase.from("handler_issues").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("farm_qr_codes").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("task_evidence").select("*").order("created_at", { ascending: false }),
+    const [h, t, i, q] = await Promise.all([
+      supabase.from("handlers").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
+      supabase.from("handler_tasks").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
+      supabase.from("handler_issues").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
+      supabase.from("farm_qr_codes").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
     ]);
+    if (version !== fetchVersion.current || farmerId !== currentUserId.current) return;
 
-    if (h.data) setHandlers(h.data);
-    if (t.data) setTasks(t.data);
-    if (s.data) {
-      const handlerIds = (h.data || []).map(x => x.id);
-      setSessions(s.data.filter(x => handlerIds.includes(x.handler_id)));
+    const handlerRows = h.data || [];
+    const taskRows = t.data || [];
+    const handlerIds = handlerRows.map((item) => item.id);
+    const taskIds = taskRows.map((item) => item.id);
+    const [s, e] = await Promise.all([
+      handlerIds.length
+        ? supabase.from("work_sessions").select("*").in("handler_id", handlerIds).order("clock_in", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      handlerIds.length && taskIds.length
+        ? supabase.from("task_evidence").select("*").in("handler_id", handlerIds).in("task_id", taskIds).order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (version !== fetchVersion.current || farmerId !== currentUserId.current) return;
+
+    const errors = [h.error, t.error, i.error, q.error, s.error, e.error].filter(Boolean);
+    if (errors.length) {
+      toast({ title: "Some handler records could not be loaded", description: errors.map((error) => error?.message).join("; "), variant: "destructive" });
     }
-    if (i.data) setIssues(i.data);
-    if (q.data) setFarmQRs(q.data);
-    if (e.data) {
-      const handlerIds = (h.data || []).map((item) => item.id);
-      const taskIds = (t.data || []).map((item) => item.id);
-      setEvidence(e.data.filter((item) => taskIds.includes(item.task_id) || handlerIds.includes(item.handler_id)));
-    }
+    setHandlers(handlerRows);
+    setTasks(taskRows);
+    setSessions(s.data || []);
+    setIssues(i.data || []);
+    setFarmQRs(q.data || []);
+    setEvidence(e.data || []);
     setLoading(false);
-  }, [user]);
+  }, [user?.id, toast]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    void fetchData();
+    return () => { fetchVersion.current += 1; };
+  }, [fetchData]);
 
   const createHandler = async () => {
     if (!user || !newHandler.name || !newHandler.email || !newHandler.password) return;
@@ -161,7 +186,6 @@ export default function HandlerManagement() {
 
       setInviteLink(`${window.location.origin}/?handler_invite=true&email=${encodeURIComponent(newHandler.email)}`);
       toast({ title: "Handler created!", description: `${newHandler.name} can now log in.` });
-      setNewHandler({ name: "", email: "", password: "", type: "labourer", farm: "" });
       fetchData();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -170,7 +194,11 @@ export default function HandlerManagement() {
   };
 
   const createTask = async () => {
-    if (!user || !newTask.title || !newTask.handler_id) return;
+    if (!user || !newTask.title.trim() || !newTask.handler_id) return;
+    if (newTask.qty_expected.trim() && (!Number.isFinite(Number(newTask.qty_expected)) || Number(newTask.qty_expected) < 0)) {
+      toast({ title: "Invalid expected quantity", description: "Enter a valid non-negative quantity.", variant: "destructive" });
+      return;
+    }
     setCreatingTask(true);
     const { error } = await supabase.from("handler_tasks").insert({
       farmer_id: user.id,
@@ -243,7 +271,7 @@ export default function HandlerManagement() {
           <p className="text-sm text-muted-foreground mt-1">Manage farm laborers, assign tasks, track activities</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setInviteLink(null); }}>
+          <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setInviteLink(null); setNewHandler({ name: "", email: "", password: "", type: "labourer", farm: "" }); } }}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Handler</Button>
             </DialogTrigger>

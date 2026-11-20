@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,9 @@ export default function HandlerWorkspace() {
   const [completionQty, setCompletionQty] = useState("");
   const [evidenceCounts, setEvidenceCounts] = useState<Record<string, number>>({});
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
+  const fetchVersion = useRef(0);
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
 
   const getGPS = (): Promise<{ lat: number; lon: number } | null> => {
     return new Promise((resolve) => {
@@ -52,7 +55,10 @@ export default function HandlerWorkspace() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!user) {
+    const userId = user?.id;
+    if ((userId ?? null) !== currentUserId.current) return;
+    const version = ++fetchVersion.current;
+    if (!userId) {
       setHandler(null);
       setTasks([]);
       setActiveSession(null);
@@ -67,7 +73,8 @@ export default function HandlerWorkspace() {
     setActiveSession(null);
     setEvidenceCounts({});
 
-    const { data: h, error: handlerError } = await supabase.from("handlers").select("*").eq("user_id", user.id).maybeSingle();
+    const { data: h, error: handlerError } = await supabase.from("handlers").select("*").eq("user_id", userId).maybeSingle();
+    if (version !== fetchVersion.current || userId !== currentUserId.current) return;
     if (handlerError || !h) {
       if (handlerError) toast({ title: "Could not load handler profile", description: handlerError.message, variant: "destructive" });
       setLoading(false);
@@ -81,6 +88,7 @@ export default function HandlerWorkspace() {
       supabase.from("task_evidence").select("task_id,evidence_type").eq("handler_id", h.id),
     ]);
 
+    if (version !== fetchVersion.current || userId !== currentUserId.current) return;
     if (t.error || s.error || e.error) {
       const messages = [t.error, s.error, e.error].filter(Boolean).map((error) => error?.message);
       toast({ title: "Some handler records could not be loaded", description: messages.join("; "), variant: "destructive" });
@@ -89,14 +97,31 @@ export default function HandlerWorkspace() {
     setEvidenceCounts((e.data || []).reduce((counts: Record<string, number>, item: { task_id: string; evidence_type: string }) => { if (item.evidence_type === "photo" || item.evidence_type === "video") counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
     setActiveSession(s.data?.[0] || null);
     setLoading(false);
-  }, [user]);
+  }, [user?.id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    void fetchData();
+    return () => { fetchVersion.current += 1; };
+  }, [fetchData]);
 
   const clockIn = async () => {
-    if (!handler) return;
+    if (!handler || !user?.id || user.id !== currentUserId.current) return;
     setClockingIn(true);
     const gps = await getGPS();
+    if (user.id !== currentUserId.current) { setClockingIn(false); return; }
+    const { data: existing, error: lookupError } = await supabase.from("work_sessions").select("id")
+      .eq("handler_id", handler.id).is("clock_out", null).limit(1).maybeSingle();
+    if (lookupError) {
+      toast({ title: "Could not verify attendance state", description: lookupError.message, variant: "destructive" });
+      setClockingIn(false);
+      return;
+    }
+    if (existing) {
+      toast({ title: "Already clocked in", description: "An active work session already exists." });
+      await fetchData();
+      setClockingIn(false);
+      return;
+    }
     const { error } = await supabase.from("work_sessions").insert({
       handler_id: handler.id,
       gps_lat: gps?.lat ?? null,
@@ -109,10 +134,12 @@ export default function HandlerWorkspace() {
   };
 
   const clockOut = async () => {
-    if (!activeSession) return;
+    if (!activeSession || !handler || !user?.id || user.id !== currentUserId.current) return;
     setClockingIn(true);
-    const { error } = await supabase.from("work_sessions").update({ clock_out: new Date().toISOString() }).eq("id", activeSession.id);
+    const { data, error } = await supabase.from("work_sessions").update({ clock_out: new Date().toISOString() })
+      .eq("id", activeSession.id).eq("handler_id", handler.id).is("clock_out", null).select("id").maybeSingle();
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else if (!data) toast({ title: "Session already closed", description: "Refresh your workspace to see the latest session." });
     else toast({ title: "Clocked Out!", description: "Session ended." });
     setClockingIn(false);
     fetchData();
@@ -120,7 +147,14 @@ export default function HandlerWorkspace() {
 
   const completeTask = async (taskId: string) => {
     const task = tasks.find((item) => item.id === taskId);
-    if (!task || !handler) return;
+    if (!task || !handler || !user?.id || user.id !== currentUserId.current || !["pending", "in_progress"].includes(task.status)) return;
+    if (completionQty.trim()) {
+      const completed = Number(completionQty);
+      if (!Number.isFinite(completed) || completed < 0) {
+        toast({ title: "Invalid completed quantity", description: "Enter a valid non-negative number.", variant: "destructive" });
+        return;
+      }
+    }
     if (task.evidence_required && (evidenceCounts[taskId] || 0) < 1) {
       toast({ title: "Evidence required", description: "Upload at least one photo or video before completing this task.", variant: "destructive" });
       return;
@@ -142,13 +176,14 @@ export default function HandlerWorkspace() {
       }
     }
 
-    const { error } = await supabase.from("handler_tasks").update({
+    const { data: updatedTask, error } = await supabase.from("handler_tasks").update({
       status: "completed",
       completed_at: new Date().toISOString(),
       quantity_completed: completionQty ? Number(completionQty) : null,
-    }).eq("id", taskId);
+    }).eq("id", taskId).eq("handler_id", handler.id).in("status", ["pending", "in_progress"]).select("id").maybeSingle();
 
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else if (!updatedTask) toast({ title: "Task could not be completed", description: "It may have been reassigned or completed already. Refresh and try again.", variant: "destructive" });
     else {
       toast({ title: "Task completed!" });
       setCompletingTask(null);
@@ -159,7 +194,7 @@ export default function HandlerWorkspace() {
   };
 
   const reportIssue = async () => {
-    if (!handler) return;
+    if (!handler || !user?.id || user.id !== currentUserId.current) return;
     setReportingIssue(true);
     const gps = await getGPS();
     const { error } = await supabase.from("handler_issues").insert({
@@ -170,17 +205,25 @@ export default function HandlerWorkspace() {
       gps_lat: gps?.lat ?? null,
       gps_lon: gps?.lon ?? null,
     });
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else toast({ title: "Issue reported!", description: "Your farmer has been notified." });
-    setShowIssue(false);
-    setIssueDesc("");
+    if (error) {
+      toast({ title: "Could not report issue", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Issue reported!", description: "Your farmer has been notified." });
+      setShowIssue(false);
+      setIssueDesc("");
+    }
     setReportingIssue(false);
   };
 
   const uploadEvidence = async (taskId: string, file: File) => {
-    if (!handler) return;
+    if (!handler || !user?.id || user.id !== currentUserId.current) return;
     if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
       toast({ title: "Unsupported file", description: "Upload a photo or video.", variant: "destructive" });
+      return;
+    }
+    const maxBytes = file.type.startsWith("video/") ? 100 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toast({ title: "File is too large", description: file.type.startsWith("video/") ? "Videos must be 100 MB or smaller." : "Photos must be 20 MB or smaller.", variant: "destructive" });
       return;
     }
     setUploadingTaskId(taskId);
@@ -193,6 +236,10 @@ export default function HandlerWorkspace() {
       });
       if (uploadError) throw uploadError;
 
+      if (user.id !== currentUserId.current) {
+        await supabase.storage.from("handler-evidence").remove([path]);
+        throw new Error("Your account changed during upload. Sign in again before retrying.");
+      }
       const { data: urlData } = supabase.storage.from("handler-evidence").getPublicUrl(path);
       const gps = await getGPS();
       const { error: recordError } = await supabase.from("task_evidence").insert({
@@ -202,7 +249,7 @@ export default function HandlerWorkspace() {
         file_url: urlData.publicUrl,
         gps_lat: gps?.lat ?? null,
         gps_lon: gps?.lon ?? null,
-        device_id: navigator.userAgent.slice(0, 100),
+        device_id: null,
       });
       if (recordError) {
         await supabase.storage.from("handler-evidence").remove([path]);
@@ -314,15 +361,13 @@ export default function HandlerWorkspace() {
                           {t.quantity_label && <span>{t.quantity_expected} {t.quantity_label}</span>}
                         </div>
                       </div>
-                      {t.evidence_required && <Badge variant="outline" className="text-[10px]">📷 Required · {evidenceCounts[t.id] || 0} uploaded</Badge>}
+                      <Badge variant="outline" className="text-[10px]">📷 {t.evidence_required ? `Required · ${evidenceCounts[t.id] || 0} uploaded` : `Optional · ${evidenceCounts[t.id] || 0} uploaded`}</Badge>
                     </div>
                     <div className="flex gap-2">
-                      {t.evidence_required && (
-                        <label className="cursor-pointer">
+                      <label className="cursor-pointer">
                           <input type="file" accept="image/*,video/*" capture="environment" className="hidden" disabled={uploadingTaskId === t.id} onChange={e => { if (e.target.files?.[0]) void uploadEvidence(t.id, e.target.files[0]); e.currentTarget.value = ""; }} />
                           <Button size="sm" variant="outline" asChild disabled={uploadingTaskId === t.id}><span><Camera className="h-3 w-3 mr-1" /> {uploadingTaskId === t.id ? "Uploading…" : "Upload"}</span></Button>
-                        </label>
-                      )}
+                      </label>
                       {completingTask === t.id ? (
                         <div className="flex-1 space-y-2">
                           {t.quantity_label && <Input type="number" placeholder={`${t.quantity_label} completed`} value={completionQty} onChange={e => setCompletionQty(e.target.value)} />}
