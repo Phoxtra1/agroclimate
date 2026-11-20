@@ -283,3 +283,19 @@ A physical-device test must not begin until all of the following are complete:
 - CI passes type-check, lint, unit tests and production build on the exact final commit.
 - Preview deployment and production deployment are independently verified.
 - Only after these gates pass do we choose actual phone/sensor models for physical validation.
+
+
+## 14. Software foundation now added on the feature branch
+
+The following isolated TypeScript foundation has been added under `src/services/hardware/`:
+
+- `types.ts`: component, protocol, capability, device-registration, observation and adapter contracts.
+- `componentProfiles.ts`: explicit hardware-facing capability/protocol profiles for all nine AgroClimate components.
+- `observation.ts`: pure validation for event identity, finite numeric values, metric/unit pairing, timezone-aware timestamps, receipt-time bounds, coordinate ranges and rejected-quality events.
+- `adapterRegistry.ts`: explicit adapter registration and protocol/component/model capability matching.
+- `index.ts`: public exports.
+- `src/test/hardwareIntegration.test.ts`: unit coverage for component coverage, valid/invalid observations, coordinate validation, rejected/future events and adapter selection.
+
+This code is intentionally not imported by application pages and does not initiate any device connection. It adds no database migration, route, screen, service worker, permission request, SDK, vendor dependency, or Supabase write. This keeps the existing production workflows unchanged while giving future device-specific adapters a typed and tested contract.
+
+**Not yet implemented:** persistent device enrollment, backend ingestion endpoint, database storage/RLS, actual BLE/USB/MQTT/vendor adapters, real drone connection, physical logger ingestion, and device-health UI. Those require verified target models, exact vendor protocol documentation and a reviewed live schema. The software foundation is therefore a completed interface contract, not a claim that live hardware is already connected.
