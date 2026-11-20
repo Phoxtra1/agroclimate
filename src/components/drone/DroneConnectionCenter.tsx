@@ -283,7 +283,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
               variant="destructive"
               className="w-full font-mono bg-red-950/60 hover:bg-red-900/80 text-red-200 border border-red-800 text-xs"
               onClick={emergencyLand}
-              disabled={!isFlying || isMannedCommercial}
+              disabled={!isFlying || isMannedCommercial || isReadOnlyLive}
             >
               <ShieldAlert className="mr-1.5 h-4 w-4" /> EMERGENCY HARD LAND
             </Button>
