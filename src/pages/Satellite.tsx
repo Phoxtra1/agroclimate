@@ -70,6 +70,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
   calculatePolygonAreaHectares,
+  buildFieldPolygon,
   describeNdmi,
   describeNdvi,
   getFieldIndexStatistics,
@@ -689,13 +690,14 @@ export default function Satellite() {
     const name = window.prompt("Name this monitored field:");
     if (!name?.trim()) return;
     const cropType = window.prompt("Crop type (optional):")?.trim() || null;
-    const ring = [...fieldPoints.map((point) => [point.lon, point.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]];
-    const fieldGeojson: GeoJSON.Polygon = { type: "Polygon", coordinates: [ring] };
-    const areaHectares = calculatePolygonAreaHectares(fieldPoints);
-    if (!Number.isFinite(areaHectares) || areaHectares <= 0) {
-      toast.error("The field boundary does not produce a valid area.");
+    let fieldGeojson: GeoJSON.Polygon;
+    try {
+      fieldGeojson = buildFieldPolygon(fieldPoints);
+    } catch (error) {
+      toast.error("Invalid field boundary", { description: error instanceof Error ? error.message : "Review the boundary points." });
       return;
     }
+    const areaHectares = calculatePolygonAreaHectares(fieldPoints);
     setSavingMonitoredField(true);
     try {
       const { error } = await supabase.from("satellite_fields").insert({
@@ -710,7 +712,7 @@ export default function Satellite() {
       });
       if (error) throw error;
       toast.success("Field boundary saved for satellite monitoring", {
-        description: "Automated monitoring will begin when the scheduled satellite monitor processes this field.",
+        description: "The field is saved. Monitoring alerts will appear when the satellite monitor is configured and processes new imagery.",
       });
       await refreshSavedFields();
     } catch (error) {
