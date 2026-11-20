@@ -178,12 +178,13 @@ function makeFormatCurrency(currencyCode: string, locale: string) {
 function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   title: string;
   fields: { name: string; label: string; type?: string; required?: boolean; placeholder?: string }[];
-  onSave: (data: any) => void;
+  onSave: (data: any) => Promise<boolean>;
   trigger: React.ReactNode;
   initialData?: any;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(initialData || {});
+  const [saving, setSaving] = useState(false);
 
   const handleOpen = useCallback((isOpen: boolean) => {
     setOpen(isOpen);
@@ -191,10 +192,17 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
     if (isOpen && !initialData) setForm({});
   }, [initialData]);
 
-  const handleSave = () => {
-    onSave(form);
-    setOpen(false);
-    setForm({});
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const saved = await onSave(form);
+      if (saved) {
+        setOpen(false);
+        setForm({});
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -212,11 +220,11 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
                 placeholder={f.placeholder || f.label}
                 value={form[f.name] ?? ""}
                 className="h-9"
-                onChange={(e) => setForm((prev: any) => ({ ...prev, [f.name]: f.type === "number" ? Number(e.target.value) : e.target.value }))}
+                onChange={(e) => setForm((prev: any) => ({ ...prev, [f.name]: e.target.value }))}
               />
             </div>
           ))}
-          <Button onClick={handleSave} className="w-full mt-2">Save Record</Button>
+          <Button onClick={() => void handleSave()} className="w-full mt-2" disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}{saving ? "Saving…" : "Save Record"}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -281,6 +289,15 @@ export default function AgroInventory() {
       { name: "loss_reason", label: "Reason for Loss", required: true, placeholder: "e.g. Pest damage, Spoilage, Drought" },
       { name: "quantity_lost", label: "Quantity Lost", type: "number", required: true },
       { name: "unit", label: "Unit", placeholder: "kg, heads, bags" },
+      { name: "season", label: "Season" },
+      { name: "farm_plot", label: "Farm Plot" },
+      { name: "notes", label: "Notes" },
+    ],
+    land: [
+      { name: "land_description", label: "Land Description", required: true, placeholder: "e.g. North field lease" },
+      { name: "size_acres", label: "Size (acres)", type: "number", required: true },
+      { name: "cost_type", label: "Cost Type", required: true, placeholder: "rent or purchase" },
+      { name: "cost_amount", label: `Cost Amount (${selectedCurrency.code})`, type: "number", required: true },
       { name: "season", label: "Season" },
       { name: "farm_plot", label: "Farm Plot" },
       { name: "notes", label: "Notes" },
@@ -452,6 +469,7 @@ export default function AgroInventory() {
           <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
             <TabsTrigger value="inputs" className="text-xs px-4">Inputs</TabsTrigger>
             <TabsTrigger value="labor" className="text-xs px-4">Labor</TabsTrigger>
+            <TabsTrigger value="land" className="text-xs px-4">Land</TabsTrigger>
             <TabsTrigger value="harvest" className="text-xs px-4">Harvest</TabsTrigger>
             <TabsTrigger value="loss" className="text-xs px-4">Losses</TabsTrigger>
             <TabsTrigger value="sales" className="text-xs px-4">Sales</TabsTrigger>
