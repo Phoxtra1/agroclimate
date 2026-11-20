@@ -360,8 +360,10 @@ export class WebBluetoothPostHarvestAdapter implements HardwareAdapter {
           reading.temperatureC < -40 || reading.temperatureC > 85 || reading.humidityPct < 0 || reading.humidityPct > 100 ||
           !reading.idempotencyKey.trim() || !Number.isFinite(Date.parse(reading.observedAt))) return;
       const queue = this.pending.get(device.deviceId) ?? this.readPending(device.deviceId);
-      if (!queue.some((item) => item.idempotencyKey === reading.idempotencyKey)) queue.push(reading);
-      if (queue.length > 5000) queue.shift();
+      if (!queue.some((item) => item.idempotencyKey === reading.idempotencyKey)) {
+        if (queue.length >= 5000) { console.error("Post-Harvest offline queue is full; pending readings were retained."); return; }
+        queue.push(reading);
+      }
       this.pending.set(device.deviceId, queue);
       this.persistPending(device.deviceId);
       void this.flushPending(device);
