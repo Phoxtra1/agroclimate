@@ -76,7 +76,6 @@ export type ObservationMetric =
   | "wind_speed"
   | "wind_direction"
   | "water_level"
-  | "weight"
   | "vehicle_speed"
   | "aircraft_altitude"
   | "aircraft_battery"
