@@ -478,7 +478,15 @@ export default function AgroInventory() {
 
           {/* ===== COST SCENARIOS TAB ===== */}
           <TabsContent value="cost-scenarios" className="space-y-4">
-            <AgriCostCalculator currencyCode={selectedCurrency.code} />
+            <AgriCostCalculator
+              currencyCode={selectedCurrency.code}
+              inventoryItems={inventoryItems}
+              laborRecords={laborRecords}
+              landCosts={landCosts}
+              harvestRecords={harvestRecords}
+              salesRecords={salesRecords}
+              crops={crops}
+            />
           </TabsContent>
 
         {/* ===== INPUTS TAB (unchanged logic) ===== */}
