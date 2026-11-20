@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -72,6 +72,18 @@ export interface PriceRow {
   unit: string;
 }
 
+export function canTransitionContractState(current: MarketContract["state"], next: MarketContract["state"], actorIsFarmer: boolean): boolean {
+  if (current === "proposed") return next === "cancelled" || (actorIsFarmer && (next === "accepted" || next === "rejected"));
+  if (current === "accepted") return next === "cancelled" || next === "completed";
+  return false;
+}
+
+const LOGISTICS_STEPS: MarketContract["logistics_status"][] = ["pending", "scheduled", "in_transit", "delivered"];
+
+export function canTransitionLogistics(current: MarketContract["logistics_status"], next: MarketContract["logistics_status"]): boolean {
+  return LOGISTICS_STEPS.indexOf(next) === LOGISTICS_STEPS.indexOf(current) + 1;
+}
+
 export function useMarketLink() {
   const { user } = useAuth();
   const [supply, setSupply] = useState<FarmerInput[]>([]);
@@ -79,11 +91,14 @@ export function useMarketLink() {
   const [contracts, setContracts] = useState<MarketContract[]>([]);
   const [prices, setPrices] = useState<PriceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const fetchAll = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
-    // Contracts are private to the signed-in parties; clear them before an account transition.
-    setContracts([]);
+    // Never render private rows from the previous account while a new session loads.
+    setSupply([]); setOrders([]); setContracts([]); setPrices([]);
+    if (!user) { setLoading(false); return; }
     try {
       const [s, o, c, p] = await Promise.all([
         supabase.from("farmer_inputs" as any).select("*").order("created_at", { ascending: false }),
@@ -91,24 +106,23 @@ export function useMarketLink() {
         supabase.from("market_contracts" as any).select("*").order("created_at", { ascending: false }),
         supabase.from("price_intelligence" as any).select("*").order("crop_name", { ascending: true }),
       ]);
-      if (s.error) console.error("[MarketLink] supply load failed:", s.error);
-      if (o.error) console.error("[MarketLink] orders load failed:", o.error);
-      if (c.error) console.error("[MarketLink] contracts load failed:", c.error);
-      if (p.error) console.error("[MarketLink] prices load failed:", p.error);
+      if (version !== requestVersion.current) return;
+      if (s.error || o.error || c.error || p.error) {
+        console.error("[MarketLink] one or more data sources failed", { supply: s.error, orders: o.error, contracts: c.error, prices: p.error });
+        throw s.error || o.error || c.error || p.error;
+      }
       setSupply((s.data as any) || []);
       setOrders((o.data as any) || []);
       setContracts((c.data as any) || []);
       setPrices((p.data as any) || []);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       console.error("[MarketLink] fetchAll failed:", err);
-      setSupply([]);
-      setOrders([]);
-      setContracts([]);
-      setPrices([]);
+      setSupply([]); setOrders([]); setContracts([]); setPrices([]);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -135,12 +149,18 @@ export function useMarketLink() {
     if (error) throw error;
   };
   const updateSupply = async (id: string, patch: Partial<FarmerInput>) => {
-    const { error } = await supabase.from("farmer_inputs" as any).update(patch as any).eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const safePatch = { ...patch } as Record<string, unknown>;
+    delete safePatch.id; delete safePatch.user_id; delete safePatch.created_at; delete safePatch.updated_at;
+    const { error } = await supabase.from("farmer_inputs" as any).update(safePatch as any).eq("id", id).eq("user_id", user.id);
     if (error) throw error;
+    await fetchAll();
   };
   const deleteSupply = async (id: string) => {
-    const { error } = await supabase.from("farmer_inputs" as any).delete().eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const { error } = await supabase.from("farmer_inputs" as any).delete().eq("id", id).eq("user_id", user.id);
     if (error) throw error;
+    await fetchAll();
   };
 
   // ---- Buyer order ops ----
@@ -153,12 +173,18 @@ export function useMarketLink() {
     if (error) throw error;
   };
   const updateOrder = async (id: string, patch: Partial<BuyerOrder>) => {
-    const { error } = await supabase.from("buyer_orders" as any).update(patch as any).eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const safePatch = { ...patch } as Record<string, unknown>;
+    delete safePatch.id; delete safePatch.buyer_id; delete safePatch.created_at; delete safePatch.updated_at;
+    const { error } = await supabase.from("buyer_orders" as any).update(safePatch as any).eq("id", id).eq("buyer_id", user.id);
     if (error) throw error;
+    await fetchAll();
   };
   const deleteOrder = async (id: string) => {
-    const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const { error } = await supabase.from("buyer_orders" as any).delete().eq("id", id).eq("buyer_id", user.id);
     if (error) throw error;
+    await fetchAll();
   };
 
   // ---- Contract ops ----
@@ -194,12 +220,42 @@ export function useMarketLink() {
     if (error) throw error;
   };
   const setContractState = async (id: string, state: MarketContract["state"]) => {
-    const { error } = await supabase.from("market_contracts" as any).update({ state } as any).eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const { data: current, error: readError } = await supabase.from("market_contracts" as any)
+      .select("farmer_id,buyer_id,state").eq("id", id)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).maybeSingle();
+    if (readError) throw readError;
+    const contract = current as any;
+    if (!contract) throw new Error("Contract not found or access denied");
+    const actorIsFarmer = contract.farmer_id === user.id;
+    if (!canTransitionContractState(contract.state, state, actorIsFarmer)) {
+      throw new Error(`Contract cannot move from ${contract.state} to ${state} for this participant`);
+    }
+    const { data, error } = await supabase.from("market_contracts" as any).update({ state } as any)
+      .eq("id", id).eq("state", contract.state)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).select("id").maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error("Contract changed before this update. Refresh and try again.");
+    await fetchAll();
   };
   const setLogistics = async (id: string, logistics_status: MarketContract["logistics_status"]) => {
-    const { error } = await supabase.from("market_contracts" as any).update({ logistics_status } as any).eq("id", id);
+    if (!user) throw new Error("Not signed in");
+    const { data: current, error: readError } = await supabase.from("market_contracts" as any)
+      .select("farmer_id,buyer_id,state,logistics_status").eq("id", id)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).maybeSingle();
+    if (readError) throw readError;
+    const contract = current as any;
+    if (!contract) throw new Error("Contract not found or access denied");
+    if (contract.state !== "accepted") throw new Error("Logistics can only advance for accepted contracts");
+    if (!canTransitionLogistics(contract.logistics_status, logistics_status)) {
+      throw new Error(`Invalid logistics transition from ${contract.logistics_status} to ${logistics_status}`);
+    }
+    const { data, error } = await supabase.from("market_contracts" as any).update({ logistics_status } as any)
+      .eq("id", id).eq("state", "accepted").eq("logistics_status", contract.logistics_status)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).select("id").maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error("Logistics status changed before this update. Refresh and try again.");
+    await fetchAll();
   };
 
   // ---- Derived insights ----
