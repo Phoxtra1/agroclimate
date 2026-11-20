@@ -98,7 +98,8 @@ export async function queueHarvest(
   const existing = queue.find((item) => item.user_id === entry.user_id && item.id === itemId);
   if (existing) return existing;
 
-  const photos = readPhotos();
+  const originalPhotos = readPhotos();
+  const photos = { ...originalPhotos };
   const photo_keys: string[] = [];
   for (const f of files) {
     const key = `${entry.user_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -114,16 +115,20 @@ export async function queueHarvest(
     };
     photo_keys.push(key);
   }
-  writePhotos(photos);
-
   const item: PendingHarvest = {
     ...entry,
     id: itemId,
     photo_keys,
     queued_at: Date.now(),
   };
-  queue.push(item);
-  writeQueue(queue);
+  try {
+    writePhotos(photos);
+    writeQueue([...queue, item]);
+  } catch (error) {
+    // Roll back the photo cache if the queue record could not be persisted.
+    try { writePhotos(originalPhotos); } catch { /* storage is unavailable */ }
+    throw new Error("This device could not store the harvest offline. Free some device storage and retry.");
+  }
   return item;
 }
 
