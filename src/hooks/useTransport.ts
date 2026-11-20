@@ -814,6 +814,7 @@ export function useAGTrans() {
     distance_m?: number;
     route?: any;
   }) => {
+    if (!user) throw new Error("Sign in as the assigned driver to share GPS.");
     if (!Number.isFinite(locationData.lat) || locationData.lat < -90 || locationData.lat > 90
       || !Number.isFinite(locationData.lon) || locationData.lon < -180 || locationData.lon > 180) {
       throw new Error("The supplied driver GPS coordinates are invalid.");
@@ -821,12 +822,18 @@ export function useAGTrans() {
     if (!Number.isFinite(locationData.accuracyM) || locationData.accuracyM <= 0 || locationData.accuracyM > 100) {
       throw new Error("GPS accuracy is too low to publish this vehicle position.");
     }
+    if (locationData.speed_kn !== undefined && (!Number.isFinite(locationData.speed_kn) || locationData.speed_kn < 0 || locationData.speed_kn > 150)) {
+      throw new Error("Vehicle speed is outside the supported range.");
+    }
+    if (locationData.heading !== undefined && (!Number.isFinite(locationData.heading) || locationData.heading < 0 || locationData.heading >= 360)) {
+      throw new Error("Vehicle heading must be between 0 and 359 degrees.");
+    }
     const capturedAtMs = Date.parse(locationData.capturedAt);
     const ageMs = Date.now() - capturedAtMs;
     if (!Number.isFinite(capturedAtMs) || ageMs > 90000 || ageMs < -15000) {
       throw new Error("The GPS fix is stale or has an invalid capture time. Request a fresh device GPS position.");
     }
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("tracking_sessions")
       .update({
         current_lat: locationData.lat,
@@ -842,12 +849,15 @@ export function useAGTrans() {
         route: locationData.route,
       } as any)
       .eq("delivery_job_id", jobId)
-      .eq("driver_id", user?.id);
+      .eq("driver_id", user.id)
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       console.error("Error updating live location:", error);
       throw new Error(error.message || "Could not update the vehicle GPS position.");
     }
+    if (!data) throw new Error("No active tracking session is available for this assigned driver.");
   };
 
   const handleCancelTrip = async (jobId: string) => {
