@@ -555,7 +555,7 @@ export function useAGTrans() {
     const payload = offerPayload(values);
     const { data, error } = await supabase
       .from("agtrans_drivers")
-      .update({ ...payload, updated_at: new Date().toISOString() } as any)
+      .update(payload as any)
       .eq("user_id", user.id)
       .select()
       .single();
@@ -570,7 +570,7 @@ export function useAGTrans() {
     if (!user || !driverProfile) throw new Error("Not authenticated");
     const { data, error } = await supabase
       .from("agtrans_drivers")
-      .update({ offer_status: "paused", updated_at: new Date().toISOString() } as any)
+      .update({ offer_status: "paused" } as any)
       .eq("user_id", user.id)
       .select()
       .single();
@@ -583,7 +583,7 @@ export function useAGTrans() {
     if (!user || !driverProfile) throw new Error("Not authenticated");
     const { data, error } = await supabase
       .from("agtrans_drivers")
-      .update({ offer_status: "removed", availability_status: "offline", updated_at: new Date().toISOString() } as any)
+      .update({ offer_status: "removed", availability_status: "offline" } as any)
       .eq("user_id", user.id)
       .select()
       .single();
