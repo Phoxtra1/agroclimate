@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/offlineQueue";
 import { buildHarvestPhotoPath, createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
+import { validateHarvestEntry } from "@/lib/postHarvestValidation";
 
 export interface HarvestEntry {
   id: string;
@@ -122,32 +123,38 @@ export function usePostHarvest() {
   }, []);
 
   const addEntry = async (input: Omit<HarvestEntry, "id" | "user_id" | "created_at" | "updated_at" | "photos" | "risk_override"> & { photos?: string[]; client_idempotency_key?: string }) => {
-    if (!user) throw new Error("Not signed in");
+    if (!user?.id || user.id !== currentUserId.current) throw new Error("Your session changed. Sign in again before saving.");
+    const userId = user.id;
+    const validationError = validateHarvestEntry(input);
+    if (validationError) throw new Error(validationError);
+    const quantity = Number(input.quantity);
     const clientKey = input.client_idempotency_key || createHarvestIdempotencyKey();
     const { data: existing, error: lookupError } = await supabase
       .from("post_harvest_entries" as any)
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("client_idempotency_key", clientKey)
       .maybeSingle();
     if (lookupError) throw lookupError;
+    if (userId !== currentUserId.current) throw new Error("Your session changed while the harvest was being saved.");
     if (existing) return existing;
 
     const { data, error } = await supabase
       .from("post_harvest_entries" as any)
-      .insert({ ...input, client_idempotency_key: clientKey, user_id: user.id, photos: input.photos || [] } as any)
+      .insert({ ...input, crop_name: input.crop_name.trim(), quantity, client_idempotency_key: clientKey, user_id: userId, photos: input.photos || [] } as any)
       .select()
       .single();
     if (error?.code === "23505") {
       const { data: duplicate, error: duplicateError } = await supabase
         .from("post_harvest_entries" as any)
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("client_idempotency_key", clientKey)
         .maybeSingle();
       if (!duplicateError && duplicate) return duplicate;
     }
     if (error) throw error;
+    if (userId !== currentUserId.current) throw new Error("Your session changed after the harvest was saved. Sign in again to refresh.");
     return data;
   };
 
@@ -175,6 +182,10 @@ export function usePostHarvest() {
 }
 
 export async function uploadHarvestPhoto(userId: string, file: File, idempotencyKey?: string, photoIndex = 0): Promise<string> {
+  if (!file.type.startsWith("image/")) throw new Error("Harvest evidence must be an image.");
+  if (file.size > 20 * 1024 * 1024) throw new Error("Harvest images must be 20 MB or smaller.");
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || session?.user?.id !== userId) throw new Error("The signed-in farm account changed before photo upload.");
   const prepared = await compressImage(file);
   const mimeType = prepared.type || file.type || "image/jpeg";
   const ext = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";

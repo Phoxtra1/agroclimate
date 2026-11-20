@@ -19,6 +19,7 @@ import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteBut
 import { createGeoFeature } from "@/services/satellite/geospatial";
 import { PostHarvestStationPanel } from "@/components/PostHarvestStationPanel";
 import { createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
+import { validateHarvestEntry } from "@/lib/postHarvestValidation";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
@@ -72,14 +73,16 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cropName || !quantity) { toast.error("Crop name and quantity are required"); return; }
+    const parsedQuantity = Number(quantity);
+    const validationError = validateHarvestEntry({ crop_name: cropName, quantity: parsedQuantity, unit, harvest_date: date });
+    if (validationError) { toast.error(validationError); return; }
     if (!user) { toast.error("Please sign in"); return; }
     setSaving(true);
     const idempotencyKey = submissionKeyRef.current;
     const harvestInput = {
       user_id: user.id,
       crop_name: cropName,
-      quantity: Number(quantity),
+      quantity: parsedQuantity,
       unit,
       harvest_date: date,
       storage_location: location || null,
@@ -110,7 +113,7 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
           try {
             await addEntry({
               crop_name: cropName,
-              quantity: Number(quantity),
+              quantity: parsedQuantity,
               unit,
               harvest_date: date,
               storage_location: location || null,

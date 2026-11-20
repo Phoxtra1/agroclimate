@@ -82,6 +82,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
     event.preventDefault();
     if (!deviceName.trim() || !hardwareId.trim()) return;
     if (!user?.id || user.id !== currentUserId.current) { toast.error("Your session changed. Refresh and try again."); return; }
+    const ownerId = user.id;
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke("post-harvest-station", {
@@ -90,6 +91,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
           model: model.trim() || null, harvest_entry_id: harvestEntryId || null,
         },
       });
+      if (ownerId !== currentUserId.current) return;
       if (error) throw error;
       if (!data?.device_token) throw new Error(data?.error || "The gateway did not return a device credential.");
       setIssuedToken(data.device_token);
@@ -104,10 +106,12 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   const revokeDevice = async (device: StationDevice) => {
     if (!confirm(`Revoke access for "${device.device_name}"? The station will no longer be able to upload readings.`)) return;
     if (!user?.id || user.id !== currentUserId.current) { toast.error("Your session changed. Refresh and try again."); return; }
+    const ownerId = user.id;
     try {
       const { data, error } = await supabase.functions.invoke("post-harvest-station", {
         body: { action: "revoke", device_id: device.id },
       });
+      if (ownerId !== currentUserId.current) return;
       if (error || !data?.revoked) throw new Error(data?.error || error?.message || "Request failed");
       toast.success("Station credential revoked");
       await refresh();
@@ -117,7 +121,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   };
 
   const copyToken = async () => {
-    if (!issuedToken) return;
+    if (!issuedToken || !user?.id || user.id !== currentUserId.current) return;
     try { await navigator.clipboard.writeText(issuedToken); toast.success("Device token copied"); }
     catch { toast.error("Clipboard unavailable. Select and copy the token manually."); }
   };
@@ -168,9 +172,12 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
                   <div><div className="font-medium">{device.device_name}</div><div className="text-xs text-muted-foreground">{device.model || "Model not specified"} · {device.hardware_id}</div></div>
                   <div className="flex items-center gap-2"><Badge variant={device.status === "revoked" ? "destructive" : seen ? "default" : "secondary"}>{device.status === "revoked" ? "Revoked" : seen ? "Recently connected" : "Registered · no recent signal"}</Badge>{device.status === "active" && <Button size="sm" variant="outline" onClick={() => void revokeDevice(device)}><Ban className="h-3 w-3 mr-1" /> Revoke</Button>}</div>
                 </div>
-                {reading ? <div className="grid grid-cols-2 gap-2 text-sm">
+                {reading ? <div className="space-y-2">
+                  {reading.harvest_entry_id && <p className="text-xs text-muted-foreground">Linked harvest: {entries.find((entry) => entry.id === reading.harvest_entry_id)?.crop_name || "Harvest record unavailable"}</p>}
+                  <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-md bg-muted p-2 flex items-center gap-2"><Thermometer className="h-4 w-4" /><span>{Number(reading.temperature_c).toFixed(1)} °C</span></div>
                   <div className="rounded-md bg-muted p-2 flex items-center gap-2"><Droplets className="h-4 w-4" /><span>{Number(reading.humidity_pct).toFixed(1)} % RH</span></div>
+                  </div>
                 </div> : <p className="text-xs text-muted-foreground">No sensor observations received.</p>}
                 <p className="text-xs text-muted-foreground">Last device signal: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never"}{reading ? ` · Latest reading: ${new Date(reading.observed_at).toLocaleString()}` : ""}</p>
               </div>;
