@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -303,6 +304,7 @@ export default function DroneAdvisory() {
         </TabsContent>
 
       </Tabs>
+      <SharedDevicePanel component="aerial-console" />
     </div>
   );
 }
