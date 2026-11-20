@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { WeatherDay, weeklyForecast } from "@/data/mock-data";
 
@@ -180,7 +180,6 @@ export function useWeather(lat?: number, lon?: number) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [observedAt, setObservedAt] = useState<Date | null>(null);
   const [source, setSource] = useState<"live" | "cache" | "none">("none");
-  const requestVersion = useRef(0);
 
   const refresh = useCallback(() => {
     try { localStorage.removeItem(CACHE_KEY); } catch { /* storage unavailable */ }
@@ -198,6 +197,7 @@ export function useWeather(lat?: number, lon?: number) {
 
     const cached = readLocationCache(latitude, longitude);
     const fallbackCache = cached;
+    setLoading(false);
     if (cached) {
       setForecast(cached.data);
       setIsLive(false);
@@ -284,7 +284,6 @@ export function useWeather(lat?: number, lon?: number) {
     return () => {
       active = false;
       latestRequest += 1;
-      requestVersion.current += 1;
       window.clearInterval(interval);
       window.removeEventListener("focus", onWake);
       window.removeEventListener("online", onWake);
