@@ -178,7 +178,7 @@ GRANT UPDATE (
 
 REVOKE UPDATE ON public.agtrans_requests FROM authenticated;
 GRANT UPDATE (
-  status, driver_id, negotiation_status, driver_counter_price, counter_note,
+  status, driver_id, negotiation_status, supplier_offer_price, driver_counter_price, counter_note,
   rejection_reason, agreed_fee, agreement_timestamp, agreement_id
 ) ON public.agtrans_requests TO authenticated;
 
