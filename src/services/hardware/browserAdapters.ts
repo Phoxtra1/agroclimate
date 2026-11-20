@@ -126,6 +126,43 @@ export interface BleCharacteristicMapping {
   decode: (value: DataView) => number | null;
 }
 
+const BLE_UUID = (short: string) => `0000${short.toLowerCase()}-0000-1000-8000-00805f9b34fb`;
+
+/**
+ * Bluetooth SIG standard profiles supported without vendor-specific decoding:
+ * Environmental Sensing temperature/humidity and Weight Scale measurement.
+ * Custom soil/weather probes still require their documented characteristic map.
+ */
+export const STANDARD_BLE_SENSOR_MAPPINGS: readonly BleCharacteristicMapping[] = [
+  {
+    serviceUuid: BLE_UUID("181a"),
+    characteristicUuid: BLE_UUID("2a6e"),
+    metric: "temperature",
+    unit: "°C",
+    decode: (value) => value.byteLength >= 2 ? value.getInt16(0, true) / 100 : null,
+  },
+  {
+    serviceUuid: BLE_UUID("181a"),
+    characteristicUuid: BLE_UUID("2a6f"),
+    metric: "relative_humidity",
+    unit: "%RH",
+    decode: (value) => value.byteLength >= 2 ? value.getUint16(0, true) / 100 : null,
+  },
+  {
+    serviceUuid: BLE_UUID("181d"),
+    characteristicUuid: BLE_UUID("2a9d"),
+    metric: "weight",
+    unit: "kg",
+    decode: (value) => {
+      if (value.byteLength < 3) return null;
+      const flags = value.getUint8(0);
+      const raw = value.getUint16(1, true) / 100;
+      // Weight Scale Measurement flag bit 0 selects pounds instead of kilograms.
+      return flags & 0x01 ? raw * 0.45359237 : raw;
+    },
+  },
+];
+
 export class WebBluetoothSensorAdapter implements HardwareAdapter {
   readonly adapterId = "web-bluetooth-gatt-configurable-v1";
   readonly protocol = "ble-gatt" as const;
