@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric } from "@/services/hardware/browserAdapters";
+import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric, STANDARD_BLE_SENSOR_MAPPINGS } from "@/services/hardware/browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
 import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
 
@@ -15,6 +15,24 @@ const observation: DeviceObservation = {
   measuredAt: "2026-11-20T08:00:00Z", receivedAt: "2026-11-20T08:01:00Z",
   quality: "valid", sourceProtocol: "ble-gatt",
 };
+
+describe("standard BLE sensor profiles", () => {
+  it("decodes standard temperature and humidity values", () => {
+    const temperature = new DataView(new Uint8Array([0x2e, 0x09]).buffer);
+    const humidity = new DataView(new Uint8Array([0x10, 0x27]).buffer);
+    expect(STANDARD_BLE_SENSOR_MAPPINGS.find((item) => item.metric === "temperature")?.decode(temperature)).toBe(23.5);
+    expect(STANDARD_BLE_SENSOR_MAPPINGS.find((item) => item.metric === "relative_humidity")?.decode(humidity)).toBe(100);
+  });
+
+  it("decodes the Bluetooth weight scale profile and converts pounds to kilograms", () => {
+    const mapping = STANDARD_BLE_SENSOR_MAPPINGS.find((item) => item.metric === "weight");
+    const kilograms = new DataView(new Uint8Array([0, 0xD2, 0x04]).buffer);
+    const pounds = new DataView(new Uint8Array([1, 0xD2, 0x04]).buffer);
+    expect(mapping?.decode(kilograms)).toBe(12.34);
+    expect(mapping?.decode(pounds)).toBeCloseTo(5.597);
+    expect(mapping?.decode(new DataView(new ArrayBuffer(2)))).toBeNull();
+  });
+});
 
 describe("hardware capability mapping", () => {
   it("maps scale and weather capabilities to their concrete observation metrics", () => {
