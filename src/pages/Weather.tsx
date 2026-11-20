@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import {
   Droplets,
   Thermometer,
@@ -623,6 +624,7 @@ export default function Weather() {
           </button>
         </div>
       )}
+      <SharedDevicePanel component="agroforecast" />
     </div>
   );
 }
