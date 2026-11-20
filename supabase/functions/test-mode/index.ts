@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     // Test Mode bypasses paid-feature gates globally. Only a server-verified
     // administrator may change it; never trust client metadata or localStorage.
     const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.replace(/^Bearer\\s+/i, "").trim();
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
     if (!token) return json({ error: "Authentication required." }, 401);
 
     const { data: userData, error: userError } = await admin.auth.getUser(token);
