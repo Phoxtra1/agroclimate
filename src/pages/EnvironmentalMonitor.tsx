@@ -608,7 +608,7 @@ export default function EnvironmentalMonitor() {
   const [aiAgroRisk, setAiAgroRisk] = useState<AIAgroRiskAssessment | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Incident reporting state
+  // Incident reporting state (currently local to this browser; not a shared alert feed)
   const [incidentType, setIncidentType] = useState<IncidentReport["type"]>("Flooding");
   const [incidentDesc, setIncidentDesc] = useState("");
 
@@ -621,7 +621,7 @@ export default function EnvironmentalMonitor() {
   const [isAiEnvLoading, setIsAiEnvLoading] = useState(false);
 
   // ---------------------------------------------------------------------------
-  // DATA SYNC: FARMS & INCIDENTS (DATABASE WITH LOCALSTORAGE FALLBACK)
+  // DATA SYNC: FARM RECORDS IN DATABASE; INCIDENT REPORTS IN LOCAL BROWSER STORAGE
   // ---------------------------------------------------------------------------
   const reloadFarms = useCallback(async () => {
     setLoadingFarms(true);
@@ -713,7 +713,7 @@ export default function EnvironmentalMonitor() {
       }
     } catch (err: any) {
       console.warn("AgroRisk AI assessment offline/failed:", err);
-      setAiError("Advanced AI recommendations offline. Viewing high-fidelity local risk calculation.");
+      setAiError("Advanced AI recommendations are unavailable. Viewing a local rule-based risk estimate.");
     } finally {
       setIsAiLoading(false);
     }
@@ -1045,6 +1045,10 @@ export default function EnvironmentalMonitor() {
             <span>Updated {envState.lastUpdated.toLocaleTimeString()}</span>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+        AgroRisk scores are model-based estimates using weather-provider forecasts or fallback sample data, coordinate-based terrain heuristics and incident reports saved in this browser. They are not field-sensor measurements, surveyed terrain results or verified hazard boundaries. Confirm local conditions before making operational decisions.
       </div>
 
       {/* =======================================================================
@@ -1440,7 +1444,7 @@ export default function EnvironmentalMonitor() {
                       </Marker>
                     )}
 
-                    {/* Preset color-coded Hazard Overlays */}
+                    {/* Approximate reference overlays only; not surveyed hazard boundaries. */}
                     {HAZARD_OVERLAYS.map(ho => (
                       <Polygon
                         key={ho.name}
@@ -1456,6 +1460,7 @@ export default function EnvironmentalMonitor() {
                           <div className="text-xs p-1">
                             <Badge variant="destructive" className="mb-1 text-[8px]">{ho.risk}</Badge>
                             <p className="font-bold">{ho.name}</p>
+                            <p className="mt-1">Illustrative reference area only; not a verified boundary or current hazard observation.</p>
                           </div>
                         </Popup>
                       </Polygon>
