@@ -905,7 +905,9 @@ export default function EnvironmentalMonitor() {
     if (activeMode === "boundary") {
       const newDrawn = [...drawnBoundary, [lat, lon] as [number, number]];
       setDrawnBoundary(newDrawn);
-      updateRiskAssessment(lat, lon, newDrawn, "Custom Farm Boundary");
+      const centerLat = newDrawn.reduce((sum, point) => sum + point[0], 0) / newDrawn.length;
+      const centerLon = newDrawn.reduce((sum, point) => sum + point[1], 0) / newDrawn.length;
+      updateRiskAssessment(centerLat, centerLon, newDrawn, "Custom Farm Boundary");
     } else if (activeMode === "quick") {
       setClickLocationName("Loading coordinates address...");
       const addr = await fetchAddress(lat, lon);
@@ -939,11 +941,13 @@ export default function EnvironmentalMonitor() {
 
     setSavingFarm(true);
     const boundary = activeMode === "boundary" ? drawnBoundary : undefined;
+    const farmLat = boundary?.length ? boundary.reduce((sum, point) => sum + point[0], 0) / boundary.length : clickPoint[0];
+    const farmLon = boundary?.length ? boundary.reduce((sum, point) => sum + point[1], 0) / boundary.length : clickPoint[1];
     let savedFarm: SavedFarm;
     try {
       const dbFarm = await dbSaveFarm({
         name: farmName.trim(),
-        location: { lat: clickPoint[0], lon: clickPoint[1] },
+        location: { lat: farmLat, lon: farmLon },
         user_id: user.id,
         boundary,
       });
@@ -960,8 +964,8 @@ export default function EnvironmentalMonitor() {
       savedFarm = {
         id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         name: farmName.trim(),
-        lat: clickPoint[0],
-        lon: clickPoint[1],
+        lat: farmLat,
+        lon: farmLon,
         boundary,
       };
       const localKey = userStorageKey("local_farms", user.id);
