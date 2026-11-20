@@ -292,6 +292,43 @@ export class WebHidScaleAdapter implements HardwareAdapter {
   }
 }
 
+
+type MediaDevicesLike = { getUserMedia(constraints?: MediaStreamConstraints): Promise<MediaStream> };
+
+export class BrowserCameraAdapter implements HardwareAdapter {
+  readonly adapterId = "browser-camera-v1";
+  readonly protocol = "browser-camera" as const;
+  readonly components: readonly HardwareComponent[] = ["farm-handler", "market-link"];
+  private streams = new Map<string, MediaStream>();
+
+  constructor(private readonly media: MediaDevicesLike | undefined =
+    typeof navigator !== "undefined" ? navigator.mediaDevices : undefined) {}
+
+  supports(device: DeviceRegistration): boolean {
+    return device.protocol === this.protocol && this.components.includes(device.component) &&
+      (device.capabilities.includes("image-capture") || device.capabilities.includes("video-capture"));
+  }
+
+  async connect(device: DeviceRegistration): Promise<AdapterConnection> {
+    if (!this.media?.getUserMedia) return { connected: false, detail: "Browser camera access is unavailable." };
+    if (this.streams.has(device.deviceId)) return { connected: true, detail: "Camera stream is already active." };
+    const stream = await this.media.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: "environment" } },
+    });
+    this.streams.set(device.deviceId, stream);
+    return { connected: true, connectedAt: new Date().toISOString(), detail: "Camera stream opened; capture remains controlled by the component workflow." };
+  }
+
+  getStream(deviceId: string): MediaStream | null { return this.streams.get(deviceId) ?? null; }
+
+  async disconnect(deviceId: string): Promise<void> {
+    const stream = this.streams.get(deviceId);
+    stream?.getTracks().forEach((track) => track.stop());
+    this.streams.delete(deviceId);
+  }
+}
+
 /** Keyboard-wedge scanners send decoded text as keystrokes; call this from a focused scan field. */
 export class BarcodeScanBuffer {
   private buffer = "";
