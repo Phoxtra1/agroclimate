@@ -6,6 +6,7 @@
 
 # Satellite
 - [ ] Connect selected-location weather, climate context and environmental risks without invented measurements.
+- [ ] Show location-specific weather risk on the map when zooming or selecting a point; verify real provider readings.
 - [ ] Apply shared geospatial/maritime and AGTrans provenance migrations to the live database, with required field-monitoring prerequisites.
 - [ ] Deploy required Satellite functions and verify live data updates.
 - [ ] Complete existing Satellite functionality with genuine imagery and honest unavailable states.
@@ -13,3 +14,7 @@
 
 # App updates
 - [ ] Restore published-app update notification and verify preview safety.
+
+# Hardware integration
+- [ ] Standardize versioned, validated real-time device observations for Amineva interoperability and document the connection contract.
+- [ ] Verify live observation delivery and honest disconnected/stale states; external Amineva connection awaits its specification.
