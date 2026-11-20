@@ -522,8 +522,9 @@ export default function MarketLink() {
 
       <Dialog open={inboxOpen} onOpenChange={setInboxOpen}>
         <DashboardMarketInbox threads={inboxThreads} />
-      <SharedDevicePanel component="market-link" />
       </Dialog>
+
+      <SharedDevicePanel component="market-link" />
     </div>
   );
 }
