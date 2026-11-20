@@ -66,35 +66,50 @@ export default function TripPage() {
       return;
     }
 
+    if (gpsWatchIdRef.current !== null) return;
+
     setGpsError("");
+    lastGpsWriteAtRef.current = 0;
     setGpsSharing(true);
     gpsWatchIdRef.current = navigator.geolocation.watchPosition(async (position) => {
       const capturedAt = new Date(position.timestamp).toISOString();
+      const ageMs = Date.now() - position.timestamp;
       const accuracyM = position.coords.accuracy;
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
       setGpsFix({
-        lat: position.coords.latitude,
-        lon: position.coords.longitude,
+        lat: latitude,
+        lon: longitude,
         accuracyM,
         capturedAt,
       });
 
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+          !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        setGpsError("The device returned invalid GPS coordinates. Waiting for a valid fix.");
+        return;
+      }
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > 30000) {
+        setGpsError("The GPS fix is stale. Waiting for a fresh device position.");
+        return;
+      }
       if (!Number.isFinite(accuracyM) || accuracyM <= 0 || accuracyM > 100) {
         setGpsError("GPS accuracy is over 100 m. The current position is not being published until accuracy improves.");
         return;
       }
       if (Date.now() - lastGpsWriteAtRef.current < 15000) return;
 
-      lastGpsWriteAtRef.current = Date.now();
       try {
         await updateTrackingSessionLocation(job.id, {
-          lat: position.coords.latitude,
-          lon: position.coords.longitude,
+          lat: latitude,
+          lon: longitude,
           accuracyM,
           source: "device_gps",
           capturedAt,
           speed_kn: position.coords.speed == null ? undefined : Number((position.coords.speed * 3.6).toFixed(1)),
           heading: position.coords.heading ?? undefined,
         });
+        lastGpsWriteAtRef.current = Date.now();
         setGpsError("");
       } catch (error) {
         setGpsError(error instanceof Error ? error.message : "Could not publish this GPS update.");
