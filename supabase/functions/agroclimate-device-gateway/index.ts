@@ -12,8 +12,7 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const COMPONENTS = new Set([
-  "farm-handler", "agro-inventory", "market-link", "agtrans",
-  "agroforecast", "agrorisk", "aerial-console", "satellite",
+  "agtrans", "agroforecast", "agrorisk", "aerial-console",
 ]);
 const PROTOCOLS = new Set([
   "browser-camera", "browser-geolocation", "ble-gatt", "usb-hid", "usb-serial",
@@ -30,13 +29,9 @@ const UNITS: Record<string, string[]> = {
   wind_speed: ["m/s", "km/h", "mph"],
   wind_direction: ["°"],
   water_level: ["mm", "cm", "m"],
-  weight: ["g", "kg", "lb"],
   vehicle_speed: ["m/s", "km/h", "mph"],
   aircraft_altitude: ["m", "ft"],
   aircraft_battery: ["%", "V"],
-  latitude: ["°"],
-  longitude: ["°"],
-  barcode_count: ["count"],
 };
 const hex = (bytes: Uint8Array) => Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 const sha256 = async (value: string) => hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))));
