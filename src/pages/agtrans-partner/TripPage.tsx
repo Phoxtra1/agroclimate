@@ -92,7 +92,7 @@ export default function TripPage() {
           accuracyM,
           source: "device_gps",
           capturedAt,
-          speed_kn: position.coords.speed == null ? undefined : Number((position.coords.speed * 3.6).toFixed(1)),
+          speed_kn: position.coords.speed == null ? undefined : Number((position.coords.speed * 1.943844).toFixed(1)),
           heading: position.coords.heading ?? undefined,
         });
         setGpsError("");
