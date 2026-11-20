@@ -109,6 +109,14 @@ const REQUIRED_NUMERIC_FIELDS: Record<InventoryTable, string[]> = {
   sales_records: ["quantity_sold", "price_per_unit"],
 };
 
+const POSITIVE_NUMERIC_FIELDS: Partial<Record<InventoryTable, string[]>> = {
+  labor_records: ["worker_count", "days_worked"],
+  land_costs: ["size_acres"],
+  harvest_records: ["quantity"],
+  harvest_losses: ["quantity_lost"],
+  sales_records: ["quantity_sold"],
+};
+
 const REQUIRED_FIELDS: Record<InventoryTable, string[]> = {
   inventory_items: ["item_name", "item_type"],
   labor_records: ["task_description"],
@@ -158,6 +166,9 @@ export function normalizeInventoryRecord(table: InventoryTable, data: Record<str
     const value = Number(payload[field]);
     if (!Number.isFinite(value) || value < 0) {
       throw new Error(`${field.replace(/_/g, " ")} must be a non-negative number.`);
+    }
+    if (POSITIVE_NUMERIC_FIELDS[table]?.includes(field) && value <= 0) {
+      throw new Error(`${field.replace(/_/g, " ")} must be greater than zero.`);
     }
     if (field === "worker_count" && !Number.isInteger(value)) {
       throw new Error("Worker count must be a whole number.");
