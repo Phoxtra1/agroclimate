@@ -31,17 +31,24 @@ export function useMarketChat(otherUserId: string | null, contextId?: string | n
   const { user } = useAuth();
   const [messages, setMessages] = useState<MarketMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const requestVersion = useRef(0);
   const threadKey = user && otherUserId ? makeThreadKey(user.id, otherUserId, contextId) : null;
 
   const fetchMessages = useCallback(async () => {
-    if (!threadKey || !user) return;
+    const version = ++requestVersion.current;
+    if (!threadKey || !user) { setMessages([]); setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("market_messages" as any)
       .select("*")
       .eq("thread_key", threadKey)
       .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
       .order("created_at", { ascending: true });
+    if (version !== requestVersion.current) return;
+    if (error) {
+      console.error("[MarketChat] messages could not be loaded", error);
+      setMessages([]); setLoading(false); return;
+    }
     const rows = ((data as any) || []) as MarketMessage[];
     // Isolation guard: only messages this signed-in user takes part in are ever
     // rendered, even if a wider row set were ever returned.
@@ -67,7 +74,10 @@ export function useMarketChat(otherUserId: string | null, contextId?: string | n
         () => fetchMessages(),
       )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      requestVersion.current += 1;
+      void supabase.removeChannel(ch);
+    };
   }, [threadKey, fetchMessages]);
 
   const send = useCallback(

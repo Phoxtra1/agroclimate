@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -164,8 +164,11 @@ function useOrders(scope: Scope) {
   const { user } = useAuth();
   const [items, setItems] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const load = async () => {
+    const version = ++requestVersion.current;
+    setItems([]);
     setLoading(true);
     try {
       let query = supabase
@@ -183,15 +186,20 @@ function useOrders(scope: Scope) {
         query = query.neq("buyer_id", user.id);
       }
       const { data, error } = await query;
+      if (version !== requestVersion.current) return;
       if (error) {
         console.warn("[useOrders] Fetch error:", error);
+        setItems([]);
       } else {
         setItems((data as unknown as OrderRow[]) || []);
       }
     } catch (err) {
-      console.error("[useOrders] Fetch failed:", err);
+      if (version === requestVersion.current) {
+        console.error("[useOrders] Fetch failed:", err);
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
@@ -201,7 +209,10 @@ function useOrders(scope: Scope) {
       .channel(`orders-${scope}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "buyer_orders" }, load)
       .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch { /* ignore */ } };
+    return () => {
+      requestVersion.current += 1;
+      try { supabase.removeChannel(ch); } catch { /* ignore */ }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, scope]);
 
