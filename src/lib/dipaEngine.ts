@@ -650,89 +650,91 @@ export const DipaEngine = {
     quantityTons: number,
     coldChainRequired: boolean = false
   ): Promise<LogisticsMatchResult> {
-    // 1. Fetch registered logistics providers
-    const { data: dbProviders } = await supabase.from("logistics_providers" as any).select("*");
-    
-    // 2. Fetch registered user profiles with driver / transporter role
-    const { data: driverProfiles } = await supabase
-      .from("profiles" as any)
-      .select("*")
-      .or("role.eq.driver,role.eq.transporter,account_type.eq.driver");
-
-    const allRegistered: any[] = [];
-
-    if (dbProviders && dbProviders.length > 0) {
-      dbProviders.forEach((p: any) => {
-        allRegistered.push({
-          id: p.id,
-          name: p.name,
-          country: p.country || "Ghana",
-          vehicleTypes: p.vehicle_types || ["cargo_truck"],
-          capacityTons: Number(p.capacity_tons || 10),
-          coldChain: !!p.cold_chain_capable,
-          contactPhone: p.public_phone || "Contact via Market Link",
-        });
-      });
+    if (!Number.isFinite(quantityTons) || quantityTons <= 0) {
+      throw new Error("Enter a valid cargo quantity greater than zero.");
     }
 
-    if (driverProfiles && driverProfiles.length > 0) {
-      driverProfiles.forEach((d: any) => {
-        allRegistered.push({
-          id: d.id,
-          name: d.full_name || d.name || "Registered Transport Driver",
-          country: d.country || "Ghana",
-          vehicleTypes: d.vehicle_type ? [d.vehicle_type] : ["heavy_truck"],
-          capacityTons: Number(d.capacity_tons || 15),
-          coldChain: !!d.cold_chain_capable,
-          contactPhone: d.phone || d.email || "Registered Platform Driver",
-        });
-      });
+    const requestedKg = quantityTons * 1000;
+    const { data: driverOffers, error } = await supabase
+      .from("agtrans_drivers")
+      .select(
+        "id, full_name, phone, region, vehicle_type, vehicle_capacity_kg, remaining_capacity, vehicle_features, pickup_area, destination, planned_route, current_location_text, preferred_corridors, route_coverage, route_flexibility, approval_status, admin_suspended, offer_status, availability_status, reliability_score, driver_rating, verification_status"
+      )
+      .eq("approval_status", "approved")
+      .eq("admin_suspended", false)
+      .eq("offer_status", "published")
+      .eq("availability_status", "online")
+      .gt("remaining_capacity", 0);
+
+    if (error) {
+      console.error("[DipaEngine] AGTrans provider lookup failed:", error);
+      throw new Error("Transport provider availability could not be loaded. Please try again.");
     }
 
-    const providers = allRegistered.map((p) => {
-      let score = 70;
-      const reasons: string[] = ["Registered transport provider on AgroClimate platform"];
+    const normalize = (value: unknown) => String(value ?? "").trim().toLowerCase();
+    const pickup = normalize(pickupLocation);
+    const dropoff = normalize(destination);
 
-      if (p.capacityTons >= quantityTons) {
-        score += 20;
-        reasons.push(`Capacity (${p.capacityTons} tons) satisfies payload requirement (${quantityTons} tons)`);
-      } else {
-        score -= 15;
-        reasons.push(`Capacity (${p.capacityTons} tons) below requested payload`);
-      }
+    const providers = (driverOffers ?? [])
+      .filter((driver) => {
+        const remainingKg = Number(driver.remaining_capacity ?? 0);
+        const features = (driver.vehicle_features ?? []).map(normalize);
+        const hasColdChain = features.some((feature) =>
+          feature.includes("refrigerated") || feature.includes("cold-chain") || feature.includes("cold chain")
+        );
+        return remainingKg >= requestedKg && (!coldChainRequired || hasColdChain);
+      })
+      .map((driver) => {
+        const routeText = normalize([
+          driver.current_location_text,
+          driver.pickup_area,
+          driver.destination,
+          driver.planned_route,
+          ...(driver.preferred_corridors ?? []),
+          ...(driver.route_coverage ?? []),
+        ].filter(Boolean).join(" "));
+        const pickupMatch = !!pickup && routeText.includes(pickup);
+        const destinationMatch = !!dropoff && routeText.includes(dropoff);
+        const remainingKg = Number(driver.remaining_capacity ?? 0);
+        const features = driver.vehicle_features ?? [];
+        const hasColdChain = features.some((feature) => {
+          const value = normalize(feature);
+          return value.includes("refrigerated") || value.includes("cold-chain") || value.includes("cold chain");
+        });
 
-      if (coldChainRequired) {
-        if (p.coldChain) {
-          score += 10;
-          reasons.push("Refrigerated cold-chain equipment verified");
-        } else {
-          score -= 20;
-          reasons.push("Standard ambient transport only (no cold-chain)");
-        }
-      }
+        let score = 65;
+        const reasons = [
+          "Approved driver with a published, currently available AGTrans offer",
+          `Remaining capacity (${remainingKg.toLocaleString()} kg) meets the requested ${requestedKg.toLocaleString()} kg`,
+        ];
+        if (pickupMatch) { score += 10; reasons.push("Pickup location appears in the driver's published route information"); }
+        if (destinationMatch) { score += 10; reasons.push("Destination appears in the driver's published route information"); }
+        if (!pickupMatch || !destinationMatch) reasons.push("Confirm the full route with the driver before accepting the request");
+        if (coldChainRequired && hasColdChain) { score += 10; reasons.push("Vehicle lists refrigerated/cold-chain capability"); }
+        if (driver.verification_status === "verified") { score += 5; reasons.push("Driver verification status is verified"); }
 
-      return {
-        id: p.id,
-        name: p.name,
-        country: p.country,
-        vehicleTypes: p.vehicleTypes,
-        capacityTons: p.capacityTons,
-        coldChain: p.coldChain,
-        contactPhone: p.contactPhone,
-        matchScore: Math.max(30, Math.min(99, score)),
-        reasons,
-      };
-    });
-
-    providers.sort((a, b) => b.matchScore - a.matchScore);
+        return {
+          id: driver.id,
+          name: driver.full_name,
+          country: driver.region || "Ghana",
+          vehicleTypes: [driver.vehicle_type],
+          capacityTons: Number(driver.vehicle_capacity_kg ?? remainingKg) / 1000,
+          coldChain: hasColdChain,
+          contactPhone: driver.phone || "Contact through AgroClimate",
+          matchScore: Math.max(0, Math.min(100, score)),
+          reasons,
+        };
+      })
+      .sort((a, b) => b.matchScore - a.matchScore);
 
     return {
       providers,
       confidenceMeta: {
-        confidence: "High",
-        dataQuality: "Good",
+        confidence: providers.length ? "Medium" : "Low",
+        dataQuality: providers.length ? "Good" : "Insufficient",
         timestamp: new Date().toISOString(),
-        sourceInfo: "Dipa Registered Logistics Matcher Engine (Verified Platform Drivers)",
+        sourceInfo: "Live approved, published and available AGTrans driver offers",
+        limitations: "Route matching uses driver-published text fields. Confirm route, cargo fit, final price and delivery terms with the driver before booking.",
       },
     };
   },
