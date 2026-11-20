@@ -54,9 +54,9 @@ export function computeRisk(entry: Pick<HarvestEntry, "harvest_date" | "storage_
 }
 
 function messageFor(level: RiskLevel, days: number): string {
-  if (level === "danger") return `Stored ${days} days — high spoilage risk. Inspect or sell now.`;
-  if (level === "warning") return `Stored ${days} days — check for mold, pests or moisture.`;
-  return `Stored ${days} days — conditions look safe.`;
+  if (level === "danger") return `Age-based estimate: stored ${days} days. Inspect promptly for spoilage, pests and moisture.`;
+  if (level === "warning") return `Age-based estimate: stored ${days} days. Check for mold, pests and excess moisture.`;
+  return `No age-based warning at ${days} days. This is not a measurement of storage conditions or produce safety.`;
 }
 
 export function usePostHarvest() {
