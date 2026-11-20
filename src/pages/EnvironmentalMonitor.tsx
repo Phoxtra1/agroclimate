@@ -763,49 +763,83 @@ export default function EnvironmentalMonitor() {
   // ---------------------------------------------------------------------------
   // RISK EVALUATION TRIGGERS (DYNAMIC UPDATES)
   // ---------------------------------------------------------------------------
-  const updateRiskAssessment = useCallback(async (lat: number, lon: number, boundary?: [number, number][], locName = "Selected Coordinates") => {
-    if (!forecast || forecast.length === 0) return;
-
+  const updateRiskAssessment = useCallback((
+    lat: number,
+    lon: number,
+    boundary?: [number, number][],
+    locName = "Selected Coordinates",
+  ) => {
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) return;
     setAiError(null);
     setAiAgroRisk(null);
+    setAiEnv(null);
+    setAssessmentTarget({ lat, lon, boundary, locationName: locName, manual: true });
+  }, []);
 
-    // 1. Calculate Local deterministic Risk metrics (instant updates)
-    const localAssess = calculateAgroRiskLocal(lat, lon, boundary, forecast, incidents);
-    setAgroRiskData(localAssess);
-
-    // 2. Trigger Advanced AI Risk Summary if online
-    setIsAiLoading(true);
-    try {
-      const provider = getActiveProvider();
-      const aiResponse = await provider.generateAgroRiskAssessment(
-        locName,
-        lat,
-        lon,
-        boundary,
-        forecast
-      );
-      if (aiResponse && typeof aiResponse.vulnerabilityScore === "number") {
-        setAiAgroRisk(aiResponse);
-      } else {
-        throw new Error("Invalid AI payload");
-      }
-    } catch (err: any) {
-      console.warn("AgroRisk AI assessment offline/failed:", err);
-      setAiError("Advanced AI recommendations are unavailable. Viewing a local rule-based risk estimate.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  }, [forecast, incidents]);
-
-  // Initial load or geolocation change
+  // Local estimates and AI assessment are calculated only against a forecast
+  // associated with the selected farm/map coordinates.
   useEffect(() => {
-    if (position.lat && position.lon && forecast && forecast.length > 0) {
-      setMapCenter([position.lat, position.lon]);
-      setClickPoint([position.lat, position.lon]);
-      setClickLocationName(position.locationName);
-      updateRiskAssessment(position.lat, position.lon, undefined, position.locationName);
+    if (!forecastMatchesTarget || !forecast?.length) {
+      setAgroRiskData(null);
+      setAiAgroRisk(null);
+      setIsAiLoading(false);
+      return;
     }
-  }, [position.lat, position.lon, forecast, updateRiskAssessment]);
+
+    const localAssessment = calculateAgroRiskLocal(
+      assessmentTarget.lat,
+      assessmentTarget.lon,
+      assessmentTarget.boundary,
+      forecast,
+      incidents,
+    );
+    setAgroRiskData(localAssessment);
+
+    if (!weatherUsable) {
+      setAiAgroRisk(null);
+      setAiError("AI risk analysis is paused because current provider weather or a recent location fix is unavailable. The local estimate is not an official warning.");
+      setIsAiLoading(false);
+      return;
+    }
+
+    let active = true;
+    setAiError(null);
+    setIsAiLoading(true);
+    const run = async () => {
+      try {
+        const provider = getActiveProvider();
+        const aiResponse = await provider.generateAgroRiskAssessment(
+          assessmentTarget.locationName,
+          assessmentTarget.lat,
+          assessmentTarget.lon,
+          assessmentTarget.boundary,
+          forecast,
+        );
+        if (!active) return;
+        if (aiResponse && typeof aiResponse.vulnerabilityScore === "number") {
+          setAiAgroRisk(aiResponse);
+        } else {
+          throw new Error("Invalid AI payload");
+        }
+      } catch (error) {
+        if (!active) return;
+        console.warn("[AgroRisk] AI assessment unavailable:", error);
+        setAiError("Advanced AI recommendations are unavailable. Viewing the local rule-based risk estimate.");
+      } finally {
+        if (active) setIsAiLoading(false);
+      }
+    };
+    void run();
+    return () => { active = false; };
+  }, [assessmentTarget, forecast, forecastMatchesTarget, incidents, weatherUsable]);
+
+  // Keep the map centred on the device location until the user selects a farm or map point.
+  useEffect(() => {
+    if (!Number.isFinite(position.lat) || !Number.isFinite(position.lon)) return;
+    setMapCenter([position.lat, position.lon]);
+    setClickPoint([position.lat, position.lon]);
+    setClickLocationName(position.locationName);
+  }, [position.lat, position.lon, position.locationName]);
 
   // ---------------------------------------------------------------------------
   // INTERACTIVE MAP CLICK ROUTER
