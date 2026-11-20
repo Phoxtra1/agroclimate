@@ -85,7 +85,7 @@ export interface InventoryMetrics {
   netProfit: number;
 }
 
-type InventoryTable = "inventory_items" | "labor_records" | "land_costs" | "harvest_records" | "harvest_losses" | "sales_records";
+export type InventoryTable = "inventory_items" | "labor_records" | "land_costs" | "harvest_records" | "harvest_losses" | "sales_records";
 
 const INVENTORY_TABLES: InventoryTable[] = [
   "inventory_items", "labor_records", "land_costs", "harvest_records", "harvest_losses", "sales_records",
@@ -127,7 +127,7 @@ const DATE_FIELDS: Record<InventoryTable, string[]> = {
   sales_records: ["sale_date"],
 };
 
-function normalizeInventoryRecord(table: InventoryTable, data: Record<string, unknown>, requireFields: boolean) {
+export function normalizeInventoryRecord(table: InventoryTable, data: Record<string, unknown>, requireFields: boolean) {
   const payload = { ...data };
   for (const key of ["id", "user_id", "created_at", "updated_at"]) delete payload[key];
 
@@ -365,76 +365,6 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
       return this.totalRevenue - this.totalInputsCost - this.totalLaborCost - this.totalLandCost;
     },
   };
-
-  // CRUD helpers
-const addRecord = async (table: string, data: any) => {
-  if (!user) return;
-
-  const payload = {
-    ...data,
-    user_id: user.id,
-  };
-
-  const { error } = await supabase
-    .from(table as any)
-    .insert(payload);
-
-  if (error) {
-    toast({
-      title: "Error adding record",
-      description: error.message,
-      variant: "destructive",
-    });
-    return;
-  }
-
-  toast({ title: "Added successfully" });
-  fetchAll();
-};
-
-const updateRecord = async (table: string, id: string, data: any) => {
-  if (!user) return;
-
-  const { error } = await supabase
-    .from(table as any)
-    .update(data)
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) {
-    toast({
-      title: "Error updating record",
-      description: error.message,
-      variant: "destructive",
-    });
-    return;
-  }
-
-  toast({ title: "Updated successfully" });
-  fetchAll();
-};
-
-  const deleteRecord = async (table: string, id: string) => {
-  if (!user || !id) return;
-
-  const { error } = await supabase
-    .from(table as any)
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) {
-    toast({
-      title: "Error deleting record",
-      description: error.message,
-      variant: "destructive",
-    });
-    return;
-  }
-
-  toast({ title: "Deleted successfully" });
-  fetchAll();
-};
 
   // Get unique values for filters
   const seasons = [...new Set([
