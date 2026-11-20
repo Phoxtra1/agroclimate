@@ -19,7 +19,7 @@ const UNIT_ALLOWLIST: Record<DeviceObservation["metric"], readonly string[]> = {
   longitude: ["°"],
 };
 
-const ISO_DATE = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 const MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const MAX_METADATA_ENTRIES = 20;
 
