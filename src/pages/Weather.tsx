@@ -336,7 +336,7 @@ export default function Weather() {
 
   const currentCrops = CROPS.filter((c) => c.season.includes(currentMonth));
   const isLoading = geoLoading || weatherLoading;
-  const advisoryAvailable = source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000);
+  const advisoryAvailable = position?.source !== "default" && (source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000));
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
