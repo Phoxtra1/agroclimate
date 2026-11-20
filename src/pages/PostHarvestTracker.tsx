@@ -103,15 +103,9 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
             photos: photoUrls,
           });
           if (failedPhotos.length) {
-            // Queue remaining photos as a follow-up entry? simpler: queue full retry
-            toast.message(`Saved. ${failedPhotos.length} photo(s) will retry when online.`);
-            await queueHarvest({
-              user_id: user.id,
-              crop_name: `${cropName} (photos)`,
-              quantity: 0, unit, harvest_date: date,
-              storage_location: location || null,
-              storage_method: null, notes: "Photo-only retry",
-            }, failedPhotos);
+            toast.warning("Harvest saved, but some photos could not be uploaded", {
+              description: `${failedPhotos.length} photo(s) were not attached. Please retry those photos from the original harvest record.`,
+            });
           } else {
             toast.success("Harvest saved");
           }
@@ -343,8 +337,14 @@ export default function PostHarvestTracker() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this harvest entry?")) return;
-    await deleteEntry(id);
-    toast.success("Entry deleted");
+    try {
+      await deleteEntry(id);
+      toast.success("Entry deleted");
+    } catch (error) {
+      toast.error("Could not delete harvest entry", {
+        description: error instanceof Error ? error.message : "Please retry.",
+      });
+    }
   };
 
   const captureStorageLocation = async (entry: HarvestEntry) => {
