@@ -24,7 +24,7 @@ interface Scenario {
   estimated_yield_units: number;
   unit: string;
   market_price_per_unit: number;
-  currency_code: string;
+  currency_code: string | null;
   data_source_type: "user_entered" | "estimated" | "ai_derived";
 }
 
@@ -70,7 +70,11 @@ export function AgriCostCalculator({
         .select("*").eq("user_id", userId).order("created_at", { ascending: false });
       if (version !== requestVersion.current || userId !== currentUserId.current) return;
       if (error) throw error;
-      setScenarios((data || []) as unknown as Scenario[]);
+      const loaded = (data || []) as unknown as Scenario[];
+      setScenarios(loaded.map((scenario) => ({
+        ...scenario,
+        data_source_type: scenario.data_source_type === "verified" ? "estimated" : scenario.data_source_type,
+      })));
     } catch (error) {
       if (version === requestVersion.current && userId === currentUserId.current) {
         setScenarios([]);
@@ -236,7 +240,7 @@ export function AgriCostCalculator({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {activeScenarios.map((scenario, index) => {
           const calc = calculateScenario(scenario);
-          const displayCurrency = scenario.currency_code || currencyCode;
+          const displayCurrency = scenario.currency_code || "Currency not recorded";
           return (
             <Card key={scenario.id || `${scenario.crop_name}-${scenario.scenario_title}-${index}`} className="border border-border/70 hover:border-primary/50 transition-colors shadow-sm">
               <CardHeader className="pb-2">
