@@ -1,3 +1,9 @@
+-- Normalize legacy request.driver_id values from driver-profile UUIDs to auth user UUIDs.
+UPDATE public.agtrans_requests r
+SET driver_id = d.user_id
+FROM public.agtrans_drivers d
+WHERE r.driver_id = d.id;
+
 -- AGTrans: replace globally-readable logistics rows with party-scoped access.
 DROP POLICY IF EXISTS "authenticated_select_delivery_jobs" ON public.delivery_jobs;
 DROP POLICY IF EXISTS "authenticated_all_delivery_jobs" ON public.delivery_jobs;
@@ -213,6 +219,13 @@ CREATE TRIGGER trg_agtrans_sync_offer_capacity
   BEFORE UPDATE ON public.agtrans_drivers
   FOR EACH ROW EXECUTE FUNCTION public.agtrans_sync_offer_capacity();
 
+UPDATE public.agtrans_drivers d
+SET remaining_capacity = GREATEST(0, COALESCE(d.vehicle_capacity_kg, 0) - COALESCE((
+  SELECT SUM(j.quantity) FROM public.delivery_jobs j
+  WHERE j.driver_id = d.user_id AND j.status NOT IN ('Delivered', 'Completed', 'Cancelled')
+), 0))
+WHERE d.offer_status = 'published';
+
 -- Only the database updates delivery reputation and returns reserved capacity.
 CREATE OR REPLACE FUNCTION public.agtrans_apply_delivery_completion()
 RETURNS trigger
@@ -262,7 +275,7 @@ CREATE TRIGGER trg_agtrans_delivery_completion
 -- agreement, tracking session and capacity reservation commit together.
 CREATE OR REPLACE FUNCTION public.create_agtrans_delivery_job(
   p_request_id uuid,
-  p_transport_fee numeric DEFAULT 0
+  p_transport_fee numeric DEFAULT NULL
 )
 RETURNS public.delivery_jobs
 LANGUAGE plpgsql
