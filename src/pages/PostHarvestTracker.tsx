@@ -17,6 +17,7 @@ import { queueHarvest, getPendingCount, syncPendingHarvests, installOfflineSync 
 import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { createGeoFeature } from "@/services/satellite/geospatial";
+import { PostHarvestStationPanel } from "@/components/PostHarvestStationPanel";
 
 const CROP_SUGGESTIONS = ["Maize", "Rice", "Cassava", "Yam", "Tomato", "Pepper", "Onion", "Cocoa", "Plantain", "Beans", "Groundnut", "Millet"];
 const UNITS = ["kg", "bags", "tons", "crates", "baskets"];
@@ -451,10 +452,11 @@ export default function PostHarvestTracker() {
       <OverviewPanel entries={entries} />
 
       <Tabs defaultValue="log" className="w-full">
-        <TabsList className="grid grid-cols-3 w-full">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full">
           <TabsTrigger value="log">Log harvest</TabsTrigger>
           <TabsTrigger value="list">Stored ({entries.length})</TabsTrigger>
           <TabsTrigger value="produce-safety">Produce &amp; Safety</TabsTrigger>
+          <TabsTrigger value="station">Post-Harvest Station</TabsTrigger>
         </TabsList>
         <TabsContent value="log" className="mt-3">
           <HarvestForm onAdded={() => { /* realtime refresh */ }} />
@@ -468,6 +470,9 @@ export default function PostHarvestTracker() {
         </TabsContent>
         <TabsContent value="produce-safety" className="mt-3">
           <ProduceSafety />
+        </TabsContent>
+        <TabsContent value="station" className="mt-3">
+          <PostHarvestStationPanel entries={entries.map((entry) => ({ id: entry.id, crop_name: entry.crop_name }))} />
         </TabsContent>
       </Tabs>
 
