@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric, STANDARD_BLE_SENSOR_MAPPINGS } from "@/services/hardware/browserAdapters";
+import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric, STANDARD_BLE_SENSOR_MAPPINGS, decodeMavlinkGpsRawInt } from "@/services/hardware/browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
 import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
 
@@ -15,6 +15,32 @@ const observation: DeviceObservation = {
   measuredAt: "2026-11-20T08:00:00Z", receivedAt: "2026-11-20T08:01:00Z",
   quality: "valid", sourceProtocol: "ble-gatt",
 };
+
+describe("MAVLink GPS_RAW_INT decoder", () => {
+  it("reads the correct fix-type and coordinate offsets and rejects invalid fixes", () => {
+    const bytes = new Uint8Array(30);
+    const view = new DataView(bytes.buffer);
+    view.setUint8(8, 3);
+    view.setInt32(9, 5.6037 * 1e7, true);
+    view.setInt32(13, -0.187 * 1e7, true);
+    expect(decodeMavlinkGpsRawInt(view)).toEqual({
+      fixType: 3,
+      latitude: 5.6037,
+      longitude: -0.187,
+    });
+    view.setUint8(8, 1);
+    expect(decodeMavlinkGpsRawInt(view)).toBeNull();
+  });
+
+  it("rejects out-of-range coordinates and truncated payloads", () => {
+    const view = new DataView(new ArrayBuffer(30));
+    view.setUint8(8, 3);
+    view.setInt32(9, 91 * 1e7, true);
+    view.setInt32(13, 0, true);
+    expect(decodeMavlinkGpsRawInt(view)).toBeNull();
+    expect(decodeMavlinkGpsRawInt(new DataView(new ArrayBuffer(12)))).toBeNull();
+  });
+});
 
 describe("standard BLE sensor profiles", () => {
   it("decodes standard temperature and humidity values", () => {
