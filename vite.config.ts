@@ -131,23 +131,10 @@ export default defineConfig(({ mode }) => ({
           },
 
           {
-            urlPattern:
-              /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
-
-            handler: "NetworkFirst",
-
-            options: {
-              cacheName: "edge-functions",
-
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 1800,
-              },
-
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            // Edge Functions may return user-specific or authenticated data.
+            // Always go to the network; do not persist these responses in Cache Storage.
+            urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
+            handler: "NetworkOnly",
           },
 
           {
