@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { getAdapter, SUPPORTED_PROTOCOLS } from "@/lib/drone/connectionManager";
 
 describe("Aerial Console read-only hardware boundary", () => {
-  it("exposes only the simulator and generic read-only bridge as ready", () => {
+  it("exposes the simulator, generic JSON bridge and read-only MAVLink serial as ready", () => {
     expect(SUPPORTED_PROTOCOLS.filter((item) => item.ready).map((item) => item.id).sort())
-      .toEqual(["custom", "simulator"]);
+      .toEqual(["custom", "mavlink", "simulator"]);
   });
 
-  it("does not create a connection for an unimplemented flight protocol", async () => {
+  it("offers MAVLink discovery but refuses connection when browser serial is unavailable", async () => {
     const adapter = getAdapter("mavlink");
     await expect(adapter.scan()).resolves.toEqual([]);
-    await expect(adapter.connect("aircraft-001")).rejects.toThrow(/not implemented or validated/i);
+    await expect(adapter.connect("aircraft-001")).rejects.toThrow(/Web Serial|HTTPS/i);
   });
 
   it("rejects every live flight-control command on the generic telemetry bridge", async () => {
