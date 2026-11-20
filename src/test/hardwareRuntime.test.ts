@@ -46,7 +46,7 @@ describe("NMEA 0183 vehicle tracker decoder", () => {
   const sentence = (body: string) => {
     let checksum = 0;
     for (const character of body) checksum ^= character.charCodeAt(0);
-    return `${body}*${checksum.toString(16).toUpperCase().padStart(2, "0")}`;
+    return "$" + body + "*" + checksum.toString(16).toUpperCase().padStart(2, "0");
   };
 
   it("decodes checked RMC position and speed in knots", () => {
