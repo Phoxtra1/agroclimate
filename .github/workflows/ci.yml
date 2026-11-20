@@ -75,6 +75,7 @@ jobs:
           src/pages/PostHarvestTracker.tsx
           src/pages/HandlerWorkspace.tsx
           src/test/harvestIdempotency.test.ts
+          src/test/hardwareRuntime.test.ts
           src/hooks/usePostHarvest.ts
           src/lib/harvestIdempotency.ts
           src/lib/offlineQueue.ts
@@ -82,6 +83,8 @@ jobs:
           src/lib/drone/connectionManager.ts
           src/lib/drone/mavlinkAdapter.ts
           src/lib/drone/realAdapter.ts
+          src/services/hardware/browserAdapters.ts
+          src/services/hardware/bootstrap.ts
           src/services/hardware/deviceRuntime.ts
           src/components/PostHarvestStationPanel.tsx
           src/pages/Satellite.tsx
