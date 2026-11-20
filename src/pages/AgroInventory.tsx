@@ -174,6 +174,20 @@ function makeFormatCurrency(currencyCode: string, locale: string) {
   };
 }
 
+function summarizeQuantitiesByUnit(
+  records: Array<{ unit: string; quantity?: number; quantity_lost?: number }>,
+  field: "quantity" | "quantity_lost",
+): string {
+  const totals = new Map<string, number>();
+  for (const record of records) {
+    const unit = record.unit?.trim() || "units";
+    totals.set(unit, (totals.get(unit) || 0) + Number(record[field] || 0));
+  }
+  return Array.from(totals.entries())
+    .map(([unit, quantity]) => `${quantity.toLocaleString()} ${unit}`)
+    .join(" · ") || "0";
+}
+
 // Reusable Dialog for adding/editing records
 function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   title: string;
@@ -329,6 +343,9 @@ export default function AgroInventory() {
     return { totalInputsCost, totalLaborCost, totalLandCost, totalHarvestQty, totalLossQty, totalRevenue, totalExpenses, netProfit };
   }, [inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords]);
 
+  const harvestQuantitySummary = summarizeQuantitiesByUnit(harvestRecords, "quantity");
+  const lossQuantitySummary = summarizeQuantitiesByUnit(harvestLosses, "quantity_lost");
+
   // Use local totals if metrics from hook are empty/zero, otherwise prefer hook metrics
   const displayMetrics = {
     totalInputsCost: metrics.totalInputsCost || totals.totalInputsCost,
@@ -435,8 +452,8 @@ export default function AgroInventory() {
         <MetricCard icon={Package} label="Inputs" value={formatCurrency(displayMetrics.totalInputsCost)} color="text-blue-600" bg="bg-blue-50/50" />
         <MetricCard icon={Users} label="Labor" value={formatCurrency(displayMetrics.totalLaborCost)} color="text-indigo-600" bg="bg-indigo-50/50" />
         <MetricCard icon={MapPin} label="Land" value={formatCurrency(displayMetrics.totalLandCost)} color="text-violet-600" bg="bg-violet-50/50" />
-        <MetricCard icon={Wheat} label="Harvest" value={`${displayMetrics.totalHarvestQty.toLocaleString()}`} color="text-primary" bg="bg-primary/10" />
-        <MetricCard icon={AlertTriangle} label="Losses" value={`${displayMetrics.totalLosses.toLocaleString()}`} color="text-destructive" bg="bg-destructive/10" />
+        <MetricCard icon={Wheat} label="Harvest by Unit" value={harvestQuantitySummary} color="text-primary" bg="bg-primary/10" />
+        <MetricCard icon={AlertTriangle} label="Losses by Unit" value={lossQuantitySummary} color="text-destructive" bg="bg-destructive/10" />
         <MetricCard icon={ShoppingCart} label="Revenue" value={formatCurrency(displayMetrics.totalRevenue)} color="text-emerald-600" bg="bg-emerald-50/50" />
         <MetricCard icon={DollarSign} label="Expenses" value={formatCurrency(displayMetrics.totalExpenses)} color="text-orange-600" bg="bg-orange-50/50" />
         <MetricCard icon={TrendingUp} label="Net Profit" value={formatCurrency(displayMetrics.netProfit)} color={displayMetrics.netProfit >= 0 ? "text-emerald-700" : "text-destructive"} bg={displayMetrics.netProfit >= 0 ? "bg-emerald-50" : "bg-destructive/10"} />
@@ -452,7 +469,7 @@ export default function AgroInventory() {
             <div className="flex-1">
               <p className="text-sm font-semibold">Season Summary</p>
               <p className="text-[11px] text-muted-foreground">
-                Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {displayMetrics.totalLosses.toLocaleString()} units | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
+                Recorded net profit excludes costs not entered in Agro Inventory. Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {lossQuantitySummary} | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
               </p>
             </div>
             <Link to="/produce-safety">
@@ -651,7 +668,7 @@ export default function AgroInventory() {
             </div>
             <div className="px-4 py-3 border-t bg-muted/20 text-sm font-semibold flex justify-between">
               <span>Total Harvest Quantity</span>
-              <span>{totals.totalHarvestQty.toLocaleString()} units</span>
+              <span>{harvestQuantitySummary}</span>
             </div>
           </SectionCard>
         </TabsContent>
@@ -691,7 +708,7 @@ export default function AgroInventory() {
             </div>
             <div className="px-4 py-3 border-t bg-destructive/10 text-sm font-semibold flex justify-between">
               <span>Total Quantity Lost</span>
-              <span className="text-destructive">{totals.totalLossQty.toLocaleString()} units</span>
+              <span className="text-destructive">{lossQuantitySummary}</span>
             </div>
           </SectionCard>
         </TabsContent>
