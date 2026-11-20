@@ -344,8 +344,14 @@ export default function PostHarvestTracker() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this harvest entry?")) return;
-    await deleteEntry(id);
-    toast.success("Entry deleted");
+    try {
+      await deleteEntry(id);
+      toast.success("Entry deleted");
+    } catch (error) {
+      toast.error("Could not delete harvest entry", {
+        description: error instanceof Error ? error.message : "Please retry.",
+      });
+    }
   };
 
   const captureStorageLocation = async (entry: HarvestEntry) => {
