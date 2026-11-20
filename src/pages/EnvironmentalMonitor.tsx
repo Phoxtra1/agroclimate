@@ -98,6 +98,21 @@ interface EnvironmentState {
   lastUpdated: Date;
 }
 
+function readUserStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeUserStorage<T>(key: string, value: T) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* local fallback is optional */ }
+}
+
+const userStorageKey = (name: string, userId: string) => `agrorisk_${name}_${userId}`;
+
 interface IncidentReport {
   id: string;
   lat: number;
@@ -629,7 +644,7 @@ export default function EnvironmentalMonitor() {
   const [selectedFarmId, setSelectedFarmId] = useState<string>("");
   const [drawnBoundary, setDrawnBoundary] = useState<[number, number][]>([]);
 
-  // DB and Local storage synced states
+  // Owner-scoped DB and local fallback states.
   const [farms, setFarms] = useState<SavedFarm[]>([]);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [loadingFarms, setLoadingFarms] = useState(false);
@@ -640,7 +655,7 @@ export default function EnvironmentalMonitor() {
   const [aiAgroRisk, setAiAgroRisk] = useState<AIAgroRiskAssessment | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // Incident reporting state (currently local to this browser; not a shared alert feed)
+  // Incident reporting state
   const [incidentType, setIncidentType] = useState<IncidentReport["type"]>("Flooding");
   const [incidentDesc, setIncidentDesc] = useState("");
 
@@ -652,51 +667,81 @@ export default function EnvironmentalMonitor() {
   const [aiEnv, setAiEnv] = useState<AIEnvironmentalAssessment | null>(null);
   const [isAiEnvLoading, setIsAiEnvLoading] = useState(false);
 
-  // ---------------------------------------------------------------------------
-  // DATA SYNC: FARM RECORDS IN DATABASE; INCIDENT REPORTS IN LOCAL BROWSER STORAGE
-  // ---------------------------------------------------------------------------
   const reloadFarms = useCallback(async () => {
+    const userId = user?.id;
+    const version = ++farmRequestVersion.current;
+    if (!userId) {
+      setFarms([]);
+      setLoadingFarms(false);
+      return;
+    }
     setLoadingFarms(true);
+    const localKey = userStorageKey("local_farms", userId);
+    const localFarms = readUserStorage<SavedFarm[]>(localKey, []);
     try {
-      // 1. Try DB
-      const dbFarms = await dbListFarms(); // Row-level security limits this to the signed-in user's own saved farm records.
-      const mappedDb = dbFarms.map((f: any) => ({
-        id: f.id,
-        name: f.name,
-        lat: Number(f.lat),
-        lon: Number(f.lon)
+      const dbFarms = await dbListFarms(userId);
+      if (version !== farmRequestVersion.current || userId !== currentUserId.current) return;
+      const mappedDb = dbFarms.map((farm: any) => ({
+        id: farm.id,
+        name: farm.name,
+        lat: Number(farm.lat),
+        lon: Number(farm.lon),
+        boundary: farm.boundary as [number, number][] | undefined,
       }));
-
-      // 2. Fetch local storage boundaries
-      const localBoundaries = JSON.parse(localStorage.getItem("agrorisk_farm_boundaries") || "{}");
-      
-      const merged = mappedDb.map((f: any) => ({
-        ...f,
-        boundary: localBoundaries[f.id] || undefined
-      }));
-
-      // 3. Merge pure local storage farms as well in case DB is offline/restricted
-      const localFarms = JSON.parse(localStorage.getItem("agrorisk_local_farms") || "[]");
-      const finalFarms = [...merged, ...localFarms.filter((lf: any) => !merged.some(mf => mf.id === lf.id))];
-
+      const finalFarms = [
+        ...mappedDb,
+        ...localFarms.filter((localFarm) => !mappedDb.some((dbFarm) => dbFarm.id === localFarm.id)),
+      ];
       setFarms(finalFarms);
-    } catch (err) {
-      console.warn("DB list farms failed, falling back to localStorage:", err);
-      const localFarms = JSON.parse(localStorage.getItem("agrorisk_local_farms") || "[]");
+    } catch (error) {
+      if (version !== farmRequestVersion.current || userId !== currentUserId.current) return;
+      console.warn("[AgroRisk] Database farm load failed; showing this account's local fallback:", error);
       setFarms(localFarms);
     } finally {
-      setLoadingFarms(false);
+      if (version === farmRequestVersion.current && userId === currentUserId.current) setLoadingFarms(false);
     }
-  }, [position.locationName]);
+  }, [user?.id]);
 
-  const reloadIncidents = useCallback(() => {
-    const localInc = JSON.parse(localStorage.getItem("agrorisk_incidents") || "[]");
-    setIncidents(localInc);
-  }, []);
+  const reloadIncidents = useCallback(async () => {
+    const userId = user?.id;
+    const version = ++incidentRequestVersion.current;
+    if (!userId) {
+      setIncidents([]);
+      return;
+    }
+    const localKey = userStorageKey("incidents", userId);
+    const localIncidents = readUserStorage<IncidentReport[]>(localKey, []);
+    try {
+      const dbIncidents = await dbListIncidents(userId);
+      if (version !== incidentRequestVersion.current || userId !== currentUserId.current) return;
+      const mapped = dbIncidents.map((incident) => ({
+        id: incident.id,
+        lat: Number(incident.lat),
+        lon: Number(incident.lon),
+        type: incident.incident_type,
+        description: incident.description,
+        date: incident.reported_at,
+        status: "unverified" as const,
+        source: "user_report" as const,
+      }));
+      setIncidents([
+        ...mapped,
+        ...localIncidents.filter((localIncident) => !mapped.some((item) => item.id === localIncident.id)),
+      ]);
+    } catch (error) {
+      if (version !== incidentRequestVersion.current || userId !== currentUserId.current) return;
+      console.warn("[AgroRisk] Database incident load failed; showing this account's local fallback:", error);
+      setIncidents(localIncidents);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
-    reloadFarms();
-    reloadIncidents();
+    void reloadFarms();
+    void reloadIncidents();
+    return () => {
+      farmRequestVersion.current += 1;
+      incidentRequestVersion.current += 1;
+    };
   }, [reloadFarms, reloadIncidents]);
 
   // Reverse Geocoding helper for quick map pin
