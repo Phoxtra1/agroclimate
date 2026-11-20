@@ -4,9 +4,8 @@ import {
   DEFAULT_TEST_MODE,
   TEST_MODE_EVENT,
   TEST_MODE_SETTINGS_KEY,
+  TEST_MODE_STORAGE_KEY,
   TestModeState,
-  readLocalTestMode,
-  writeLocalTestMode,
 } from "@/lib/testMode";
 
 /**
@@ -17,12 +16,16 @@ import {
  * - Writes go through the `test-mode` edge function (admin-only, server verified).
  */
 export function useTestMode() {
-  const [state, setState] = useState<TestModeState>(() => readLocalTestMode());
+  const [state, setState] = useState<TestModeState>(DEFAULT_TEST_MODE);
   const [loading, setLoading] = useState(true);
 
   const apply = useCallback((next: TestModeState) => {
     setState(next);
-    writeLocalTestMode(next);
+    try {
+      localStorage.setItem(TEST_MODE_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // The server remains authoritative if local storage is unavailable.
+    }
   }, []);
 
   const load = useCallback(async () => {
@@ -57,10 +60,9 @@ export function useTestMode() {
   useEffect(() => {
     load();
 
-    const onLocal = (e: Event) => {
-      const detail = (e as CustomEvent).detail as TestModeState | undefined;
-      if (detail) setState(detail);
-    };
+    // Local events are only invalidation signals. Never accept their payload
+    // as an entitlement; reload the server-authoritative state instead.
+    const onLocal = () => { void load(); };
     window.addEventListener(TEST_MODE_EVENT, onLocal);
 
     const ch = supabase
@@ -93,16 +95,16 @@ export function useTestMode() {
   /** Admin-only. Persists globally via the edge function. */
   const setTestMode = useCallback(
     async (enabled: boolean, note?: string) => {
-      const optimistic: TestModeState = { enabled, note, updatedAt: new Date().toISOString() };
-      apply(optimistic);
       const { data, error } = await supabase.functions.invoke("test-mode", {
         body: { action: "set", enabled, note },
       });
-      if (error || data?.error) {
+      if (error || data?.error || !data?.state) {
         await load();
         throw new Error(data?.error || error?.message || "Could not update Test Mode");
       }
-      return data?.state as TestModeState;
+      const confirmedState = data.state as TestModeState;
+      apply(confirmedState);
+      return confirmedState;
     },
     [apply, load]
   );
