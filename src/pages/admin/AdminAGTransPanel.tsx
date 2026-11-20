@@ -124,7 +124,7 @@ export default function AdminAGTransPanel() {
                         <p className="font-semibold">Tracking: {r.tracking_code}</p>
                         <p className="text-xs">{r.product_type} · {r.quantity} {r.unit}</p>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => { supabase.from("agtrans_requests").update({ status: "searching_driver" }).eq("id", r.id); toast.success("Dispute resolved"); }}>Resolve</Button>
+                      <Button size="sm" variant="outline" onClick={async () => { const { error } = await supabase.from("agtrans_requests").update({ status: "searching_driver" }).eq("id", r.id); if (error) toast.error("Could not resolve dispute", { description: error.message }); else toast.success("Dispute resolved"); }}>Resolve</Button>
                     </div>
                   </div>
                 ))
