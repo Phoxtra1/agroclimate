@@ -22,7 +22,7 @@ describe("Satellite monitored field boundaries", () => {
       { lat: 5.001, lon: -1 },
     ]);
     expect(polygon.type).toBe("Polygon");
-    expect(polygon.coordinates[0][0]).toEqual(polygon.coordinates[0].at(-1));
+    expect(polygon.coordinates[0][0]).toEqual(polygon.coordinates[0][polygon.coordinates[0].length - 1]);
     expect(polygon.coordinates[0]).toHaveLength(5);
   });
 
