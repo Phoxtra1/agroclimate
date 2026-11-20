@@ -122,32 +122,40 @@ export function usePostHarvest() {
   }, []);
 
   const addEntry = async (input: Omit<HarvestEntry, "id" | "user_id" | "created_at" | "updated_at" | "photos" | "risk_override"> & { photos?: string[]; client_idempotency_key?: string }) => {
-    if (!user) throw new Error("Not signed in");
+    if (!user?.id || user.id !== currentUserId.current) throw new Error("Your session changed. Sign in again before saving.");
+    const userId = user.id;
+    const quantity = Number(input.quantity);
+    if (!input.crop_name?.trim()) throw new Error("Crop name is required.");
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Harvest quantity must be greater than zero.");
+    if (!input.unit?.trim()) throw new Error("Harvest unit is required.");
+    if (!input.harvest_date || Number.isNaN(Date.parse(input.harvest_date))) throw new Error("A valid harvest date is required.");
     const clientKey = input.client_idempotency_key || createHarvestIdempotencyKey();
     const { data: existing, error: lookupError } = await supabase
       .from("post_harvest_entries" as any)
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("client_idempotency_key", clientKey)
       .maybeSingle();
     if (lookupError) throw lookupError;
+    if (userId !== currentUserId.current) throw new Error("Your session changed while the harvest was being saved.");
     if (existing) return existing;
 
     const { data, error } = await supabase
       .from("post_harvest_entries" as any)
-      .insert({ ...input, client_idempotency_key: clientKey, user_id: user.id, photos: input.photos || [] } as any)
+      .insert({ ...input, crop_name: input.crop_name.trim(), quantity, client_idempotency_key: clientKey, user_id: userId, photos: input.photos || [] } as any)
       .select()
       .single();
     if (error?.code === "23505") {
       const { data: duplicate, error: duplicateError } = await supabase
         .from("post_harvest_entries" as any)
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("client_idempotency_key", clientKey)
         .maybeSingle();
       if (!duplicateError && duplicate) return duplicate;
     }
     if (error) throw error;
+    if (userId !== currentUserId.current) throw new Error("Your session changed after the harvest was saved. Sign in again to refresh.");
     return data;
   };
 
