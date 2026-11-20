@@ -66,9 +66,11 @@ jobs:
           src/components/satellite/MaritimeSafetyPanel.tsx
           src/components/satellite/PortsMapLayer.tsx
           src/hooks/useDroneState.ts
+          src/hooks/useHardwareObservations.ts
           src/hooks/useTransport.ts
           src/pages/AgroInventory.tsx
           src/pages/EnvironmentalMonitor.tsx
+          src/pages/Weather.tsx
           src/pages/LiveTracking.tsx
           src/pages/PostHarvestTracker.tsx
           src/pages/HandlerWorkspace.tsx
@@ -80,6 +82,7 @@ jobs:
           src/lib/drone/connectionManager.ts
           src/lib/drone/mavlinkAdapter.ts
           src/lib/drone/realAdapter.ts
+          src/services/hardware/deviceRuntime.ts
           src/components/PostHarvestStationPanel.tsx
           src/pages/Satellite.tsx
           src/pages/admin/AdminDashboard.tsx
