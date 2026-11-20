@@ -1,10 +1,6 @@
 -- Post-Harvest Station: authenticated device provisioning and idempotent sensor ingestion.
 -- Device credentials are isolated in a non-exposed schema; only the edge function uses service_role.
 
-CREATE SCHEMA IF NOT EXISTS private;
-REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
-GRANT USAGE ON SCHEMA private TO service_role;
-
 CREATE TABLE IF NOT EXISTS public.post_harvest_station_devices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -20,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.post_harvest_station_devices (
   UNIQUE (user_id, hardware_id)
 );
 
-CREATE TABLE IF NOT EXISTS private.post_harvest_station_credentials (
+CREATE TABLE IF NOT EXISTS public.post_harvest_station_credentials (
   device_id uuid PRIMARY KEY REFERENCES public.post_harvest_station_devices(id) ON DELETE CASCADE,
   token_hash text NOT NULL UNIQUE,
   created_at timestamptz NOT NULL DEFAULT now(),
