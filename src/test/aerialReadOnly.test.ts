@@ -1,0 +1,26 @@
+import { describe, expect, it } from "vitest";
+import { getAdapter, SUPPORTED_PROTOCOLS } from "@/lib/drone/connectionManager";
+
+describe("Aerial Console read-only hardware boundary", () => {
+  it("exposes only the simulator and generic read-only bridge as ready", () => {
+    expect(SUPPORTED_PROTOCOLS.filter((item) => item.ready).map((item) => item.id).sort())
+      .toEqual(["custom", "simulator"]);
+  });
+
+  it("does not create a connection for an unimplemented flight protocol", async () => {
+    const adapter = getAdapter("mavlink");
+    await expect(adapter.scan()).resolves.toEqual([]);
+    await expect(adapter.connect("aircraft-001")).rejects.toThrow(/not implemented or validated/i);
+  });
+
+  it("rejects every live flight-control command on the generic telemetry bridge", async () => {
+    const adapter = getAdapter("custom");
+    await expect(adapter.calibrate()).rejects.toThrow(/read-only/i);
+    await expect(adapter.arm()).rejects.toThrow(/read-only/i);
+    await expect(adapter.startMission()).rejects.toThrow(/read-only/i);
+    await expect(adapter.pauseMission()).rejects.toThrow(/read-only/i);
+    await expect(adapter.resumeMission()).rejects.toThrow(/read-only/i);
+    await expect(adapter.returnToHome()).rejects.toThrow(/read-only/i);
+    await expect(adapter.emergencyLand()).rejects.toThrow(/read-only/i);
+  });
+});
