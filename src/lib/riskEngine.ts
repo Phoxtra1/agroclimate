@@ -81,6 +81,8 @@ export interface LocalAgroRiskResult {
   climateScore: number;
   vulnerabilityScore: number;
   terrainAnalysis: string;
+  terrainSource: "coordinate_heuristic";
+  incidentSource: "user_reported_unverified";
   suitability: { crop: string; suitability: "high" | "medium" | "low"; notes: string }[];
   recommendations: string[];
 }
@@ -133,7 +135,10 @@ export function calculateAgroRiskLocal(
   let nearbyErosionIncident = false;
   let nearbyDroughtIncident = false;
 
+  const now = Date.now();
   incidents.forEach(inc => {
+    const reportedAt = Date.parse(inc.date);
+    if (!Number.isFinite(reportedAt) || reportedAt > now + 15 * 60 * 1000 || now - reportedAt > 30 * 24 * 60 * 60 * 1000) return;
     const dLat = (inc.lat - lat) * 111; // km
     const dLon = (inc.lon - lon) * 111 * Math.cos(lat * Math.PI / 180);
     const dist = Math.sqrt(dLat * dLat + dLon * dLon);
@@ -201,7 +206,7 @@ export function calculateAgroRiskLocal(
   vulnerabilityScore = Math.round(Math.min(100, Math.max(5, vulnerabilityScore)));
 
   // 4. Terrain Narrative
-  let terrainAnalysis = `Terrain classification: ${terrainType}. Average slope is estimated at ${slope}°. `;
+  let terrainAnalysis = `Coordinate-based terrain heuristic: ${terrainType}. Modelled slope proxy is ${slope}°; this is not a measured elevation/slope result or DEM survey. Broad regional floodplain bands are reference heuristics, not official hazard boundaries. `;
   if (terrainType === "Steep Hills") {
     terrainAnalysis += "High surface run-off velocity and gravitational slip hazards are present. Soil structural reinforcement is recommended.";
   } else if (terrainType === "Valley") {
@@ -310,6 +315,8 @@ export function calculateAgroRiskLocal(
     climateScore,
     vulnerabilityScore,
     terrainAnalysis,
+    terrainSource: "coordinate_heuristic",
+    incidentSource: "user_reported_unverified",
     suitability,
     recommendations: recommendations.slice(0, 6),
   };
