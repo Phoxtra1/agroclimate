@@ -37,3 +37,23 @@ CREATE INDEX IF NOT EXISTS idx_agro_risk_incidents_owner_date
   ON public.agro_risk_incidents(user_id, reported_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agro_risk_incidents_farm
   ON public.agro_risk_incidents(farm_id) WHERE farm_id IS NOT NULL;
+
+-- Publish the owner-scoped AgroRisk data paths for realtime refresh on other devices.
+DO $$
+DECLARE
+  table_name text;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    FOREACH table_name IN ARRAY ARRAY['farms', 'geo_features', 'agro_risk_incidents'] LOOP
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = table_name
+      ) THEN
+        EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', table_name);
+      END IF;
+    END LOOP;
+  END IF;
+END;
+$$;
