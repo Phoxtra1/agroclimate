@@ -74,3 +74,20 @@ DROP TRIGGER IF EXISTS update_post_harvest_station_device_updated_at ON public.p
 CREATE TRIGGER update_post_harvest_station_device_updated_at
   BEFORE UPDATE ON public.post_harvest_station_devices
   FOR EACH ROW EXECUTE FUNCTION public.update_post_harvest_station_device_updated_at();
+
+-- Realtime is optional for ingestion, but enables owner dashboards to refresh on new readings.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'post_harvest_station_devices'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.post_harvest_station_devices;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'post_harvest_station_observations'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.post_harvest_station_observations;
+  END IF;
+END $$;
