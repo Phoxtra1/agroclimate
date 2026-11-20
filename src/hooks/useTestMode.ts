@@ -11,9 +11,9 @@ import {
 /**
  * Persistent, globally-synced Test Mode.
  *
- * - Reads instantly from LocalStorage (`settings.testMode`) so gating never flashes.
- * - Syncs with the backend `system_settings` row so every device/tester agrees.
- * - Writes go through the `test-mode` edge function (admin-only, server verified).
+ * - The server Edge Function is the authoritative source for the global setting.
+ * - Local storage is a display cache only and never grants access by itself.
+ * - Writes go through the `test-mode` Edge Function with server-side admin verification.
  */
 export function useTestMode() {
   const [state, setState] = useState<TestModeState>(DEFAULT_TEST_MODE);
