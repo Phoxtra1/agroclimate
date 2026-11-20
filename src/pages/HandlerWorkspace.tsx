@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -435,7 +434,6 @@ export default function HandlerWorkspace() {
             </div>
           </DialogContent>
         </Dialog>
-      <SharedDevicePanel component="farm-handler" />
       </main>
     </div>
   );
