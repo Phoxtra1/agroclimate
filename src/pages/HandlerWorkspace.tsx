@@ -52,11 +52,27 @@ export default function HandlerWorkspace() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setHandler(null);
+      setTasks([]);
+      setActiveSession(null);
+      setEvidenceCounts({});
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    // Do not display a previous handler's data while another account is loading.
+    setHandler(null);
+    setTasks([]);
+    setActiveSession(null);
+    setEvidenceCounts({});
 
-    const { data: h } = await supabase.from("handlers").select("*").eq("user_id", user.id).maybeSingle();
-    if (!h) { setLoading(false); return; }
+    const { data: h, error: handlerError } = await supabase.from("handlers").select("*").eq("user_id", user.id).maybeSingle();
+    if (handlerError || !h) {
+      if (handlerError) toast({ title: "Could not load handler profile", description: handlerError.message, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     setHandler(h);
 
     const [t, s, e] = await Promise.all([
@@ -65,10 +81,13 @@ export default function HandlerWorkspace() {
       supabase.from("task_evidence").select("task_id").eq("handler_id", h.id),
     ]);
 
-    if (t.data) setTasks(t.data);
-    if (e.data) setEvidenceCounts(e.data.reduce((counts: Record<string, number>, item: { task_id: string }) => { counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
-    if (s.data && s.data.length > 0) setActiveSession(s.data[0]);
-    else setActiveSession(null);
+    if (t.error || s.error || e.error) {
+      const messages = [t.error, s.error, e.error].filter(Boolean).map((error) => error?.message);
+      toast({ title: "Some handler records could not be loaded", description: messages.join("; "), variant: "destructive" });
+    }
+    setTasks(t.data || []);
+    setEvidenceCounts((e.data || []).reduce((counts: Record<string, number>, item: { task_id: string }) => { counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
+    setActiveSession(s.data?.[0] || null);
     setLoading(false);
   }, [user]);
 
