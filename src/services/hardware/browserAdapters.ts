@@ -293,6 +293,133 @@ export class WebHidScaleAdapter implements HardwareAdapter {
 }
 
 
+type MavlinkSerialPort = {
+  open(options: { baudRate: number }): Promise<void>;
+  close(): Promise<void>;
+  readable?: ReadableStream<Uint8Array> | null;
+};
+type MavlinkSerialNavigator = { serial?: { requestPort(): Promise<MavlinkSerialPort> } };
+type MavlinkSession = { port: MavlinkSerialPort; reader: ReadableStreamDefaultReader<Uint8Array>; closed: boolean };
+
+const MAVLINK_CRC_EXTRA: Record<number, number> = {
+  0: 50, 1: 124, 24: 24, 30: 39, 33: 104, 74: 20,
+};
+function mavCrcAccumulate(byte: number, crc: number): number {
+  let tmp = (byte ^ (crc & 0xff)) & 0xff;
+  tmp = (tmp ^ ((tmp << 4) & 0xff)) & 0xff;
+  return ((crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)) & 0xffff;
+}
+function readMavlinkFrames(input: Uint8Array, buffer: number[]): Array<{ messageId: number; payload: DataView }> {
+  buffer.push(...input);
+  const frames: Array<{ messageId: number; payload: DataView }> = [];
+  while (buffer.length) {
+    const magicIndex = buffer.findIndex((value) => value === 0xfe || value === 0xfd);
+    if (magicIndex < 0) { buffer.length = 0; break; }
+    if (magicIndex > 0) buffer.splice(0, magicIndex);
+    if (buffer.length < 2) break;
+    const v2 = buffer[0] === 0xfd;
+    const payloadLength = buffer[1];
+    if (v2 && buffer.length < 3) break;
+    const incompat = v2 ? buffer[2] : 0;
+    const headerLength = v2 ? 10 : 6;
+    const signatureLength = v2 && (incompat & 1) ? 13 : 0;
+    const totalLength = headerLength + payloadLength + 2 + signatureLength;
+    if (buffer.length < totalLength) break;
+    const messageId = v2
+      ? buffer[7] | (buffer[8] << 8) | (buffer[9] << 16)
+      : buffer[5];
+    const crcExtra = MAVLINK_CRC_EXTRA[messageId];
+    if (crcExtra !== undefined) {
+      let crc = 0xffff;
+      for (let i = 1; i < headerLength + payloadLength; i++) crc = mavCrcAccumulate(buffer[i], crc);
+      crc = mavCrcAccumulate(crcExtra, crc);
+      const checksumOffset = headerLength + payloadLength;
+      const received = buffer[checksumOffset] | (buffer[checksumOffset + 1] << 8);
+      if (crc === received) {
+        const payload = Uint8Array.from(buffer.slice(headerLength, checksumOffset));
+        frames.push({ messageId, payload: new DataView(payload.buffer) });
+      }
+    }
+    buffer.splice(0, totalLength);
+  }
+  return frames;
+}
+
+export class WebSerialMavlinkAdapter implements HardwareAdapter {
+  readonly adapterId = "mavlink-v1-v2-serial";
+  readonly protocol = "mavlink" as const;
+  readonly components: readonly HardwareComponent[] = ["aerial-console"];
+  private sessions = new Map<string, MavlinkSession>();
+
+  constructor(
+    private readonly context: AdapterContext,
+    private readonly baudRate = 57600,
+    private readonly serial: MavlinkSerialNavigator = typeof navigator !== "undefined" ? navigator as unknown as MavlinkSerialNavigator : {},
+  ) {}
+
+  supports(device: DeviceRegistration): boolean {
+    return device.protocol === this.protocol && device.component === "aerial-console" &&
+      device.capabilities.includes("aircraft-telemetry");
+  }
+
+  async connect(device: DeviceRegistration): Promise<AdapterConnection> {
+    if (!this.serial.serial) return { connected: false, detail: "Web Serial is not available for MAVLink telemetry." };
+    if (this.sessions.has(device.deviceId)) return { connected: true, detail: "MAVLink serial stream is already active." };
+    const port = await this.serial.serial.requestPort();
+    await port.open({ baudRate: this.baudRate });
+    if (!port.readable) { await port.close(); return { connected: false, detail: "MAVLink serial port has no readable stream." }; }
+    const session: MavlinkSession = { port, reader: port.readable.getReader(), closed: false };
+    this.sessions.set(device.deviceId, session);
+    void this.readTelemetry(device, session);
+    return { connected: true, connectedAt: new Date().toISOString(), detail: "MAVLink v1/v2 read-only telemetry stream opened." };
+  }
+
+  private async readTelemetry(device: DeviceRegistration, session: MavlinkSession): Promise<void> {
+    const buffer: number[] = [];
+    try {
+      while (!session.closed) {
+        const { value, done } = await session.reader.read();
+        if (done) break;
+        for (const frame of readMavlinkFrames(value, buffer)) {
+          const now = this.context.now?.() ?? new Date();
+          const emit = (metric: ObservationMetric, value: number, unit: string) => {
+            if (Number.isFinite(value)) void this.context.onObservation(observation(device, metric, value, unit, this.protocol, now));
+          };
+          const p = frame.payload;
+          if (frame.messageId === 24 && p.byteLength >= 32) {
+            const fixType = p.getUint8(30);
+            if (fixType >= 2) {
+              emit("latitude", p.getInt32(8, true) / 1e7, "°");
+              emit("longitude", p.getInt32(12, true) / 1e7, "°");
+            }
+          } else if (frame.messageId === 33 && p.byteLength >= 28) {
+            emit("latitude", p.getInt32(4, true) / 1e7, "°");
+            emit("longitude", p.getInt32(8, true) / 1e7, "°");
+            emit("aircraft_altitude", p.getInt32(12, true) / 1000, "m");
+          } else if (frame.messageId === 74 && p.byteLength >= 20) {
+            emit("aircraft_altitude", p.getFloat32(8, true), "m");
+          } else if (frame.messageId === 1 && p.byteLength >= 31) {
+            const battery = p.getInt8(30);
+            if (battery >= 0 && battery <= 100) emit("aircraft_battery", battery, "%");
+          }
+        }
+      }
+    } catch {
+      // Link loss ends the reader; the runtime exposes disconnect/reconnect to the host.
+    }
+  }
+
+  async disconnect(deviceId: string): Promise<void> {
+    const session = this.sessions.get(deviceId);
+    if (!session) return;
+    session.closed = true;
+    try { await session.reader.cancel(); } catch { /* serial link may already be closed */ }
+    session.reader.releaseLock();
+    await session.port.close();
+    this.sessions.delete(deviceId);
+  }
+}
+
 type MediaDevicesLike = { getUserMedia(constraints?: MediaStreamConstraints): Promise<MediaStream> };
 
 export class BrowserCameraAdapter implements HardwareAdapter {
