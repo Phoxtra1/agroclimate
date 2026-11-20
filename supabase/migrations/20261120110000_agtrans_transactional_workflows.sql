@@ -285,7 +285,8 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN RAISE EXCEPTION 'Transport request not found'; END IF;
-  IF auth.uid() NOT IN (r.supplier_id, r.driver_id)
+  IF auth.uid() IS DISTINCT FROM r.supplier_id
+     AND auth.uid() IS DISTINCT FROM r.driver_id
      AND NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Only the request supplier or assigned driver can create its delivery';
   END IF;
@@ -433,3 +434,14 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.confirm_agtrans_delivery(uuid) TO authenticated;
+
+-- Job creation and status changes must go through the checked transactional RPCs.
+REVOKE INSERT, UPDATE ON public.delivery_jobs FROM authenticated;
+REVOKE INSERT ON public.tracking_sessions FROM authenticated;
+REVOKE INSERT, UPDATE ON public.transport_agreements FROM authenticated;
+-- Drivers may publish GPS observations, but cannot directly change job/session status.
+REVOKE UPDATE ON public.tracking_sessions FROM authenticated;
+GRANT UPDATE (
+  current_lat, current_lon, speed_kn, heading, last_location_at,
+  location_accuracy_m, location_source, is_simulated, eta, distance_m, route
+) ON public.tracking_sessions TO authenticated;
