@@ -268,7 +268,7 @@ function TodayWeather({ weather }: { weather: WeatherDay }) {
         <div>
           <Leaf className="h-4 w-4 mx-auto opacity-70" />
           <p className="font-semibold mt-1">{weather.evapotranspiration ?? 4.5}</p>
-          <p className="text-xs opacity-70">ET₀ mm</p>
+          <p className="text-xs opacity-70">ET₀ · {weather.evapotranspirationSource === "provider" ? "provider" : weather.evapotranspirationSource === "estimated" ? "estimated" : "sample"}</p>
         </div>
       </div>
     </div>
@@ -439,7 +439,7 @@ export default function Weather() {
                       : "border-green-300 text-green-600 bg-green-50 dark:bg-green-950/20"
                   }`}
                 >
-                  {summary.overallNeed === "none" ? "✓ No Irrigation" : `⚠ ${summary.overallNeed} need`}
+                  {advisoryAvailable ? (summary.overallNeed === "none" ? "✓ No Irrigation" : `⚠ ${summary.overallNeed} need`) : "Unavailable"}
                 </Badge>
               </h2>
 
@@ -537,7 +537,7 @@ export default function Weather() {
                   <span className="w-20 text-right">Air Temp</span>
                 </div>
                 {forecast.map((day) => (
-                  <ForecastRow key={day.date} day={day} />
+                  <ForecastRow key={day.isoDate || day.date} day={day} />
                 ))}
               </div>
             </section>
