@@ -35,18 +35,18 @@ const POSITIVE_NUMBERS: Partial<Record<InventoryTable, string[]>> = {
 export function validateInventoryRecord(table: InventoryTable, data: Record<string, unknown>, isUpdate = false): string | null {
   for (const field of REQUIRED_TEXT[table]) {
     if ((!isUpdate || field in data) && (typeof data[field] !== "string" || !String(data[field]).trim())) {
-      return `${field.replaceAll("_", " ")} is required.`;
+      return `${field.replace(/_/g, " ")} is required.`;
     }
   }
   for (const field of NON_NEGATIVE_NUMBERS[table] || []) {
     if (!(field in data)) continue;
     const value = Number(data[field]);
-    if (!Number.isFinite(value) || value < 0) return `${field.replaceAll("_", " ")} must be a valid non-negative number.`;
+    if (!Number.isFinite(value) || value < 0) return `${field.replace(/_/g, " ")} must be a valid non-negative number.`;
   }
   for (const field of POSITIVE_NUMBERS[table] || []) {
     if (!(field in data)) continue;
     const value = Number(data[field]);
-    if (!Number.isFinite(value) || value <= 0) return `${field.replaceAll("_", " ")} must be greater than zero.`;
+    if (!Number.isFinite(value) || value <= 0) return `${field.replace(/_/g, " ")} must be greater than zero.`;
   }
   if (table === "labor_records" && "worker_count" in data && !Number.isInteger(Number(data.worker_count))) {
     return "Worker count must be a whole number.";
