@@ -6,8 +6,7 @@ create table if not exists public.agroclimate_devices (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   component text not null check (component in (
-    'farm-handler','agro-inventory','market-link','agtrans',
-    'agroforecast','agrorisk','aerial-console','satellite'
+    'agtrans','agroforecast','agrorisk','aerial-console'
   )),
   device_name text not null check (char_length(trim(device_name)) between 1 and 100),
   hardware_id text not null check (char_length(trim(hardware_id)) between 1 and 160),
@@ -41,8 +40,7 @@ create table if not exists public.agroclimate_device_observations (
   device_id uuid not null references public.agroclimate_devices(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   component text not null check (component in (
-    'farm-handler','agro-inventory','market-link','agtrans',
-    'agroforecast','agrorisk','aerial-console','satellite'
+    'agtrans','agroforecast','agrorisk','aerial-console'
   )),
   metric text not null check (char_length(trim(metric)) between 1 and 64),
   value double precision not null check (value > '-Infinity'::double precision and value < 'Infinity'::double precision),
@@ -98,14 +96,3 @@ create trigger update_agroclimate_device_updated_at
   before update on public.agroclimate_devices
   for each row execute function public.update_agroclimate_device_updated_at();
 
-do $$
-begin
-  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'agroclimate_devices') then
-      alter publication supabase_realtime add table public.agroclimate_devices;
-    end if;
-    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'agroclimate_device_observations') then
-      alter publication supabase_realtime add table public.agroclimate_device_observations;
-    end if;
-  end if;
-end $$;
