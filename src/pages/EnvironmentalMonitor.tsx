@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1881,6 +1882,7 @@ export default function EnvironmentalMonitor() {
           </div>
         </div>
       )}
+      <SharedDevicePanel component="agrorisk" />
     </div>
   );
 }
