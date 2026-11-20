@@ -14,6 +14,8 @@ export interface WeatherDay {
   evapotranspiration?: number;
   soilMoisture?: number;
   soilTemperature?: number;
+  soilMoistureSource?: "provider" | "estimated" | "sample";
+  soilTemperatureSource?: "provider" | "estimated" | "sample";
   isoDate?: string; // provider timestamp for this period
 }
 
