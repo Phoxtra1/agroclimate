@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -63,18 +63,21 @@ export function usePostHarvest() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<HarvestEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const activeUserIdRef = useRef<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
-    if (!user) { setEntries([]); setLoading(false); return; }
+    if (!user) { setEntries([]); activeUserIdRef.current = null; setLoading(false); return; }
     setLoading(true);
-    setEntries([]);
+    if (activeUserIdRef.current !== user.id) {
+      setEntries([]);
+      activeUserIdRef.current = user.id;
+    }
     const { data, error } = await supabase
       .from("post_harvest_entries" as any)
       .select("*")
       .eq("user_id", user.id)
       .order("harvest_date", { ascending: false });
     if (!error && data) setEntries(data as unknown as HarvestEntry[]);
-    else setEntries([]);
     setLoading(false);
   }, [user]);
 
