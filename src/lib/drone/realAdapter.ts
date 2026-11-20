@@ -3,6 +3,27 @@ import { ConnectionAdapter, ConnectionDiagnostics, DiscoveredDrone, DroneProtoco
 const STORAGE_KEY = "droneBridgeUrl";
 interface RealAdapterOptions { protocol: DroneProtocol }
 
+/** Accept secure WebSocket endpoints; plain ws is permitted only on loopback for local development. */
+export function validateTelemetryBridgeUrl(input: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(input.trim());
+  } catch {
+    throw new Error("Enter a valid telemetry bridge URL.");
+  }
+  if (parsed.protocol !== "wss:" && parsed.protocol !== "ws:") {
+    throw new Error("Telemetry bridge URLs must use wss://. ws:// is allowed only for localhost development.");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Do not embed usernames or passwords in the telemetry bridge URL.");
+  }
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  if (parsed.protocol === "ws:" && !loopbackHosts.has(parsed.hostname.toLowerCase())) {
+    throw new Error("Unencrypted ws:// connections are allowed only to localhost or loopback addresses.");
+  }
+  return parsed.toString();
+}
+
 export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionAdapter {
   let status: FlightStatus = "disconnected";
   let telemetry: DroneTelemetry = {
@@ -47,7 +68,9 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
       const p = payload as Record<string, unknown>;
       const numericKeys = ["lat", "lng", "altitude", "alt", "groundSpeed", "speed", "verticalSpeed", "heading", "yaw", "battery", "batteryPct", "signal", "rssi", "gpsAccuracy"];
       const providedNumericKeys = numericKeys.filter((key) => p[key] !== undefined && p[key] !== null);
-      if (!providedNumericKeys.length || providedNumericKeys.some((key) => !Number.isFinite(Number(p[key])))) return false;
+      // JSON telemetry measurements must be JSON numbers. Do not coerce strings,
+      // booleans, or empty values into plausible zero-valued flight readings.
+      if (!providedNumericKeys.length || providedNumericKeys.some((key) => typeof p[key] !== "number" || !Number.isFinite(p[key]))) return false;
 
       const lat = p.lat == null ? telemetry.lat : Number(p.lat);
       const lng = p.lng == null ? telemetry.lng : Number(p.lng);
@@ -100,7 +123,10 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
     }, 1000);
   };
 
-  const bridgeUrl = () => localStorage.getItem(STORAGE_KEY) || "";
+  const bridgeUrl = () => {
+    const stored = localStorage.getItem(STORAGE_KEY) || "";
+    return stored ? validateTelemetryBridgeUrl(stored) : "";
+  };
   const requireSecureCtx = () => {
     if (!window.isSecureContext) throw new Error("Read-only device telemetry requires HTTPS. Open the published site or use localhost.");
   };
@@ -110,9 +136,10 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
     void firstFrame.catch(() => undefined);
     await new Promise<void>((resolve, reject) => {
       try {
-        ws = new WebSocket(url);
+        const safeUrl = validateTelemetryBridgeUrl(url);
+        ws = new WebSocket(safeUrl);
         diag.transport = "websocket";
-        diag.endpoint = url;
+        diag.endpoint = safeUrl;
         emitDiag();
         const timer = setTimeout(() => {
           try { ws?.close(); } catch { /* ignore */ }
@@ -264,5 +291,8 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
   };
 }
 
-export const setBridgeUrl = (url: string) => { if (url) localStorage.setItem(STORAGE_KEY, url); else localStorage.removeItem(STORAGE_KEY); };
+export const setBridgeUrl = (url: string) => {
+  if (url.trim()) localStorage.setItem(STORAGE_KEY, validateTelemetryBridgeUrl(url));
+  else localStorage.removeItem(STORAGE_KEY);
+};
 export const getBridgeUrl = () => localStorage.getItem(STORAGE_KEY) || "";
