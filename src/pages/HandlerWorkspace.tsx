@@ -37,6 +37,8 @@ export default function HandlerWorkspace() {
   const [completingTask, setCompletingTask] = useState<string | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
   const [completionQty, setCompletionQty] = useState("");
+  const [evidenceCounts, setEvidenceCounts] = useState<Record<string, number>>({});
+  const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
 
   const getGPS = (): Promise<{ lat: number; lon: number } | null> => {
     return new Promise((resolve) => {
@@ -50,21 +52,42 @@ export default function HandlerWorkspace() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setHandler(null);
+      setTasks([]);
+      setActiveSession(null);
+      setEvidenceCounts({});
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    // Do not display a previous handler's data while another account is loading.
+    setHandler(null);
+    setTasks([]);
+    setActiveSession(null);
+    setEvidenceCounts({});
 
-    const { data: h } = await supabase.from("handlers").select("*").eq("user_id", user.id).maybeSingle();
-    if (!h) { setLoading(false); return; }
+    const { data: h, error: handlerError } = await supabase.from("handlers").select("*").eq("user_id", user.id).maybeSingle();
+    if (handlerError || !h) {
+      if (handlerError) toast({ title: "Could not load handler profile", description: handlerError.message, variant: "destructive" });
+      setLoading(false);
+      return;
+    }
     setHandler(h);
 
-    const [t, s] = await Promise.all([
+    const [t, s, e] = await Promise.all([
       supabase.from("handler_tasks").select("*").eq("handler_id", h.id).order("created_at", { ascending: false }),
       supabase.from("work_sessions").select("*").eq("handler_id", h.id).is("clock_out", null).order("clock_in", { ascending: false }).limit(1),
+      supabase.from("task_evidence").select("task_id").eq("handler_id", h.id),
     ]);
 
-    if (t.data) setTasks(t.data);
-    if (s.data && s.data.length > 0) setActiveSession(s.data[0]);
-    else setActiveSession(null);
+    if (t.error || s.error || e.error) {
+      const messages = [t.error, s.error, e.error].filter(Boolean).map((error) => error?.message);
+      toast({ title: "Some handler records could not be loaded", description: messages.join("; "), variant: "destructive" });
+    }
+    setTasks(t.data || []);
+    setEvidenceCounts((e.data || []).reduce((counts: Record<string, number>, item: { task_id: string }) => { counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
+    setActiveSession(s.data?.[0] || null);
     setLoading(false);
   }, [user]);
 
@@ -96,30 +119,43 @@ export default function HandlerWorkspace() {
   };
 
   const completeTask = async (taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task || !handler) return;
+    if (task.evidence_required && (evidenceCounts[taskId] || 0) < 1) {
+      toast({ title: "Evidence required", description: "Upload at least one photo or video before completing this task.", variant: "destructive" });
+      return;
+    }
+
+    if (completionNotes.trim()) {
+      const gps = await getGPS();
+      const { error: evidenceError } = await supabase.from("task_evidence").insert({
+        task_id: taskId,
+        handler_id: handler.id,
+        evidence_type: "notes",
+        notes: completionNotes.trim(),
+        gps_lat: gps?.lat ?? null,
+        gps_lon: gps?.lon ?? null,
+      });
+      if (evidenceError) {
+        toast({ title: "Could not save completion notes", description: evidenceError.message, variant: "destructive" });
+        return;
+      }
+    }
+
     const { error } = await supabase.from("handler_tasks").update({
       status: "completed",
       completed_at: new Date().toISOString(),
       quantity_completed: completionQty ? Number(completionQty) : null,
     }).eq("id", taskId);
 
-    if (completionNotes) {
-      const gps = await getGPS();
-      await supabase.from("task_evidence").insert({
-        task_id: taskId,
-        handler_id: handler.id,
-        evidence_type: "notes",
-        notes: completionNotes,
-        gps_lat: gps?.lat ?? null,
-        gps_lon: gps?.lon ?? null,
-      });
-    }
-
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else toast({ title: "Task completed!" });
-    setCompletingTask(null);
-    setCompletionNotes("");
-    setCompletionQty("");
-    fetchData();
+    else {
+      toast({ title: "Task completed!" });
+      setCompletingTask(null);
+      setCompletionNotes("");
+      setCompletionQty("");
+      fetchData();
+    }
   };
 
   const reportIssue = async () => {
@@ -143,23 +179,42 @@ export default function HandlerWorkspace() {
 
   const uploadEvidence = async (taskId: string, file: File) => {
     if (!handler) return;
-    const path = `${handler.id}/${taskId}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("handler-evidence").upload(path, file);
-    if (uploadError) { toast({ title: "Upload failed", description: uploadError.message, variant: "destructive" }); return; }
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+      toast({ title: "Unsupported file", description: "Upload a photo or video.", variant: "destructive" });
+      return;
+    }
+    setUploadingTaskId(taskId);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100) || "evidence";
+    const path = `${handler.id}/${taskId}/${crypto.randomUUID()}_${safeName}`;
+    try {
+      const { error: uploadError } = await supabase.storage.from("handler-evidence").upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
 
-    const { data: urlData } = supabase.storage.from("handler-evidence").getPublicUrl(path);
-    const gps = await getGPS();
-
-    await supabase.from("task_evidence").insert({
-      task_id: taskId,
-      handler_id: handler.id,
-      evidence_type: file.type.startsWith("video") ? "video" : "photo",
-      file_url: urlData.publicUrl,
-      gps_lat: gps?.lat ?? null,
-      gps_lon: gps?.lon ?? null,
-      device_id: navigator.userAgent.slice(0, 100),
-    });
-    toast({ title: "Evidence uploaded!" });
+      const { data: urlData } = supabase.storage.from("handler-evidence").getPublicUrl(path);
+      const gps = await getGPS();
+      const { error: recordError } = await supabase.from("task_evidence").insert({
+        task_id: taskId,
+        handler_id: handler.id,
+        evidence_type: file.type.startsWith("video") ? "video" : "photo",
+        file_url: urlData.publicUrl,
+        gps_lat: gps?.lat ?? null,
+        gps_lon: gps?.lon ?? null,
+        device_id: navigator.userAgent.slice(0, 100),
+      });
+      if (recordError) {
+        await supabase.storage.from("handler-evidence").remove([path]);
+        throw recordError;
+      }
+      setEvidenceCounts((current) => ({ ...current, [taskId]: (current[taskId] || 0) + 1 }));
+      toast({ title: "Evidence uploaded!" });
+    } catch (error) {
+      toast({ title: "Evidence upload failed", description: error instanceof Error ? error.message : "Could not save evidence.", variant: "destructive" });
+    } finally {
+      setUploadingTaskId(null);
+    }
   };
 
   if (loading) {
@@ -259,13 +314,13 @@ export default function HandlerWorkspace() {
                           {t.quantity_label && <span>{t.quantity_expected} {t.quantity_label}</span>}
                         </div>
                       </div>
-                      {t.evidence_required && <Badge variant="outline" className="text-[10px]">📷 Required</Badge>}
+                      {t.evidence_required && <Badge variant="outline" className="text-[10px]">📷 Required · {evidenceCounts[t.id] || 0} uploaded</Badge>}
                     </div>
                     <div className="flex gap-2">
                       {t.evidence_required && (
                         <label className="cursor-pointer">
-                          <input type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={e => { if (e.target.files?.[0]) uploadEvidence(t.id, e.target.files[0]); }} />
-                          <Button size="sm" variant="outline" asChild><span><Camera className="h-3 w-3 mr-1" /> Upload</span></Button>
+                          <input type="file" accept="image/*,video/*" capture="environment" className="hidden" disabled={uploadingTaskId === t.id} onChange={e => { if (e.target.files?.[0]) void uploadEvidence(t.id, e.target.files[0]); e.currentTarget.value = ""; }} />
+                          <Button size="sm" variant="outline" asChild disabled={uploadingTaskId === t.id}><span><Camera className="h-3 w-3 mr-1" /> {uploadingTaskId === t.id ? "Uploading…" : "Upload"}</span></Button>
                         </label>
                       )}
                       {completingTask === t.id ? (
@@ -273,7 +328,7 @@ export default function HandlerWorkspace() {
                           {t.quantity_label && <Input type="number" placeholder={`${t.quantity_label} completed`} value={completionQty} onChange={e => setCompletionQty(e.target.value)} />}
                           <Textarea placeholder="Notes (optional)" value={completionNotes} onChange={e => setCompletionNotes(e.target.value)} rows={2} />
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => completeTask(t.id)}><CheckCircle2 className="h-3 w-3 mr-1" /> Submit</Button>
+                            <Button size="sm" onClick={() => void completeTask(t.id)} disabled={uploadingTaskId === t.id || (t.evidence_required && (evidenceCounts[t.id] || 0) < 1)}><CheckCircle2 className="h-3 w-3 mr-1" /> Submit</Button>
                             <Button size="sm" variant="ghost" onClick={() => setCompletingTask(null)}>Cancel</Button>
                           </div>
                         </div>
