@@ -53,7 +53,7 @@ function fileToDataUrl(file: File | Blob): Promise<string> {
 }
 
 // Downscale + JPEG-compress an image to reduce storage and upload time
-async function compressImage(file: File, maxEdge = 1280, quality = 0.7): Promise<Blob> {
+export async function compressImage(file: File, maxEdge = 1280, quality = 0.7): Promise<Blob> {
   if (!file.type.startsWith("image/")) return file;
   try {
     const dataUrl = await fileToDataUrl(file);
@@ -104,11 +104,13 @@ export async function queueHarvest(
   for (const f of files) {
     const key = `${entry.user_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const compressed = await compressImage(f);
+    const mimeType = compressed.type || f.type || "image/jpeg";
+    const extension = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
     photos[key] = {
       key,
       user_id: entry.user_id,
-      filename: (f.name || "photo.jpg").replace(/\.[^.]+$/, "") + ".jpg",
-      type: "image/jpeg",
+      filename: (f.name || "photo").replace(/\.[^.]+$/, "") + "." + extension,
+      type: mimeType,
       data_url: await fileToDataUrl(compressed),
     };
     photo_keys.push(key);
