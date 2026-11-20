@@ -18,7 +18,7 @@ The reusable `SharedDevicePanel`:
 
 | Component | Existing interface extended | Existing workflow preserved |
 |---|---|---|
-| Farm Handler | Handler Workspace | Phone camera, optional GPS, clock-in/out, task completion and evidence uploads remain unchanged. |
+| Farm Handler | Handler Management | Phone camera, optional GPS, clock-in/out, task completion and evidence uploads remain unchanged. |
 | Agro Inventory | Agro Inventory | Manual stock entry, adjustments, harvest, loss and sales records remain unchanged. Device observations do not mutate stock or harvest records. |
 | Market Link | Market Link | Listings, orders, negotiations, agreements, messaging and Produce Safety remain unchanged. |
 | AGTrans | Driver Hub | Driver onboarding, offers, trip requests, job status and existing phone-based location tracking remain unchanged. Vehicle tracker readings are a separate provenance stream. |
@@ -30,7 +30,7 @@ The reusable `SharedDevicePanel`:
 Post-Harvest is not mounted on this shared panel. It continues to use its dedicated station registry and ingestion panel.
 
 ## Registration workflow
-1. Open the relevant component page and expand/register a device in its Device connections panel.
+1. Open the relevant component page (Farm Handler device management is in Handler Management, not the worker workspace) and register a device in its Device connections panel.
 2. Enter the device's actual serial or assigned hardware ID, manufacturer, exact model and firmware where known.
 3. Select only the protocol confirmed by the device documentation. Until verified, keep the descriptive value as `manual`.
 4. The gateway returns a one-time token. Store it only in the device or trusted gateway's protected secret store.
