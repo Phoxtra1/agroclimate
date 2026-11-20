@@ -346,7 +346,7 @@ export function useAGTrans() {
   const notifyUser = async (userId: string, type: string, title: string, message: string, data?: any) => {
     if (!userId) return;
     try {
-      const { error } = await supabase.rpc("create_agtrans_notification", {
+      const { error } = await (supabase as any).rpc("create_agtrans_notification", {
         p_user_id: userId,
         p_type: type,
         p_title: title,
@@ -812,7 +812,7 @@ export function useAGTrans() {
 
   const createDeliveryJob = async (request: TransportRequest, transportFee?: number) => {
     if (!user) throw new Error("Not authenticated");
-    const { data, error } = await supabase.rpc("create_agtrans_delivery_job", {
+    const { data, error } = await (supabase as any).rpc("create_agtrans_delivery_job", {
       p_request_id: request.id,
       p_transport_fee: transportFee ?? 0,
     } as any);
@@ -831,7 +831,7 @@ export function useAGTrans() {
     if (user.id !== job.driver_id && !(user.id === job.supplier_id && status === "Cancelled")) {
       throw new Error("Only the assigned driver can advance this trip. The supplier may cancel it before delivery.");
     }
-    const { data, error } = await supabase.rpc("transition_agtrans_delivery_job", {
+    const { data, error } = await (supabase as any).rpc("transition_agtrans_delivery_job", {
       p_job_id: jobId,
       p_status: status,
     } as any);
@@ -871,7 +871,7 @@ export function useAGTrans() {
     if (!Number.isFinite(capturedAtMs) || ageMs > 90000 || ageMs < -15000) {
       throw new Error("The GPS fix is stale or has an invalid capture time. Request a fresh device GPS position.");
     }
-    const { data, error } = await supabase.rpc("update_agtrans_tracking_location", {
+    const { data, error } = await (supabase as any).rpc("update_agtrans_tracking_location", {
       p_job_id: jobId,
       p_lat: locationData.lat,
       p_lon: locationData.lon,
@@ -900,7 +900,7 @@ export function useAGTrans() {
     if (!user) throw new Error("Not authenticated");
     const jobById = deliveryJobs.find((job) => job.id === id);
     const requestId = jobById?.request_id || id;
-    const { error } = await supabase.rpc("confirm_agtrans_delivery", {
+    const { error } = await (supabase as any).rpc("confirm_agtrans_delivery", {
       p_request_id: requestId,
     } as any);
     if (error) throw error;
