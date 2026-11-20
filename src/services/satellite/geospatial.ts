@@ -327,6 +327,11 @@ export async function saveAgroRiskIncident(input: {
   }
   const description = input.description.trim();
   if (!description || description.length > 2000) throw new Error("Incident description must be 1–2,000 characters.");
+  if (input.farmId) {
+    const { data: farm, error: farmError } = await (supabase.from("farms" as any) as any)
+      .select("id").eq("id", input.farmId).eq("user_id", userData.user.id).maybeSingle();
+    if (farmError || !farm) throw new Error("The selected farm is not owned by this account.");
+  }
 
   const { data, error } = await (supabase.from("agro_risk_incidents" as any) as any).insert({
     user_id: userData.user.id,
