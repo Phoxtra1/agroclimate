@@ -9,11 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Edit2, Package, Users, MapPin, Wheat, TrendingDown, DollarSign, TrendingUp, Loader2, Bot, MessageSquare, AlertTriangle, ShoppingCart, Filter, X, Coins, ShieldCheck, Scale } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AgriCostCalculator } from "@/components/inventory/AgriCostCalculator";
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { createAgroInventoryBarcodeScanner } from "@/services/hardware/bootstrap";
+import { useHardwareObservations } from "@/hooks/useHardwareObservations";
 
 // ─── Comprehensive timezone → currency map ───
 const USER_TZ = typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
@@ -278,6 +279,8 @@ export default function AgroInventory() {
     inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords,
     metrics, loading, addRecord, updateRecord, deleteRecord, seasons, crops, plots,
   } = useInventory(filterSeason, filterCrop, filterPlot);
+  const { latestByMetric: latestInventoryMetrics } = useHardwareObservations(["agro-inventory"]);
+  const latestWeight = latestInventoryMetrics.get("weight");
 
   // Field configurations for each section
   const fieldConfigs = useMemo(() => ({
@@ -527,6 +530,7 @@ export default function AgroInventory() {
               <div>
                 <p className="text-sm font-semibold">Barcode / QR Scanner</p>
                 <p className="text-xs text-muted-foreground">Focus the field and scan with a USB/Bluetooth keyboard-wedge scanner, or type a code. Link the scanned code to an existing inventory item; the code is stored in that item's Notes field, so no new database column is required.</p>
+                {latestWeight && <Badge variant="outline" className="mt-2 border-emerald-600/40 text-emerald-700">Latest scale reading: {latestWeight.value} {latestWeight.unit} · {new Date(latestWeight.measuredAt).toLocaleTimeString()}</Badge>}
               </div>
               <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
                 <Input
@@ -570,7 +574,7 @@ export default function AgroInventory() {
             </CardContent>
           </Card>
           <SectionCard title="Input Inventory" badge={`${inventoryItems.length}`}
-            addDialog={<RecordDialog title="Add Input" fields={fieldConfigs.inputs} onSave={(data) => addRecord("inventory_items", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Input</Button>} />}
+            addDialog={<div className="flex items-center gap-2"><RecordDialog title="Add Input" fields={fieldConfigs.inputs} onSave={(data) => addRecord("inventory_items", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Input</Button>} />{latestWeight && <RecordDialog title="Add Weighed Input" fields={fieldConfigs.inputs} initialData={{ quantity: String(latestWeight.value), unit: latestWeight.unit }} onSave={(data) => addRecord("inventory_items", data)} trigger={<Button size="sm" variant="outline" className="h-8"><Scale className="h-4 w-4 mr-1" /> Use Scale Reading</Button>} />}</div>}
           >
             <div className="rounded-md border">
               <Table>
