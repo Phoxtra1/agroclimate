@@ -97,8 +97,24 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setInventoryItems([]);
+      setLaborRecords([]);
+      setLandCosts([]);
+      setHarvestRecords([]);
+      setHarvestLosses([]);
+      setSalesRecords([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    // Clear the previous account's rows immediately when the authenticated user changes.
+    setInventoryItems([]);
+    setLaborRecords([]);
+    setLandCosts([]);
+    setHarvestRecords([]);
+    setHarvestLosses([]);
+    setSalesRecords([]);
     try {
       const [inv, lab, land, harv, loss, sales] = await Promise.all([
         supabase.from("inventory_items").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
@@ -108,6 +124,14 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
         supabase.from("harvest_losses").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("sales_records").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       ]);
+      const failures = [inv, lab, land, harv, loss, sales].filter((result) => result.error);
+      if (failures.length) {
+        toast({
+          title: "Some inventory records could not be loaded",
+          description: failures.map((result) => result.error?.message).filter(Boolean).join("; "),
+          variant: "destructive",
+        });
+      }
       setInventoryItems((inv.data || []) as any);
       setLaborRecords((lab.data || []) as any);
       setLandCosts((land.data || []) as any);
