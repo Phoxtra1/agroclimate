@@ -154,6 +154,23 @@ describe("hardware runtime and browser adapters", () => {
     expect(await delivery.flush()).toEqual({ delivered: 1, remaining: 0 });
   });
 
+  it("publishes accepted hardware observations to the component UI event stream", () => {
+    const delivery = new ResilientObservationDelivery(async () => undefined, { read: () => [], write: () => undefined });
+    const runtime = new DeviceIntegrationRuntime(delivery);
+    runtime.registerDevice(device);
+    const received: DeviceObservation[] = [];
+    const listener = (event: Event) => received.push((event as CustomEvent<DeviceObservation>).detail);
+    window.addEventListener("agroclimate:device-observation", listener);
+    try {
+      runtime.acceptObservation(observation);
+      expect(received).toHaveLength(1);
+      expect(received[0].eventId).toBe(observation.eventId);
+    } finally {
+      window.removeEventListener("agroclimate:device-observation", listener);
+      void runtime.dispose();
+    }
+  });
+
   it("rejects observations from another tenant or component", () => {
     const delivery = new ResilientObservationDelivery(async () => undefined, { read: () => [], write: () => undefined });
     const runtime = new DeviceIntegrationRuntime(delivery);
