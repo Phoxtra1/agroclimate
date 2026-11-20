@@ -87,8 +87,10 @@ export function useGeolocation() {
         const longitude = result.coords.longitude;
         const cached = readGeoCache();
         if (cached && isSamePlace(cached, latitude, longitude) && cached.locationName) {
-          setPosition({ ...cached, source: "cached" });
+          const confirmed = { ...cached, source: "gps" as const, updatedAt: Date.now() };
+          setPosition(confirmed);
           setHasResolved(true);
+          try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(confirmed)); } catch { /* cache is optional */ }
           setLoading(false);
           return;
         }
