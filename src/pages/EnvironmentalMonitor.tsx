@@ -685,12 +685,15 @@ export default function EnvironmentalMonitor() {
     try {
       const dbFarms = await dbListFarms(userId);
       if (version !== farmRequestVersion.current || userId !== currentUserId.current) return;
+      // Legacy boundaries were stored in one browser key. Attach them only to
+      // farm rows already returned by this account-scoped database query.
+      const legacyBoundaries = readUserStorage<Record<string, [number, number][]>>("agrorisk_farm_boundaries", {});
       const mappedDb = dbFarms.map((farm: any) => ({
         id: farm.id,
         name: farm.name,
         lat: Number(farm.lat),
         lon: Number(farm.lon),
-        boundary: farm.boundary as [number, number][] | undefined,
+        boundary: (farm.boundary || legacyBoundaries[farm.id]) as [number, number][] | undefined,
       }));
       const finalFarms = [
         ...mappedDb,
