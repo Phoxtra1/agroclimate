@@ -20,13 +20,20 @@ const PASSWORD = import.meta.env.VITE_E2E_ADMIN_PASSWORD as string | undefined;
 const since = new Date(Date.now() - 30 * 864e5).toISOString();
 const today = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
 
-const canRun = Boolean(URL && KEY);
-const canSignIn = Boolean(canRun && EMAIL && PASSWORD);
+// Live Supabase integration tests are opt-in. Ordinary CI and unit-test runs
+// must not depend on external network availability or production credentials.
+const canRun = Boolean(
+  process.env.RUN_LIVE_SUPABASE_TESTS === "true" && URL && KEY && EMAIL && PASSWORD
+);
+const canSignIn = canRun;
 
 describe.runIf(canRun)("admin_overview_stats", () => {
   const client = createClient(URL!, KEY!, { auth: { persistSession: false } });
 
   it("is callable and returns aggregate stats structure", async () => {
+    const { error: signInError } = await client.auth.signInWithPassword({ email: EMAIL!, password: PASSWORD! });
+    expect(signInError).toBeNull();
+
     const { data, error } = await client.rpc("admin_overview_stats" as never, {
       p_since: since,
       p_today: today,
