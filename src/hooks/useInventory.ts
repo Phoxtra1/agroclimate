@@ -347,7 +347,7 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   const filtered = {
     inventoryItems: applyFilter(inventoryItems),
     laborRecords: applyFilter(laborRecords),
-    landCosts: filterSeason ? landCosts.filter(l => l.season === filterSeason) : landCosts,
+    landCosts: landCosts.filter((record) => (!filterSeason || record.season === filterSeason) && (!filterPlot || record.farm_plot === filterPlot)),
     harvestRecords: applyFilter(harvestRecords),
     harvestLosses: applyFilter(harvestLosses),
     salesRecords: applyFilter(salesRecords),
@@ -369,19 +369,28 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   // Get unique values for filters
   const seasons = [...new Set([
     ...inventoryItems.map(i => i.season),
+    ...laborRecords.map(record => record.season),
+    ...landCosts.map(record => record.season),
     ...harvestRecords.map(h => h.season),
+    ...harvestLosses.map(record => record.season),
     ...salesRecords.map(s => s.season),
   ].filter(Boolean))] as string[];
 
   const crops = [...new Set([
     ...inventoryItems.map(i => i.crop_name),
+    ...laborRecords.map(record => record.crop_name),
     ...harvestRecords.map(h => h.crop_name),
+    ...harvestLosses.map(record => record.crop_name),
     ...salesRecords.map(s => s.crop_name),
   ].filter(Boolean))] as string[];
 
   const plots = [...new Set([
     ...inventoryItems.map(i => i.farm_plot),
+    ...laborRecords.map(record => record.farm_plot),
+    ...landCosts.map(record => record.farm_plot),
     ...harvestRecords.map(h => h.farm_plot),
+    ...harvestLosses.map(record => record.farm_plot),
+    ...salesRecords.map(record => record.farm_plot),
   ].filter(Boolean))] as string[];
 
   return {
