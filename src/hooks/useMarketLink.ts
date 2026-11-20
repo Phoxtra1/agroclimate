@@ -72,6 +72,18 @@ export interface PriceRow {
   unit: string;
 }
 
+export function canTransitionContractState(current: MarketContract["state"], next: MarketContract["state"], actorIsFarmer: boolean): boolean {
+  if (current === "proposed") return next === "cancelled" || (actorIsFarmer && (next === "accepted" || next === "rejected"));
+  if (current === "accepted") return next === "cancelled" || next === "completed";
+  return false;
+}
+
+const LOGISTICS_STEPS: MarketContract["logistics_status"][] = ["pending", "scheduled", "in_transit", "delivered"];
+
+export function canTransitionLogistics(current: MarketContract["logistics_status"], next: MarketContract["logistics_status"]): boolean {
+  return LOGISTICS_STEPS.indexOf(next) === LOGISTICS_STEPS.indexOf(current) + 1;
+}
+
 export function useMarketLink() {
   const { user } = useAuth();
   const [supply, setSupply] = useState<FarmerInput[]>([]);
@@ -209,17 +221,38 @@ export function useMarketLink() {
   };
   const setContractState = async (id: string, state: MarketContract["state"]) => {
     if (!user) throw new Error("Not signed in");
-    if (!["accepted", "rejected", "cancelled", "completed"].includes(state)) throw new Error("Unsupported contract state");
-    const { error } = await supabase.from("market_contracts" as any).update({ state } as any)
-      .eq("id", id).or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`);
+    const { data: current, error: readError } = await supabase.from("market_contracts" as any)
+      .select("farmer_id,buyer_id,state").eq("id", id)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).maybeSingle();
+    if (readError) throw readError;
+    if (!current) throw new Error("Contract not found or access denied");
+    const actorIsFarmer = current.farmer_id === user.id;
+    if (!canTransitionContractState(current.state, state, actorIsFarmer)) {
+      throw new Error(`Contract cannot move from ${current.state} to ${state} for this participant`);
+    }
+    const { data, error } = await supabase.from("market_contracts" as any).update({ state } as any)
+      .eq("id", id).eq("state", current.state)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).select("id").maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error("Contract changed before this update. Refresh and try again.");
     await fetchAll();
   };
   const setLogistics = async (id: string, logistics_status: MarketContract["logistics_status"]) => {
     if (!user) throw new Error("Not signed in");
-    const { error } = await supabase.from("market_contracts" as any).update({ logistics_status } as any)
-      .eq("id", id).or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`);
+    const { data: current, error: readError } = await supabase.from("market_contracts" as any)
+      .select("farmer_id,buyer_id,state,logistics_status").eq("id", id)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).maybeSingle();
+    if (readError) throw readError;
+    if (!current) throw new Error("Contract not found or access denied");
+    if (current.state !== "accepted") throw new Error("Logistics can only advance for accepted contracts");
+    if (!canTransitionLogistics(current.logistics_status, logistics_status)) {
+      throw new Error(`Invalid logistics transition from ${current.logistics_status} to ${logistics_status}`);
+    }
+    const { data, error } = await supabase.from("market_contracts" as any).update({ logistics_status } as any)
+      .eq("id", id).eq("state", "accepted").eq("logistics_status", current.logistics_status)
+      .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).select("id").maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error("Logistics status changed before this update. Refresh and try again.");
     await fetchAll();
   };
 
