@@ -225,13 +225,14 @@ export function useMarketLink() {
       .select("farmer_id,buyer_id,state").eq("id", id)
       .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).maybeSingle();
     if (readError) throw readError;
-    if (!current) throw new Error("Contract not found or access denied");
-    const actorIsFarmer = current.farmer_id === user.id;
-    if (!canTransitionContractState(current.state, state, actorIsFarmer)) {
-      throw new Error(`Contract cannot move from ${current.state} to ${state} for this participant`);
+    const contract = current as any;
+    if (!contract) throw new Error("Contract not found or access denied");
+    const actorIsFarmer = contract.farmer_id === user.id;
+    if (!canTransitionContractState(contract.state, state, actorIsFarmer)) {
+      throw new Error(`Contract cannot move from ${contract.state} to ${state} for this participant`);
     }
     const { data, error } = await supabase.from("market_contracts" as any).update({ state } as any)
-      .eq("id", id).eq("state", current.state)
+      .eq("id", id).eq("state", contract.state)
       .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).select("id").maybeSingle();
     if (error) throw error;
     if (!data) throw new Error("Contract changed before this update. Refresh and try again.");
@@ -243,13 +244,14 @@ export function useMarketLink() {
       .select("farmer_id,buyer_id,state,logistics_status").eq("id", id)
       .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).maybeSingle();
     if (readError) throw readError;
-    if (!current) throw new Error("Contract not found or access denied");
-    if (current.state !== "accepted") throw new Error("Logistics can only advance for accepted contracts");
-    if (!canTransitionLogistics(current.logistics_status, logistics_status)) {
-      throw new Error(`Invalid logistics transition from ${current.logistics_status} to ${logistics_status}`);
+    const contract = current as any;
+    if (!contract) throw new Error("Contract not found or access denied");
+    if (contract.state !== "accepted") throw new Error("Logistics can only advance for accepted contracts");
+    if (!canTransitionLogistics(contract.logistics_status, logistics_status)) {
+      throw new Error(`Invalid logistics transition from ${contract.logistics_status} to ${logistics_status}`);
     }
     const { data, error } = await supabase.from("market_contracts" as any).update({ logistics_status } as any)
-      .eq("id", id).eq("state", "accepted").eq("logistics_status", current.logistics_status)
+      .eq("id", id).eq("state", "accepted").eq("logistics_status", contract.logistics_status)
       .or(`buyer_id.eq.${user.id},farmer_id.eq.${user.id}`).select("id").maybeSingle();
     if (error) throw error;
     if (!data) throw new Error("Logistics status changed before this update. Refresh and try again.");
