@@ -85,10 +85,12 @@ Deno.serve(async (req) => {
     if (!deviceName || deviceName.length > 100 || !hardwareId || hardwareId.length > 160) {
       return json({ error: "device_name (1-100) and hardware_id (1-160) are required" }, 400);
     }
-    const capabilities = Array.isArray(body.capabilities) &&
-      body.capabilities.length <= 32 &&
-      body.capabilities.every((v: unknown) => typeof v === "string" && v.length <= 64)
-      ? body.capabilities : [];
+    if (body.capabilities !== undefined && (!Array.isArray(body.capabilities) ||
+        body.capabilities.length > 32 ||
+        !body.capabilities.every((v: unknown) => typeof v === "string" && v.trim().length > 0 && v.length <= 64))) {
+      return json({ error: "capabilities must be an array of at most 32 short strings" }, 400);
+    }
+    const capabilities = body.capabilities ?? [];
     const token = newToken();
     const { data: device, error } = await admin.from("agroclimate_devices").insert({
       user_id: user.id, component, protocol, device_name: deviceName, hardware_id: hardwareId,
@@ -141,6 +143,7 @@ Deno.serve(async (req) => {
     const key = typeof body.idempotency_key === "string" ? body.idempotency_key.trim() : "";
     if (!Object.hasOwn(UNITS, metric) || !UNITS[metric].includes(unit) ||
         typeof value !== "number" || !Number.isFinite(value) ||
+        !metricValueIsPlausible(metric, value, unit) ||
         !ISO_DATE.test(observedAt) || !Number.isFinite(Date.parse(observedAt)) ||
         Date.parse(observedAt) > Date.now() + 5 * 60_000 ||
         !key || key.length > 160) {
@@ -172,7 +175,7 @@ Deno.serve(async (req) => {
       const same = existing.metric === metric && existing.value === value && existing.unit === unit &&
         existing.observed_at === row.observed_at && existing.farm_id === row.farm_id &&
         existing.site_id === row.site_id && existing.latitude === row.latitude &&
-        existing.longitude === row.longitude && JSON.stringify(existing.metadata) === JSON.stringify(metadata);
+        existing.longitude === row.longitude && stableJson(existing.metadata) === stableJson(metadata);
       if (!same) return json({ error: "Idempotency key was already used for a different observation" }, 409);
       await admin.from("agroclimate_devices").update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
       return json({ accepted: true, duplicate: true, observation: existing });
