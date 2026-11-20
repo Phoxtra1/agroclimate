@@ -552,8 +552,8 @@ export default function AgroInventory() {
                     if (!item) return;
                     const code = barcodeQuery.trim();
                     const existingNotes = item.notes?.trim() ?? "";
-                    if (existingNotes.split(/\\r?\\n/).some((line) => line.trim() === `Barcode: ${code}`)) return;
-                    const nextNotes = [existingNotes, `Barcode: ${code}`].filter(Boolean).join("\\n");
+                    if (existingNotes.split(/\r?\n/).some((line) => line.trim() === `Barcode: ${code}`)) return;
+                    const nextNotes = [existingNotes, `Barcode: ${code}`].filter(Boolean).join("\n");
                     void updateRecord("inventory_items", item.id, { notes: nextNotes });
                   }}
                 >
