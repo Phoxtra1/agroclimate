@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -521,6 +522,7 @@ export default function MarketLink() {
 
       <Dialog open={inboxOpen} onOpenChange={setInboxOpen}>
         <DashboardMarketInbox threads={inboxThreads} />
+      <SharedDevicePanel component="market-link" />
       </Dialog>
     </div>
   );
