@@ -186,7 +186,6 @@ export default function HandlerManagement() {
 
       setInviteLink(`${window.location.origin}/?handler_invite=true&email=${encodeURIComponent(newHandler.email)}`);
       toast({ title: "Handler created!", description: `${newHandler.name} can now log in.` });
-      setNewHandler({ name: "", email: "", password: "", type: "labourer", farm: "" });
       fetchData();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -195,7 +194,11 @@ export default function HandlerManagement() {
   };
 
   const createTask = async () => {
-    if (!user || !newTask.title || !newTask.handler_id) return;
+    if (!user || !newTask.title.trim() || !newTask.handler_id) return;
+    if (newTask.qty_expected.trim() && (!Number.isFinite(Number(newTask.qty_expected)) || Number(newTask.qty_expected) < 0)) {
+      toast({ title: "Invalid expected quantity", description: "Enter a valid non-negative quantity.", variant: "destructive" });
+      return;
+    }
     setCreatingTask(true);
     const { error } = await supabase.from("handler_tasks").insert({
       farmer_id: user.id,
@@ -268,7 +271,7 @@ export default function HandlerManagement() {
           <p className="text-sm text-muted-foreground mt-1">Manage farm laborers, assign tasks, track activities</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) setInviteLink(null); }}>
+          <Dialog open={showCreate} onOpenChange={(o) => { setShowCreate(o); if (!o) { setInviteLink(null); setNewHandler({ name: "", email: "", password: "", type: "labourer", farm: "" }); } }}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Handler</Button>
             </DialogTrigger>
