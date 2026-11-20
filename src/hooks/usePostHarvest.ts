@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { compressImage } from "@/lib/offlineQueue";
 
 export interface HarvestEntry {
   id: string;
@@ -146,11 +147,14 @@ export function usePostHarvest() {
 }
 
 export async function uploadHarvestPhoto(userId: string, file: File, idempotencyKey?: string, photoIndex = 0): Promise<string> {
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const prepared = await compressImage(file);
+  const mimeType = prepared.type || file.type || "image/jpeg";
+  const ext = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
   const safeKey = (idempotencyKey || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, "_");
   const path = `${userId}/harvest-${safeKey}-${photoIndex}.${ext}`;
-  const { error } = await supabase.storage.from("harvest-photos").upload(path, file, {
+  const { error } = await supabase.storage.from("harvest-photos").upload(path, prepared, {
     cacheControl: "3600",
+    contentType: mimeType,
     upsert: true,
   });
   if (error) throw error;
