@@ -526,7 +526,6 @@ export function useAGTrans() {
   // ---------- Transport Offer management ----------
 
   const offerPayload = (values: Partial<DriverProfile>) => {
-    const capacity = Number(values.vehicle_capacity_kg || driverProfile?.vehicle_capacity_kg || 0);
     return {
       driver_photo_url: cleanText(values.driver_photo_url) || driverProfile?.driver_photo_url,
       vehicle_features: normalizeArray(values.vehicle_features),
@@ -752,137 +751,32 @@ export function useAGTrans() {
 
   const createDeliveryJob = async (request: TransportRequest, transportFee?: number) => {
     if (!user) throw new Error("Not authenticated");
-
-    const driver = drivers.find((d) => d.user_id === request.driver_id) || driverProfile;
-    if (!driver) throw new Error("Driver not found");
-
-    const { data: job, error: jobError } = await supabase
-      .from("delivery_jobs")
-      .insert({
-        supplier_id: request.supplier_id,
-        buyer_id: request.buyer_id,
-        driver_id: request.driver_id,
-        request_id: request.id,
-        agreement_id: request.agreement_id,
-        product: request.product_type,
-        quantity: request.quantity,
-        pickup_location: request.pickup_location,
-        destination: request.delivery_location,
-        transport_fee: transportFee,
-        driver_name: driver.full_name,
-        vehicle_type: driver.vehicle_type,
-        plate_number: driver.plate_number,
-        status: "Assigned",
-      } as any)
-      .select()
-      .single();
-
-    if (jobError) throw jobError;
-
-    const { data: ta, error: taError } = await supabase
-      .from("transport_agreements")
-      .insert({
-        request_id: request.id,
-        supplier_id: request.supplier_id,
-        buyer_id: request.buyer_id,
-        driver_id: request.driver_id,
-        marketplace_order_id: request.marketplace_order_id,
-        agreed_fee: transportFee || 0,
-        agreement_timestamp: new Date().toISOString(),
-        delivery_status: "Assigned",
-      } as any)
-      .select()
-      .single();
-
-    if (taError) throw taError;
-
-    await supabase
-      .from("delivery_jobs")
-      .update({ transport_agreement_id: (ta as any).id } as any)
-      .eq("id", (job as any).id);
-
-    await supabase
-      .from("agtrans_requests")
-      .update({ agreement_id: (ta as any).id } as any)
-      .eq("id", request.id);
-
-    await supabase
-      .from("tracking_sessions")
-      .insert({
-        delivery_job_id: (job as any).id,
-        driver_id: request.driver_id,
-        driver_name: driver.full_name,
-        vehicle_type: driver.vehicle_type,
-        plate_number: driver.plate_number,
-        pickup_location: request.pickup_location,
-        destination: request.delivery_location,
-        status: "active",
-        // A pickup pin is not the truck's GPS position. Vehicle coordinates
-        // remain empty until the driver explicitly shares a real GPS fix.
-        current_lat: null,
-        current_lon: null,
-        speed_kn: null,
-        heading: null,
-        last_location_at: null,
-        location_accuracy_m: null,
-        location_source: "unverified",
-        is_simulated: false,
-        eta: null,
-        distance_m: null,
-      } as any);
-
-    // Decrement remaining capacity
-    const newCapacity = Math.max(0, (driver.remaining_capacity || 0) - (request.quantity || 0));
-    await supabase
-      .from("agtrans_drivers")
-      .update({ remaining_capacity: newCapacity } as any)
-      .eq("user_id", request.driver_id);
-
-    return job;
+    const { data, error } = await supabase.rpc("create_agtrans_delivery_job", {
+      p_request_id: request.id,
+      p_transport_fee: transportFee ?? 0,
+    } as any);
+    if (error) throw error;
+    await loadData();
+    return data as unknown as DeliveryJob;
   };
 
   const updateDeliveryJobStatus = async (jobId: string, status: DeliveryJob["status"]) => {
     if (!user) throw new Error("Not authenticated");
-
-    const { error } = await supabase
-      .from("delivery_jobs")
-      .update({ status } as any)
-      .eq("id", jobId);
-
+    const job = deliveryJobs.find((item) => item.id === jobId);
+    if (!job) throw new Error("Delivery job not found in the current account workspace.");
+    if (!canTransitionDeliveryJob(job.status, status)) {
+      throw new Error(`Invalid delivery transition: ${job.status} → ${status}`);
+    }
+    if (user.id !== job.driver_id && !(user.id === job.supplier_id && status === "Cancelled")) {
+      throw new Error("Only the assigned driver can advance this trip. The supplier may cancel it before delivery.");
+    }
+    const { data, error } = await supabase.rpc("transition_agtrans_delivery_job", {
+      p_job_id: jobId,
+      p_status: status,
+    } as any);
     if (error) throw error;
-
-    const job = deliveryJobs.find((j) => j.id === jobId);
-    if (job) {
-      await supabase
-        .from("transport_agreements")
-        .update({ delivery_status: status } as any)
-        .eq("request_id", job.request_id || "00000000-0000-0000-0000-000000000000");
-    }
-
-    if (status === "Delivered" && driverProfile) {
-      const completed = (driverProfile.completed_deliveries || 0) + 1;
-      const currentScore = driverProfile.reliability_score || 100;
-      const nextScore = Math.min(100, currentScore + 2);
-      await updateDriverProfile({
-        completed_deliveries: completed,
-        reliability_score: nextScore,
-      });
-    }
-
-    if (status === "Delivered" || status === "Cancelled" || status === "Completed") {
-      const nextStatus = status === "Cancelled" ? "cancelled" : "completed";
-      await supabase
-        .from("tracking_sessions")
-        .update({ status: nextStatus } as any)
-        .eq("delivery_job_id", jobId);
-    }
-
-    if (status === "Completed" && job) {
-      await notifyUser(job.supplier_id, "delivery_completed", "Delivery Completed", `Delivery ${job.product} has been completed`);
-      if (job.buyer_id) {
-        await notifyUser(job.buyer_id, "buyer_confirmed_delivery", "Delivery Confirmed", `Your order ${job.product} has been delivered`);
-      }
-    }
+    await loadData();
+    return data;
   };
 
   const updateTrackingSessionLocation = async (jobId: string, locationData: {
@@ -935,52 +829,22 @@ export function useAGTrans() {
 
   const handleCancelTrip = async (jobId: string) => {
     if (!user || !driverProfile) throw new Error("Not authenticated");
-
-    const cancellations = (driverProfile.cancellations || 0) + 1;
-    const currentScore = driverProfile.reliability_score || 100;
-    const nextScore = Math.max(0, currentScore - 15);
-    const isSuspended = cancellations >= 3;
-
-    const profileUpdates: Partial<DriverProfile> = {
-      cancellations,
-      reliability_score: nextScore,
-      admin_suspended: isSuspended ? true : driverProfile.admin_suspended,
-      notes: isSuspended
-        ? "Suspended automatically for 30 days due to high cancellation count."
-        : driverProfile.notes,
-    };
-
-    await updateDriverProfile(profileUpdates);
     await updateDeliveryJobStatus(jobId, "Cancelled");
   };
 
   const confirmDelivery = async (id: string) => {
-    // id can be request id or delivery job id
-    let requestId = id;
-    const jobById = deliveryJobs.find((j) => j.id === id);
-    if (jobById) requestId = jobById.request_id || id;
-
-    const { error } = await supabase
-      .from("agtrans_requests")
-      .update({ status: "delivery_confirmed" } as any)
-      .eq("id", requestId);
-
+    if (!user) throw new Error("Not authenticated");
+    const jobById = deliveryJobs.find((job) => job.id === id);
+    const requestId = jobById?.request_id || id;
+    const { error } = await supabase.rpc("confirm_agtrans_delivery", {
+      p_request_id: requestId,
+    } as any);
     if (error) throw error;
-
-    const { data: jobs } = await supabase
-      .from("delivery_jobs")
-      .select("id")
-      .eq("request_id", requestId);
-    const jobIds = (jobs as any) || [];
-    for (const job of jobIds) {
-      await supabase.from("delivery_jobs").update({ status: "Completed" } as any).eq("id", job.id);
-      await supabase.from("transport_agreements").update({ delivery_status: "Completed" } as any).eq("request_id", requestId);
-    }
-
-    const request = requests.find((r) => r.id === requestId);
+    const request = requests.find((item) => item.id === requestId);
     if (request?.driver_id) {
       await notifyUser(request.driver_id, "buyer_confirmed_delivery", "Buyer Confirmed Delivery", `Buyer confirmed delivery for ${request.tracking_code}`);
     }
+    await loadData();
   };
 
   const loadDriverHistory = useCallback(async () => {
