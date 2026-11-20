@@ -197,7 +197,7 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
           if (!cached) continue;
           const blob = await dataUrlToBlob(cached.data_url);
           const ext = (cached.filename.split(".").pop() || "jpg").toLowerCase();
-          const path = `${cached.user_id}/offline-${item.id}-${photoIndex}.${ext}`;
+          const path = `${cached.user_id}/harvest-${item.id}-${photoIndex}.${ext}`;
           const { error: upErr } = await supabase.storage
             .from("harvest-photos")
             .upload(path, blob, { contentType: cached.type, upsert: true });
