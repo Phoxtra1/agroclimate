@@ -341,16 +341,18 @@ export function useAGTrans() {
   }, [user, loadData]);
 
   const notifyUser = async (userId: string, type: string, title: string, message: string, data?: any) => {
+    if (!userId) return;
     try {
-      await supabase.from("transport_notifications" as any).insert({
-        user_id: userId,
-        type,
-        title,
-        message,
-        data: data || {},
+      const { error } = await supabase.rpc("create_agtrans_notification", {
+        p_user_id: userId,
+        p_type: type,
+        p_title: title,
+        p_message: message,
+        p_data: data || {},
       } as any);
+      if (error) console.warn("Failed to persist AGTrans notification:", error.message);
     } catch (e) {
-      console.warn("Failed to persist notification:", e);
+      console.warn("Failed to persist AGTrans notification:", e);
     }
     try {
       if (typeof Notification !== "undefined" && Notification.permission === "granted") {
@@ -703,7 +705,7 @@ export function useAGTrans() {
         } as any)
         .eq("id", requestId).eq("driver_id", user.id);
       if (error) throw error;
-      await notifyUser(request.supplier_id, "driver_declined", "Driver Declined", `Driver declined transport request ${request.tracking_code}`);
+      await notifyUser(request.supplier_id, "driver_declined", "Driver Declined", `Driver declined transport request ${request.tracking_code}`, { request_id: request.id });
       return;
     }
 
@@ -720,7 +722,7 @@ export function useAGTrans() {
         } as any)
         .eq("id", requestId).eq("driver_id", user.id);
       if (error) throw error;
-      await notifyUser(request.supplier_id, "counter_offer", "Counter Offer Received", `Driver countered with ${payload?.counter_price} GHS`);
+      await notifyUser(request.supplier_id, "counter_offer", "Counter Offer Received", `Driver countered with ${payload?.counter_price} GHS`, { request_id: request.id });
       return;
     }
 
@@ -747,9 +749,9 @@ export function useAGTrans() {
       throw error;
     }
 
-    await notifyUser(request.supplier_id, "driver_accepted", "Driver Accepted", `Driver accepted transport request ${request.tracking_code}`);
+    await notifyUser(request.supplier_id, "driver_accepted", "Driver Accepted", `Driver accepted transport request ${request.tracking_code}`, { request_id: request.id });
     if (request.buyer_id) {
-      await notifyUser(request.buyer_id, "transport_agreement_created", "Transport Agreement Created", `Your order is being shipped by ${driverProfile.full_name}`);
+      await notifyUser(request.buyer_id, "transport_agreement_created", "Transport Agreement Created", `Your order is being shipped by ${driverProfile.full_name}`, { request_id: request.id });
     }
   };
 
@@ -773,7 +775,7 @@ export function useAGTrans() {
         } as any)
         .eq("id", requestId).eq("supplier_id", user.id);
       if (error) throw error;
-      await notifyUser(request.driver_id || "", "counter_offer", "Counter Offer Received", `Supplier countered with ${payload?.supplier_offer_price} GHS`);
+      await notifyUser(request.driver_id || "", "counter_offer", "Counter Offer Received", `Supplier countered with ${payload?.supplier_offer_price} GHS`, { request_id: request.id });
       return;
     }
 
@@ -799,9 +801,9 @@ export function useAGTrans() {
       throw error;
     }
 
-    await notifyUser(request.driver_id || "", "supplier_accepted", "Supplier Accepted", `Supplier accepted your counter offer for ${request.tracking_code}`);
+    await notifyUser(request.driver_id || "", "supplier_accepted", "Supplier Accepted", `Supplier accepted your counter offer for ${request.tracking_code}`, { request_id: request.id });
     if (request.buyer_id) {
-      await notifyUser(request.buyer_id, "transport_agreement_created", "Transport Agreement Created", `Your order is being shipped`);
+      await notifyUser(request.buyer_id, "transport_agreement_created", "Transport Agreement Created", `Your order is being shipped`, { request_id: request.id });
     }
   };
 
@@ -901,7 +903,7 @@ export function useAGTrans() {
     if (error) throw error;
     const request = requests.find((item) => item.id === requestId);
     if (request?.driver_id) {
-      await notifyUser(request.driver_id, "buyer_confirmed_delivery", "Buyer Confirmed Delivery", `Buyer confirmed delivery for ${request.tracking_code}`);
+      await notifyUser(request.driver_id, "buyer_confirmed_delivery", "Buyer Confirmed Delivery", `Buyer confirmed delivery for ${request.tracking_code}`, { request_id: request.id });
     }
     await loadData();
   };
