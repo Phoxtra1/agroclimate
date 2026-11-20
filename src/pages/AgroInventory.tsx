@@ -178,7 +178,7 @@ function makeFormatCurrency(currencyCode: string, locale: string) {
 function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   title: string;
   fields: { name: string; label: string; type?: string; required?: boolean; placeholder?: string }[];
-  onSave: (data: any) => void;
+  onSave: (data: any) => void | boolean | Promise<void | boolean>;
   trigger: React.ReactNode;
   initialData?: any;
 }) {
@@ -191,8 +191,9 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
     if (isOpen && !initialData) setForm({});
   }, [initialData]);
 
-  const handleSave = () => {
-    onSave(form);
+  const handleSave = async () => {
+    const result = await onSave(form);
+    if (result === false) return;
     setOpen(false);
     setForm({});
   };
