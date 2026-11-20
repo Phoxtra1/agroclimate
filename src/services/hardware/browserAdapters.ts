@@ -298,6 +298,13 @@ export class WebSerialSensorAdapter implements HardwareAdapter {
       }
     } catch {
       // A disconnect or device-side read error ends this session; caller can reconnect.
+    } finally {
+      if (!session.closed && this.sessions.get(device.deviceId) === session) {
+        session.closed = true;
+        try { session.reader?.releaseLock(); } catch { /* stream already released */ }
+        try { await session.port.close(); } catch { /* device may already be detached */ }
+        this.sessions.delete(device.deviceId);
+      }
     }
   }
 
@@ -306,9 +313,8 @@ export class WebSerialSensorAdapter implements HardwareAdapter {
     if (!session) return;
     session.closed = true;
     try { await session.reader?.cancel(); } catch { /* reader may already be closed */ }
-    session.reader?.releaseLock();
-    await session.port.close();
-    this.sessions.delete(deviceId);
+    try { session.reader?.releaseLock(); } catch { /* stream already released */ }
+    try { await session.port.close(); } finally { this.sessions.delete(deviceId); }
   }
 }
 
@@ -600,6 +606,14 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
       }
     } catch {
       // Link loss ends the reader; the runtime exposes disconnect/reconnect to the host.
+    } finally {
+      if (!session.closed && this.sessions.get(device.deviceId) === session) {
+        session.closed = true;
+        try { session.reader.releaseLock(); } catch { /* stream already released */ }
+        try { await session.port.close(); } catch { /* serial device may already be detached */ }
+        this.sessions.delete(device.deviceId);
+        TelemetryGateway.updateTelemetry(device.deviceId, { connectionStatus: "disconnected" });
+      }
     }
   }
 
@@ -608,9 +622,11 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
     if (!session) return;
     session.closed = true;
     try { await session.reader.cancel(); } catch { /* serial link may already be closed */ }
-    session.reader.releaseLock();
-    await session.port.close();
-    this.sessions.delete(deviceId);
+    try { session.reader.releaseLock(); } catch { /* stream already released */ }
+    try { await session.port.close(); } finally {
+      this.sessions.delete(deviceId);
+      TelemetryGateway.updateTelemetry(deviceId, { connectionStatus: "disconnected" });
+    }
   }
 }
 
