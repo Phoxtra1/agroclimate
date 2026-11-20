@@ -12,6 +12,19 @@ export interface AdapterContext {
   now?: () => Date;
 }
 
+/** Maps component-level capabilities to the measurements they can actually deliver. */
+export function hardwareCapabilitySupportsMetric(capability: string, metric: ObservationMetric): boolean {
+  const aliases: Record<string, readonly ObservationMetric[]> = {
+    "weight-measurement": ["weight"],
+    wind: ["wind_speed", "wind_direction"],
+    "vehicle-location": ["latitude", "longitude"],
+    location: ["latitude", "longitude"],
+    "aircraft-telemetry": ["latitude", "longitude", "aircraft_altitude", "aircraft_battery"],
+  };
+  const direct = capability.replace(/-/g, "_") as ObservationMetric;
+  return aliases[capability]?.includes(metric) ?? direct === metric;
+}
+
 function observation(
   device: DeviceRegistration,
   metric: ObservationMetric,
@@ -129,14 +142,14 @@ export class WebBluetoothSensorAdapter implements HardwareAdapter {
 
   supports(device: DeviceRegistration): boolean {
     return device.protocol === this.protocol && this.components.includes(device.component) &&
-      this.mappings.some((mapping) => device.capabilities.some((capability) => capability.replace(/-/g, "_") === mapping.metric));
+      this.mappings.some((mapping) => device.capabilities.some((capability) => hardwareCapabilitySupportsMetric(capability, mapping.metric)));
   }
 
   async connect(device: DeviceRegistration): Promise<AdapterConnection> {
     if (!this.bluetooth.bluetooth) return { connected: false, detail: "Web Bluetooth is not available in this browser or context." };
     if (this.sessions.has(device.deviceId)) return { connected: true, detail: "BLE session is already active." };
     const mappings = this.mappings.filter((item) =>
-      device.capabilities.some((capability) => capability.replace(/-/g, "_") === item.metric));
+      device.capabilities.some((capability) => hardwareCapabilitySupportsMetric(capability, item.metric)));
     if (!mappings.length) return { connected: false, detail: "No manufacturer-validated characteristic mapping is configured for this device." };
     const services = [...new Set(mappings.map((item) => item.serviceUuid))];
     const selected = await this.bluetooth.bluetooth.requestDevice({ filters: [{ services }] });
@@ -289,6 +302,7 @@ export class WebHidScaleAdapter implements HardwareAdapter {
 
   async connect(device: DeviceRegistration): Promise<AdapterConnection> {
     if (!this.hid.hid) return { connected: false, detail: "WebHID is not available in this browser." };
+    if (this.sessions.has(device.deviceId)) return { connected: true, detail: "Scale session is already active." };
     const [selected] = await this.hid.hid.requestDevice({ filters: [] });
     if (!selected) return { connected: false, detail: "No HID device was selected." };
     await selected.open();
