@@ -260,6 +260,35 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
     return () => { requestVersion.current += 1; };
   }, [fetchAll]);
 
+  // Keep multiple signed-in devices in sync and refresh stale views when a user
+  // returns to this tab. Every query remains scoped to the current owner.
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const channel = supabase.channel(`agro-inventory-${userId}`);
+    for (const table of INVENTORY_TABLES) {
+      channel.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `user_id=eq.${userId}` },
+        () => { void fetchAll(); },
+      );
+    }
+    channel.subscribe();
+
+    const refreshVisible = () => {
+      if (document.visibilityState === "visible") void fetchAll();
+    };
+    window.addEventListener("focus", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, fetchAll]);
+
   const resolveTable = (table: string): InventoryTable => {
     if (!INVENTORY_TABLES.includes(table as InventoryTable)) throw new Error("Unsupported inventory record type.");
     return table as InventoryTable;
