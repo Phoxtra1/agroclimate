@@ -27,6 +27,39 @@ function isValidTimestamp(value: string): boolean {
   return ISO_DATE.test(value) && Number.isFinite(Date.parse(value));
 }
 
+function metricValueIssue(metric: DeviceObservation["metric"], value: number, unit: string): string | null {
+  const within = (min: number, max: number) => value >= min && value <= max;
+  switch (metric) {
+    case "relative_humidity":
+      return within(0, 100) ? null : "relative_humidity must be between 0 and 100.";
+    case "soil_moisture":
+      return unit === "m³/m³"
+        ? (within(0, 1) ? null : "soil_moisture in m³/m³ must be between 0 and 1.")
+        : (within(0, 100) ? null : "soil_moisture percentage must be between 0 and 100.");
+    case "soil_ph":
+      return within(0, 14) ? null : "soil_ph must be between 0 and 14.";
+    case "wind_direction":
+      return within(0, 360) ? null : "wind_direction must be between 0 and 360 degrees.";
+    case "aircraft_battery":
+      return unit === "%"
+        ? (within(0, 100) ? null : "aircraft_battery percentage must be between 0 and 100.")
+        : (value >= 0 ? null : "aircraft_battery voltage cannot be negative.");
+    case "latitude":
+      return within(-90, 90) ? null : "latitude measurement must be between -90 and 90.";
+    case "longitude":
+      return within(-180, 180) ? null : "longitude measurement must be between -180 and 180.";
+    case "rainfall":
+    case "wind_speed":
+    case "electrical_conductivity":
+    case "water_level":
+    case "weight":
+    case "vehicle_speed":
+      return value >= 0 ? null : `${metric} cannot be negative.`;
+    default:
+      return null;
+  }
+}
+
 export function validateDeviceObservation(
   observation: DeviceObservation,
   now = Date.now(),
@@ -45,6 +78,9 @@ export function validateDeviceObservation(
   if (!Number.isFinite(observation.value)) issues.push("value must be a finite number.");
   if (!UNIT_ALLOWLIST[observation.metric]?.includes(observation.unit)) {
     issues.push("unit is not valid for the selected metric.");
+  } else if (Number.isFinite(observation.value)) {
+    const rangeIssue = metricValueIssue(observation.metric, observation.value, observation.unit);
+    if (rangeIssue) issues.push(rangeIssue);
   }
 
   if (typeof observation.measuredAt !== "string" || !isValidTimestamp(observation.measuredAt)) {
