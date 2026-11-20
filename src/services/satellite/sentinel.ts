@@ -9,6 +9,22 @@ export type GeoPoint = {
   lon: number;
 };
 
+export function buildFieldPolygon(points: GeoPoint[]): GeoJSON.Polygon {
+  if (points.length < 3) throw new Error("A field boundary needs at least three points.");
+  if (points.some((point) =>
+    !Number.isFinite(point.lat) || !Number.isFinite(point.lon) ||
+    point.lat < -90 || point.lat > 90 || point.lon < -180 || point.lon > 180
+  )) throw new Error("Field boundary contains an invalid latitude or longitude.");
+  const unique = new Set(points.map((point) => `${point.lat.toFixed(7)},${point.lon.toFixed(7)}`));
+  if (unique.size < 3) throw new Error("A field boundary needs at least three distinct points.");
+  if (calculatePolygonAreaHectares(points) <= 0) throw new Error("Field boundary must enclose a non-zero area.");
+  const ring: [number, number][] = points.map((point) => [point.lon, point.lat]);
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+  return { type: "Polygon", coordinates: [ring] };
+}
+
 export type SentinelScene = {
   id: string;
   itemUrl: string;
