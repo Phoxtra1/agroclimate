@@ -255,7 +255,7 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
     async pauseMission() { throw new Error("Flight commands are disabled. This adapter is read-only."); },
     async resumeMission() { throw new Error("Flight commands are disabled. This adapter is read-only."); },
     async returnToHome() { throw new Error("Return-to-home is disabled. This adapter is read-only."); },
-    async emergencyLand() { throw new Error("Remote landing is disabled. Use the aircraft's verified physical safety controls."); },
+    async emergencyLand() { throw new Error("Remote landing is disabled in this read-only adapter. Use the aircraft's verified physical safety controls."); },
 
     onTelemetry(callback) { tListeners.add(callback); callback({ ...telemetry }); return () => { tListeners.delete(callback); }; },
     onStatus(callback) { sListeners.add(callback); callback(status); return () => { sListeners.delete(callback); }; },
