@@ -42,6 +42,14 @@ describe("Agro Inventory record validation", () => {
     }, true)).toThrow("quantity sold must be a non-negative number");
   });
 
+  it("rejects zero production, sales, loss, worker and land quantities", () => {
+    expect(() => normalizeInventoryRecord("harvest_records", { crop_name: "Maize", quantity: "0" }, true)).toThrow("quantity must be greater than zero");
+    expect(() => normalizeInventoryRecord("sales_records", { crop_name: "Maize", quantity_sold: "0", price_per_unit: "10" }, true)).toThrow("quantity sold must be greater than zero");
+    expect(() => normalizeInventoryRecord("harvest_losses", { crop_name: "Maize", loss_reason: "Spoilage", quantity_lost: "0" }, true)).toThrow("quantity lost must be greater than zero");
+    expect(() => normalizeInventoryRecord("land_costs", { land_description: "Plot", cost_type: "rent", size_acres: "0", cost_amount: "100" }, true)).toThrow("size acres must be greater than zero");
+    expect(() => normalizeInventoryRecord("labor_records", { task_description: "Weeding", worker_count: "0", days_worked: "2", cost_per_day: "20" }, true)).toThrow("worker count must be greater than zero");
+  });
+
   it("requires whole worker counts while permitting zero-cost records", () => {
     expect(() => normalizeInventoryRecord("labor_records", {
       task_description: "Harvesting", worker_count: "1.5", days_worked: "2", cost_per_day: "50",
