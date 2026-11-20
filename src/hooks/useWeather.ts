@@ -180,6 +180,7 @@ export function useWeather(lat?: number, lon?: number) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [observedAt, setObservedAt] = useState<Date | null>(null);
   const [source, setSource] = useState<"live" | "cache" | "none">("none");
+  const [forecastLocation, setForecastLocation] = useState<{ lat: number; lon: number } | null>(null);
 
   const refresh = useCallback(() => {
     try { localStorage.removeItem(CACHE_KEY); } catch { /* storage unavailable */ }
@@ -199,12 +200,14 @@ export function useWeather(lat?: number, lon?: number) {
     const fallbackCache = cached;
     setLoading(false);
     if (cached) {
+      setForecastLocation({ lat: latitude, lon: longitude });
       setForecast(cached.data);
       setIsLive(false);
       setLastUpdated(new Date(cached.timestamp));
       setObservedAt(cached.observedAt ? new Date(cached.observedAt) : null);
       setSource("cache");
     } else {
+      setForecastLocation({ lat: latitude, lon: longitude });
       setForecast(weeklyForecast);
       setIsLive(false);
       setLastUpdated(null);
@@ -249,6 +252,7 @@ export function useWeather(lat?: number, lon?: number) {
         if (!active || requestId !== latestRequest) return;
         const timestamp = Date.now();
         const observed = data?.realtime?.data?.time ?? null;
+        setForecastLocation({ lat: latitude, lon: longitude });
         setForecast(forecastDays);
         setIsLive(true);
         setLastUpdated(new Date(timestamp));
@@ -262,6 +266,7 @@ export function useWeather(lat?: number, lon?: number) {
       } catch (error) {
         if (!active || requestId !== latestRequest) return;
         console.warn("AgroForecast provider request failed", error);
+        setForecastLocation({ lat: latitude, lon: longitude });
         setForecast(fallbackCache?.data || weeklyForecast);
         setIsLive(false);
         setLastUpdated(fallbackCache ? new Date(fallbackCache.timestamp) : null);
@@ -291,5 +296,5 @@ export function useWeather(lat?: number, lon?: number) {
     };
   }, [lat, lon, refreshTrigger]);
 
-  return { forecast, loading, isLive, lastUpdated, observedAt, source, refresh };
+  return { forecast, loading, isLive, lastUpdated, observedAt, source, forecastLocation, refresh };
 }
