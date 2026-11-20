@@ -109,13 +109,9 @@ export class CommandCenter {
         message: `Command '${command}' successfully executed via simulated ${aircraft.protocol.toUpperCase()} bridge.`
       };
     } else {
-      // Connects to actual companion webapp / WebSocket gateway
-      // Since it's live operations, the telemetry gateway will listen to the stream.
-      // We log that the command was piped to the hardware interface.
-      console.log(`Sending live command ${command} to companion API...`);
       return {
-        success: true,
-        message: `Live command '${command}' forwarded to ${aircraft.protocol.toUpperCase()} hardware connection.`
+        success: false,
+        message: "Command not sent: no verified live hardware transport is connected."
       };
     }
   }

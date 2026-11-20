@@ -156,7 +156,7 @@ export function useWeather(lat?: number, lon?: number) {
         const sameArea = Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
         if (sameArea && Date.now() - parsed.timestamp < CACHE_DURATION) {
           setForecast(parsed.data);
-          setIsLive(true);
+          setIsLive(false);
           setLastUpdated(new Date(parsed.timestamp));
           setObservedAt(parsed.observedAt ? new Date(parsed.observedAt) : null);
           setSource("cache");
@@ -205,6 +205,7 @@ export function useWeather(lat?: number, lon?: number) {
         console.warn("Weather API unavailable, using fallback data:", err);
         setForecast(prev => prev.length > 0 ? prev : weeklyForecast);
         setIsLive(false);
+        setSource(localStorage.getItem(CACHE_KEY) ? "cache" : "none");
       } finally {
         setLoading(false);
       }

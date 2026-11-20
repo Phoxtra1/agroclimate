@@ -96,6 +96,10 @@ export class AirIntegrationHub {
     const asset = all.find(a => a.id === aircraftId);
     if (!asset) throw new Error("Aircraft not found in registry");
 
+    if (!this.isSimulator) {
+      throw new Error("Live aircraft transport is not configured. Switch to Simulator or connect a verified hardware adapter.");
+    }
+
     this.activeAircraft = { ...asset, status: "connecting" };
     this.notify();
 
@@ -201,15 +205,8 @@ export class AirIntegrationHub {
         signalQuality: Math.floor(92 - qualityFluc),
       };
     } else {
-      // Live operations stream health (slightly more volatile based on protocol)
-      const isMavlink = this.activeAircraft.protocol === "mavlink";
-      return {
-        fps: isMavlink ? 15 : 24,
-        bitrateKbps: isMavlink ? 350 : 1200 + Math.floor(Math.random() * 300),
-        latencyMs: isMavlink ? 180 : 80 + Math.floor(Math.random() * 40),
-        packetLossPct: isMavlink ? 1.5 : 0.8,
-        signalQuality: 80,
-      };
+      // No live stream metrics are available until a real transport reports them.
+      return { fps: 0, bitrateKbps: 0, latencyMs: 0, packetLossPct: 0, signalQuality: 0 };
     }
   }
 

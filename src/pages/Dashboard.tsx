@@ -1,5 +1,4 @@
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
-import { AICropAdvisory } from "@/components/AICropAdvisory";
 import { CropCalendarView } from "@/components/CropCalendarView";
 import { AdvisoryCard } from "@/components/AdvisoryCard";
 import { AgroClimateIntelligence, ForecastTimestamp } from "@/components/AgroClimateIntelligence";
@@ -9,7 +8,6 @@ import { Link } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
-import { useCropAdvisory } from "@/hooks/useCropAdvisory";
 import { useProfile } from "@/hooks/useProfile";
 import { useUserAlerts } from "@/hooks/useUserAlerts";
 import { Button } from "@/components/ui/button";
@@ -17,18 +15,17 @@ import { DashboardHeaderMenu } from "@/components/DashboardHeaderMenu";
 
 export default function Dashboard() {
   const { position, loading: geoLoading } = useGeolocation();
-  const { forecast, loading: weatherLoading, isLive, lastUpdated, observedAt, refresh } = useWeather(position.lat, position.lon);
+  const { forecast, loading: weatherLoading, isLive, lastUpdated, observedAt, source, refresh } = useWeather(position.lat, position.lon);
   const { user } = useAuth();
   const { profile } = useProfile();
-  const { advisory, loading: advisoryLoading, fetchAdvisory } = useCropAdvisory();
   const { unreadAlerts, alerts, markRead, dismiss, deleteAlert } = useUserAlerts(forecast, position.locationName);
 
   const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
 
   const dynamicAdvisory = {
-    crop: (typeof advisory?.recommendedCrops?.[0] === "string" ? advisory.recommendedCrops[0] : advisory?.recommendedCrops?.[0]?.name) || "Your crops",
+    crop: "Your crops",
     region: position.locationName || "Your area",
-    action: advisory?.weeklyActions?.[0] || getDynamicAction(forecast[0]),
+    action: getDynamicAction(forecast[0]),
     detail: getDynamicDetail(forecast[0], position.locationName),
     urgency: getDynamicUrgency(forecast[0]),
   };
@@ -47,9 +44,11 @@ export default function Dashboard() {
               <span>{position.locationName}</span>
             )}
             {isLive ? (
-              <span className="flex items-center gap-1 text-success text-xs"><Wifi className="h-3 w-3" /> Live</span>
+              <span className="flex items-center gap-1 text-success text-xs"><Wifi className="h-3 w-3" /> Live provider data</span>
+            ) : source === "cache" ? (
+              <span className="flex items-center gap-1 text-warning text-xs"><WifiOff className="h-3 w-3" /> Cached data</span>
             ) : (
-              <span className="flex items-center gap-1 text-warning text-xs"><WifiOff className="h-3 w-3" /> Cached</span>
+              <span className="flex items-center gap-1 text-warning text-xs"><WifiOff className="h-3 w-3" /> Sample data</span>
             )}
           </div>
         </div>
@@ -139,17 +138,7 @@ export default function Dashboard() {
 
       {/* Secondary Row: Dipa Advisory, Quick Hub Tools, and Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-        {/* 1. Dipa Crop Advisory */}
-        <section>
-          <h2 className="font-bold mb-3 text-base">🌱 Dipa Crop Advisory</h2>
-          <AICropAdvisory
-            advisory={advisory}
-            loading={advisoryLoading}
-            onRefresh={() => fetchAdvisory(forecast[0], position.locationName, position)}
-          />
-        </section>
-
-        {/* 2. Produce & Safety & Agro Inventory */}
+        {/* Produce & Safety & Agro Inventory */}
         <section className="space-y-4">
           <h2 className="font-bold text-base">⚡ Quick Hub Tools</h2>
           <div className="grid grid-cols-1 gap-4">
@@ -197,7 +186,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* 3. Alerts & System Center */}
+        {/* Alerts & System Center */}
         <section className="space-y-4">
           <h2 className="font-bold text-base">🔔 Actions & Alerts</h2>
           <div className="bg-card rounded-xl p-5 border shadow-sm space-y-3">
