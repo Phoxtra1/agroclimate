@@ -72,14 +72,17 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cropName || !quantity) { toast.error("Crop name and quantity are required"); return; }
+    const parsedQuantity = Number(quantity);
+    if (!cropName.trim()) { toast.error("Crop name is required"); return; }
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) { toast.error("Enter a harvest quantity greater than zero"); return; }
+    if (!date || Number.isNaN(Date.parse(date))) { toast.error("Choose a valid harvest date"); return; }
     if (!user) { toast.error("Please sign in"); return; }
     setSaving(true);
     const idempotencyKey = submissionKeyRef.current;
     const harvestInput = {
       user_id: user.id,
       crop_name: cropName,
-      quantity: Number(quantity),
+      quantity: parsedQuantity,
       unit,
       harvest_date: date,
       storage_location: location || null,
@@ -110,7 +113,7 @@ function HarvestForm({ onAdded }: { onAdded: () => void }) {
           try {
             await addEntry({
               crop_name: cropName,
-              quantity: Number(quantity),
+              quantity: parsedQuantity,
               unit,
               harvest_date: date,
               storage_location: location || null,
