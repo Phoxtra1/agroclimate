@@ -70,10 +70,12 @@ export function AgriCostCalculator({
         .select("*").eq("user_id", userId).order("created_at", { ascending: false });
       if (version !== requestVersion.current || userId !== currentUserId.current) return;
       if (error) throw error;
-      const loaded = (data || []) as unknown as Scenario[];
+      const loaded = (data || []) as unknown as Array<Omit<Scenario, "data_source_type"> & { data_source_type: string }>;
       setScenarios(loaded.map((scenario) => ({
         ...scenario,
-        data_source_type: scenario.data_source_type === "verified" ? "estimated" : scenario.data_source_type,
+        data_source_type: scenario.data_source_type === "verified"
+          ? "estimated"
+          : scenario.data_source_type as Scenario["data_source_type"],
       })));
     } catch (error) {
       if (version === requestVersion.current && userId === currentUserId.current) {
