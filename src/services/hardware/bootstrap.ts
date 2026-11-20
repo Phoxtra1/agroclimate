@@ -1,7 +1,7 @@
 import {
   BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter,
   WebBluetoothPostHarvestAdapter, WebBluetoothSensorAdapter, WebHidScaleAdapter,
-  WebSerialMavlinkAdapter, WebSerialSensorAdapter,
+  WebSerialMavlinkAdapter, WebSerialSensorAdapter, STANDARD_BLE_SENSOR_MAPPINGS,
   type BleCharacteristicMapping, type PostHarvestStationReading, type SerialAdapterOptions,
 } from "./browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "./deviceRuntime";
@@ -26,7 +26,8 @@ export function createAgroClimateHardwareRuntime(options: AgroClimateHardwareRun
   const context = { onObservation: (item: Parameters<DeviceIntegrationRuntime["acceptObservation"]>[0]) => runtime.acceptObservation(item) };
   runtime.registerAdapter(new BrowserGeolocationAdapter(context));
   runtime.registerAdapter(new BrowserCameraAdapter());
-  if (options.bleMappings?.length) runtime.registerAdapter(new WebBluetoothSensorAdapter(context, options.bleMappings));
+  const bleMappings = [...STANDARD_BLE_SENSOR_MAPPINGS, ...(options.bleMappings ?? [])];
+  if (bleMappings.length) runtime.registerAdapter(new WebBluetoothSensorAdapter(context, bleMappings));
   if (options.serialOptions) runtime.registerAdapter(new WebSerialSensorAdapter(context, options.serialOptions));
   if (options.decodeHidScaleReport) runtime.registerAdapter(new WebHidScaleAdapter(context, options.decodeHidScaleReport, options.hidScaleUnit ?? "kg"));
   runtime.registerAdapter(new WebSerialMavlinkAdapter(context, options.mavlinkBaudRate ?? 57600, options.aircraftType ?? "drone"));
