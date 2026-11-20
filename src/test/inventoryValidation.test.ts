@@ -23,6 +23,20 @@ describe("Agro Inventory record validation", () => {
     expect(validateInventoryRecord("land_costs", { land_description: "North plot", cost_type: "rent", size_acres: 0 })).toContain("greater than zero");
   });
 
+  it("rejects empty, null and boolean values instead of treating them as zero", () => {
+    for (const value of ["", "   ", null, false]) {
+      expect(validateInventoryRecord("inventory_items", {
+        item_name: "Fertilizer", item_type: "input", unit: "bag", price_per_unit: value,
+      })).toContain("valid non-negative number");
+    }
+  });
+
+  it("continues to accept numeric strings and explicit zero-cost inputs", () => {
+    expect(validateInventoryRecord("inventory_items", {
+      item_name: "Family-saved seed", item_type: "seed", unit: "kg", quantity: "0", price_per_unit: "0",
+    })).toBeNull();
+  });
+
   it("allows partial updates without requiring omitted fields", () => {
     expect(validateInventoryRecord("inventory_items", { quantity: 12 }, true)).toBeNull();
     expect(validateInventoryRecord("inventory_items", { quantity: -2 }, true)).toContain("non-negative");
