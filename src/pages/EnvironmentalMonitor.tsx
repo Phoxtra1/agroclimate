@@ -580,7 +580,7 @@ function useEnvironmentState(forecast: any[]): EnvironmentState | null {
 // =============================================================================
 export default function EnvironmentalMonitor() {
   const { position } = useGeolocation();
-  const { forecast } = useWeather(position.lat, position.lon);
+  const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
 
   // Tab State
@@ -1042,7 +1042,7 @@ export default function EnvironmentalMonitor() {
           </div>
           <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground">
             <RefreshCw className="h-3 w-3" />
-            <span>Updated {envState.lastUpdated.toLocaleTimeString()}</span>
+            <span>Weather input: {weatherSource === "live" ? "Live provider" : weatherSource === "cache" ? "Cached provider" : "Sample fallback"} · Updated {envState.lastUpdated.toLocaleTimeString()}</span>
           </div>
         </div>
       </div>
@@ -1356,7 +1356,7 @@ export default function EnvironmentalMonitor() {
                       <MapPin className="h-4 w-4 text-primary" />
                       AgroRisk Interactive Map Layer
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground">Select a mode below to analyze terrain and safety overlays.</p>
+                    <p className="text-xs text-muted-foreground">Risk estimates combine weather-provider data or fallback forecasts, terrain calculations and user-reported incidents. No field sensor network is connected.</p>
                   </div>
                   {/* Mode select buttons */}
                   <div className="flex flex-wrap gap-1 bg-background p-1 rounded-md border text-xs">
@@ -1458,7 +1458,7 @@ export default function EnvironmentalMonitor() {
                       >
                         <Popup>
                           <div className="text-xs p-1">
-                            <Badge variant="destructive" className="mb-1 text-[8px]">{ho.risk}</Badge>
+                            <Badge variant="outline" className="mb-1 text-[8px]">Reference overlay · not live-verified</Badge><p className="font-semibold text-[10px] text-destructive">{ho.risk}</p>
                             <p className="font-bold">{ho.name}</p>
                             <p className="mt-1">Illustrative reference area only; not a verified boundary or current hazard observation.</p>
                           </div>
@@ -1736,7 +1736,7 @@ export default function EnvironmentalMonitor() {
                     
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <Badge className={`${getRiskClassification(overallScore).color} border-transparent animate-pulse text-[9px] py-0 px-2`}>
+                        <Badge className={`${getRiskClassification(overallScore).color} border-transparent text-[9px] py-0 px-2`}>
                           {getRiskClassification(overallScore).label}
                         </Badge>
                       </div>
