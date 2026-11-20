@@ -100,6 +100,15 @@ const NUMERIC_FIELDS: Record<InventoryTable, string[]> = {
   sales_records: ["quantity_sold", "price_per_unit"],
 };
 
+const REQUIRED_NUMERIC_FIELDS: Record<InventoryTable, string[]> = {
+  inventory_items: ["quantity", "price_per_unit"],
+  labor_records: ["worker_count", "days_worked", "cost_per_day"],
+  land_costs: ["size_acres", "cost_amount"],
+  harvest_records: ["quantity"],
+  harvest_losses: ["quantity_lost"],
+  sales_records: ["quantity_sold", "price_per_unit"],
+};
+
 const REQUIRED_FIELDS: Record<InventoryTable, string[]> = {
   inventory_items: ["item_name", "item_type"],
   labor_records: ["task_description"],
@@ -132,6 +141,9 @@ function normalizeInventoryRecord(table: InventoryTable, data: Record<string, un
   }
 
   for (const field of NUMERIC_FIELDS[table]) {
+    if (requireFields && REQUIRED_NUMERIC_FIELDS[table].includes(field) && (payload[field] === "" || payload[field] == null)) {
+      throw new Error(`${field.replace(/_/g, " ")} is required.`);
+    }
     if (!(field in payload)) continue;
     if (payload[field] === "" || payload[field] == null) {
       throw new Error(`${field.replace(/_/g, " ")} must be a non-negative number.`);
@@ -173,14 +185,14 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   const currentUserId = useRef<string | null>(user?.id ?? null);
   currentUserId.current = user?.id ?? null;
 
-  const clearRecords = () => {
+  const clearRecords = useCallback(() => {
     setInventoryItems([]);
     setLaborRecords([]);
     setLandCosts([]);
     setHarvestRecords([]);
     setHarvestLosses([]);
     setSalesRecords([]);
-  };
+  }, []);
 
   const fetchAll = useCallback(async () => {
     const userId = user?.id;
@@ -231,7 +243,7 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
     } finally {
       if (version === requestVersion.current && userId === currentUserId.current) setLoading(false);
     }
-  }, [user?.id, toast]);
+  }, [user?.id, toast, clearRecords]);
 
   useEffect(() => {
     void fetchAll();
@@ -277,6 +289,7 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
     try {
       const table = resolveTable(tableName);
       const payload = normalizeInventoryRecord(table, data, false);
+      if (Object.keys(payload).length === 0) throw new Error("No changes were provided.");
       const { data: updated, error } = await supabase.from(table as any)
         .update(payload as any).eq("id", id).eq("user_id", userId).select("id").maybeSingle();
       if (error) throw error;
