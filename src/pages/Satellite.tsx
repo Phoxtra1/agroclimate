@@ -665,7 +665,14 @@ export default function Satellite() {
 
   // Supabase Monitored Fields & Alerts Loading
   const refreshSavedFields = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setSavedFields([]);
+      setSavedAlerts([]);
+      return;
+    }
+    // Clear the previous account's private field boundaries and alerts before loading.
+    setSavedFields([]);
+    setSavedAlerts([]);
     const { data: fields, error: fieldsError } = await supabase
       .from("satellite_fields")
       .select("*")
@@ -717,7 +724,7 @@ export default function Satellite() {
     setMapCenter([point.lat, point.lon]);
     setMapZoom(17);
     toast.success("Map position selected", { description: `${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}` });
-  }, []);
+  }, [user]);
 
   const handleSaveGeoFeature = async () => {
     if (!user) {
