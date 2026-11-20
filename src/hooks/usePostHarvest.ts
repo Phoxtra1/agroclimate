@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/offlineQueue";
+import { buildHarvestPhotoPath, createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
 
 export interface HarvestEntry {
   id: string;
@@ -107,7 +108,7 @@ export function usePostHarvest() {
 
   const addEntry = async (input: Omit<HarvestEntry, "id" | "user_id" | "created_at" | "updated_at" | "photos" | "risk_override"> & { photos?: string[]; client_idempotency_key?: string }) => {
     if (!user) throw new Error("Not signed in");
-    const clientKey = input.client_idempotency_key || crypto.randomUUID();
+    const clientKey = input.client_idempotency_key || createHarvestIdempotencyKey();
     const { data: existing, error: lookupError } = await supabase
       .from("post_harvest_entries" as any)
       .select("*")
@@ -150,8 +151,7 @@ export async function uploadHarvestPhoto(userId: string, file: File, idempotency
   const prepared = await compressImage(file);
   const mimeType = prepared.type || file.type || "image/jpeg";
   const ext = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
-  const safeKey = (idempotencyKey || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, "_");
-  const path = `${userId}/harvest-${safeKey}-${photoIndex}.${ext}`;
+  const path = buildHarvestPhotoPath(userId, idempotencyKey || createHarvestIdempotencyKey(), photoIndex, ext);
   const { error } = await supabase.storage.from("harvest-photos").upload(path, prepared, {
     cacheControl: "3600",
     contentType: mimeType,
