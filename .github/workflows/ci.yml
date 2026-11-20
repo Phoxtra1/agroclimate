@@ -71,6 +71,7 @@ jobs:
           src/pages/EnvironmentalMonitor.tsx
           src/pages/LiveTracking.tsx
           src/pages/PostHarvestTracker.tsx
+          src/components/PostHarvestStationPanel.tsx
           src/pages/Satellite.tsx
           src/pages/admin/AdminDashboard.tsx
           src/pages/agtrans-partner/TripPage.tsx
