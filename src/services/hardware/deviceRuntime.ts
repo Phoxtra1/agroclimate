@@ -89,6 +89,9 @@ export class DeviceIntegrationRuntime {
     if (!device || device.state === "revoked") throw new Error("Observation source is not an active registered device.");
     if (device.tenantId !== item.tenantId || device.component !== item.component || device.protocol !== item.sourceProtocol) throw new Error("Observation tenant, component or protocol does not match its registered device.");
     this.delivery.enqueue(item);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("agroclimate:device-observation", { detail: { ...item } }));
+    }
     void this.delivery.flush();
   }
   pendingObservations(): readonly DeviceObservation[] { return this.delivery.pending(); }
