@@ -43,6 +43,7 @@ export type DeviceCapability =
   | "wind"
   | "water-level"
   | "vehicle-location"
+  | "vehicle-speed"
   | "aircraft-telemetry"
   | "aerial-imagery"
   | "satellite-imagery";
