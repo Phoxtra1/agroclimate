@@ -101,6 +101,7 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
 
   const connectWs = async (url: string) => {
     const firstFrame = waitForFirstTelemetry();
+    void firstFrame.catch(() => undefined);
     await new Promise<void>((resolve, reject) => {
       try {
         ws = new WebSocket(url);
@@ -179,6 +180,7 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
           await connectWs(url);
         } else if (serialPort) {
           const firstFrame = waitForFirstTelemetry();
+          void firstFrame.catch(() => undefined);
           await serialPort.open({ baudRate: 57600 });
           diag.transport = "serial";
           diag.lastHandshakeAt = Date.now();
@@ -212,6 +214,7 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
         }
         startHeartbeat();
       } catch (error: any) {
+        telemetryWaiter?.reject(error instanceof Error ? error : new Error("Telemetry connection failed"));
         setError(error?.message || "Telemetry connection failed");
         try { ws?.close(); } catch { /* ignore */ }
         try { await serialPort?.close?.(); } catch { /* ignore */ }
