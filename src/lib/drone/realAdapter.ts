@@ -1,220 +1,256 @@
 import { ConnectionAdapter, ConnectionDiagnostics, DiscoveredDrone, DroneProtocol, DroneTelemetry, FlightStatus } from "./types";
 
 const STORAGE_KEY = "droneBridgeUrl";
-
 interface RealAdapterOptions { protocol: DroneProtocol }
 
 export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionAdapter {
   let status: FlightStatus = "disconnected";
   let telemetry: DroneTelemetry = {
-    lat: undefined, lng: undefined,
-    altitude: 0, groundSpeed: 0, verticalSpeed: 0, heading: 0,
-    battery: 100, signalStrength: 0, gpsAccuracy: 0, gpsFix: "none",
+    lat: undefined, lng: undefined, altitude: 0, groundSpeed: 0, verticalSpeed: 0,
+    heading: 0, battery: 0, signalStrength: 0, gpsAccuracy: 0, gpsFix: "none",
     flightDuration: 0, distanceCovered: 0, cameraStatus: "off",
   };
-  let diag: ConnectionDiagnostics = {
-    transport: "none", framesReceived: 0, bytesReceived: 0,
-  };
+  let diag: ConnectionDiagnostics = { transport: "none", framesReceived: 0, bytesReceived: 0 };
   const tListeners = new Set<(t: DroneTelemetry) => void>();
   const sListeners = new Set<(s: FlightStatus) => void>();
   const dListeners = new Set<(d: ConnectionDiagnostics) => void>();
   const emit = () => tListeners.forEach((cb) => cb({ ...telemetry }));
-  const setStatus = (s: FlightStatus) => { status = s; sListeners.forEach((cb) => cb(s)); };
+  const setStatus = (next: FlightStatus) => { status = next; sListeners.forEach((cb) => cb(next)); };
   const emitDiag = () => dListeners.forEach((cb) => cb({ ...diag }));
-  const setError = (e: string | undefined) => { diag.lastError = e; emitDiag(); };
+  const setError = (error: string | undefined) => { diag.lastError = error; emitDiag(); };
 
   let ws: WebSocket | null = null;
   let serialPort: any = null;
-  let bleDevice: any = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
+  let telemetryWaiter: { resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null;
 
-  const ingest = (raw: any) => {
+  const waitForFirstTelemetry = () => new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      telemetryWaiter = null;
+      reject(new Error("Transport opened, but no valid telemetry frame was received. Device connection was not confirmed."));
+    }, 12000);
+    telemetryWaiter = {
+      resolve: () => { clearTimeout(timer); telemetryWaiter = null; resolve(); },
+      reject: (error) => { clearTimeout(timer); telemetryWaiter = null; reject(error); },
+      timer,
+    };
+  });
+
+  // Accept only a JSON telemetry frame containing at least one recognized,
+  // finite measurement. A socket opening or a device being discoverable is not
+  // treated as a telemetry handshake.
+  const ingest = (raw: unknown): boolean => {
     try {
-      const sz = typeof raw === "string" ? raw.length : (raw?.byteLength || 0);
-      const payload = typeof raw === "string" ? JSON.parse(raw) : raw;
-      if (payload && typeof payload === "object") {
-        telemetry = {
-          ...telemetry,
-          lat: payload.lat ?? telemetry.lat,
-          lng: payload.lng ?? telemetry.lng,
-          altitude: Number(payload.altitude ?? payload.alt ?? telemetry.altitude),
-          groundSpeed: Number(payload.groundSpeed ?? payload.speed ?? telemetry.groundSpeed),
-          verticalSpeed: Number(payload.verticalSpeed ?? telemetry.verticalSpeed),
-          heading: Number(payload.heading ?? payload.yaw ?? telemetry.heading),
-          battery: Number(payload.battery ?? payload.batteryPct ?? telemetry.battery),
-          signalStrength: Number(payload.signal ?? payload.rssi ?? telemetry.signalStrength),
-          gpsAccuracy: Number(payload.gpsAccuracy ?? telemetry.gpsAccuracy),
-          gpsFix: payload.gpsFix ?? telemetry.gpsFix,
-          flightDuration: telemetry.flightDuration,
-          distanceCovered: telemetry.distanceCovered,
-          cameraStatus: payload.cameraStatus ?? telemetry.cameraStatus,
-          fuelPct: payload.fuelPct ?? telemetry.fuelPct,
-          flightMode: payload.flightMode ?? telemetry.flightMode,
-        };
-        diag.lastFrameAt = Date.now();
-        diag.framesReceived += 1;
-        diag.bytesReceived += sz;
-        emit();
-        emitDiag();
-      }
-    } catch { /* non-JSON ignored */ }
+      if (typeof raw !== "string") return false;
+      const payload = JSON.parse(raw);
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const p = payload as Record<string, unknown>;
+      const numericKeys = ["lat", "lng", "altitude", "alt", "groundSpeed", "speed", "verticalSpeed", "heading", "yaw", "battery", "batteryPct", "signal", "rssi", "gpsAccuracy"];
+      const hasMeasurement = numericKeys.some((key) => p[key] !== undefined && Number.isFinite(Number(p[key])));
+      if (!hasMeasurement) return false;
+
+      const lat = p.lat === undefined ? telemetry.lat : Number(p.lat);
+      const lng = p.lng === undefined ? telemetry.lng : Number(p.lng);
+      if ((lat !== undefined && (!Number.isFinite(lat) || lat < -90 || lat > 90)) ||
+          (lng !== undefined && (!Number.isFinite(lng) || lng < -180 || lng > 180)) ||
+          ((lat === undefined) !== (lng === undefined))) return false;
+
+      telemetry = {
+        ...telemetry,
+        lat, lng,
+        altitude: Number(p.altitude ?? p.alt ?? telemetry.altitude),
+        groundSpeed: Number(p.groundSpeed ?? p.speed ?? telemetry.groundSpeed),
+        verticalSpeed: Number(p.verticalSpeed ?? telemetry.verticalSpeed),
+        heading: Number(p.heading ?? p.yaw ?? telemetry.heading),
+        battery: Number(p.battery ?? p.batteryPct ?? telemetry.battery),
+        signalStrength: Number(p.signal ?? p.rssi ?? telemetry.signalStrength),
+        gpsAccuracy: Number(p.gpsAccuracy ?? telemetry.gpsAccuracy),
+        gpsFix: p.gpsFix === "2d" || p.gpsFix === "3d" ? p.gpsFix : telemetry.gpsFix,
+        cameraStatus: p.cameraStatus === "ready" || p.cameraStatus === "recording" || p.cameraStatus === "off" ? p.cameraStatus : telemetry.cameraStatus,
+        flightMode: typeof p.flightMode === "string" ? p.flightMode : telemetry.flightMode,
+      };
+      const size = new TextEncoder().encode(raw).byteLength;
+      diag.lastFrameAt = Date.now();
+      diag.framesReceived += 1;
+      diag.bytesReceived += size;
+      setStatus("connected");
+      emit();
+      emitDiag();
+      telemetryWaiter?.resolve();
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const startHeartbeat = () => {
-    if (heartbeat) return;
+    if (heartbeat) clearInterval(heartbeat);
     heartbeat = setInterval(() => {
-      const live = Date.now() - (diag.lastFrameAt || 0) < 8000;
-      telemetry.signalStrength = live ? 90 : Math.max(20, telemetry.signalStrength - 5);
-      if (status === "flying") {
-        telemetry.flightDuration += 1;
-        telemetry.distanceCovered += telemetry.groundSpeed;
-        telemetry.battery = Math.max(0, telemetry.battery - 0.02);
+      if (status === "connected" && (!diag.lastFrameAt || Date.now() - diag.lastFrameAt > 8000)) {
+        telemetry.signalStrength = 0;
+        setStatus("disconnected");
+        emit();
       }
-      emit();
     }, 1000);
   };
 
-  const send = (msg: any) => {
-    const data = typeof msg === "string" ? msg : JSON.stringify(msg);
-    if (ws?.readyState === WebSocket.OPEN) ws.send(data);
+  const bridgeUrl = () => localStorage.getItem(STORAGE_KEY) || "";
+  const requireSecureCtx = () => {
+    if (!window.isSecureContext) throw new Error("Read-only device telemetry requires HTTPS. Open the published site or use localhost.");
   };
 
-  const bridgeUrl = () => localStorage.getItem(STORAGE_KEY) || "";
-
-  const connectWs = (url: string) => new Promise<void>((resolve, reject) => {
-    try {
-      ws = new WebSocket(url);
-      diag.transport = "websocket"; diag.endpoint = url; emitDiag();
-      const timer = setTimeout(() => { try { ws?.close(); } catch {} reject(new Error("Bridge timeout")); }, 6000);
-      ws.onopen = () => { clearTimeout(timer); diag.lastHandshakeAt = Date.now(); diag.connectedAt = Date.now(); setError(undefined); resolve(); };
-      ws.onmessage = (ev) => ingest(ev.data);
-      ws.onclose = () => { if (status !== "disconnected") setStatus("disconnected"); };
-      ws.onerror = () => { clearTimeout(timer); setError("Bridge connection failed"); reject(new Error("Bridge connection failed")); };
-    } catch (e: any) { setError(e?.message); reject(e); }
-  });
-
-  const requireSecureCtx = () => {
-    if (!window.isSecureContext) throw new Error("Real drone APIs require HTTPS. Open the published site or use localhost.");
+  const connectWs = async (url: string) => {
+    const firstFrame = waitForFirstTelemetry();
+    await new Promise<void>((resolve, reject) => {
+      try {
+        ws = new WebSocket(url);
+        diag.transport = "websocket";
+        diag.endpoint = url;
+        emitDiag();
+        const timer = setTimeout(() => {
+          try { ws?.close(); } catch { /* ignore */ }
+          reject(new Error("WebSocket bridge did not open in time."));
+        }, 8000);
+        ws.onopen = () => {
+          clearTimeout(timer);
+          diag.lastHandshakeAt = Date.now();
+          setError(undefined);
+          resolve();
+        };
+        ws.onmessage = (event) => { ingest(event.data); };
+        ws.onclose = () => {
+          if (status !== "disconnected") setStatus("disconnected");
+          telemetryWaiter?.reject(new Error("Telemetry bridge closed before a valid frame arrived."));
+        };
+        ws.onerror = () => {
+          clearTimeout(timer);
+          setError("WebSocket bridge connection failed");
+          telemetryWaiter?.reject(new Error("WebSocket bridge connection failed"));
+          reject(new Error("WebSocket bridge connection failed"));
+        };
+      } catch (error) {
+        telemetryWaiter?.reject(error instanceof Error ? error : new Error("WebSocket connection failed"));
+        reject(error);
+      }
+    });
+    await firstFrame;
   };
 
   return {
     id: protocol,
-    label: protocol.toUpperCase(),
+    label: "Read-only JSON telemetry bridge",
 
     async scan(): Promise<DiscoveredDrone[]> {
       requireSecureCtx();
       const url = bridgeUrl();
       if (url) {
-        try {
-          await connectWs(url);
-          return [{ id: `bridge:${url}`, name: `Bridge (${url.replace(/^ws:\/\//, "").slice(0, 24)})`, model: "Live bridge", protocol, signal: 95, firmware: "ws-1.0" }];
-        } catch (e: any) {
-          setError(e?.message || "Bridge unreachable");
-          throw new Error(`Bridge unreachable at ${url}. ${e.message}`);
-        } finally {
-          try { ws?.close(); ws = null; } catch {}
-        }
-      }
-
-      if ((navigator as any).bluetooth?.requestDevice) {
-        try {
-          const device = await (navigator as any).bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: ["battery_service", "device_information"],
-          });
-          bleDevice = device;
-          diag.transport = "bluetooth"; diag.endpoint = device.name || device.id; emitDiag();
-          return [{ id: device.id || device.name || "ble-device", name: device.name || "Bluetooth Drone", model: "BLE", protocol, signal: 85 }];
-        } catch (e: any) {
-          if (e?.name === "NotFoundError") return [];
-          setError(e?.message); throw e;
-        }
+        return [{
+          id: `bridge:${url}`,
+          name: "Configured JSON telemetry bridge",
+          model: "Endpoint not yet verified",
+          protocol,
+          signal: 0,
+          firmware: "Unknown",
+        }];
       }
 
       if ((navigator as any).serial?.requestPort) {
         try {
           serialPort = await (navigator as any).serial.requestPort();
-          diag.transport = "serial"; diag.endpoint = "USB Serial"; emitDiag();
-          return [{ id: "serial-port", name: "USB Drone Tether", model: "Serial", protocol, signal: 90 }];
-        } catch (e: any) {
-          if (e?.name === "NotFoundError") return [];
-          setError(e?.message); throw e;
+          diag.transport = "serial";
+          diag.endpoint = "User-selected USB serial port";
+          emitDiag();
+          return [{ id: "serial-port", name: "User-selected serial telemetry port", model: "JSON-lines · unverified", protocol, signal: 0 }];
+        } catch (error: any) {
+          if (error?.name === "NotFoundError") return [];
+          setError(error?.message);
+          throw error;
         }
       }
-
-      throw new Error("No supported transport. Set a WebSocket bridge URL or use Chrome/Edge for Web Bluetooth / Web Serial.");
+      throw new Error("Configure a JSON telemetry WebSocket bridge or use a supported USB serial browser.");
     },
 
     async connect() {
+      requireSecureCtx();
       setStatus("connecting");
       try {
         const url = bridgeUrl();
         if (url) {
           await connectWs(url);
-        } else if (bleDevice) {
-          const server = await bleDevice.gatt.connect();
-          diag.lastHandshakeAt = Date.now(); diag.connectedAt = Date.now(); emitDiag();
-          try {
-            const svc = await server.getPrimaryService("battery_service");
-            const ch = await svc.getCharacteristic("battery_level");
-            const val = await ch.readValue();
-            telemetry.battery = val.getUint8(0);
-          } catch { /* device may not expose battery */ }
         } else if (serialPort) {
+          const firstFrame = waitForFirstTelemetry();
           await serialPort.open({ baudRate: 57600 });
-          diag.lastHandshakeAt = Date.now(); diag.connectedAt = Date.now(); emitDiag();
+          diag.transport = "serial";
+          diag.lastHandshakeAt = Date.now();
+          emitDiag();
           const reader = serialPort.readable.getReader();
           (async () => {
             const decoder = new TextDecoder();
-            let buf = "";
+            let buffer = "";
             try {
               while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-                buf += decoder.decode(value, { stream: true });
-                const lines = buf.split("\n"); buf = lines.pop() || "";
-                lines.forEach((l) => l.trim() && ingest(l.trim()));
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+                lines.forEach((line) => { if (line.trim()) ingest(line.trim()); });
               }
-            } catch (e: any) { setError(e?.message); }
+            } catch (error: any) {
+              setError(error?.message || "Serial telemetry read failed");
+              telemetryWaiter?.reject(new Error("Serial telemetry read failed."));
+            } finally {
+              try { reader.releaseLock(); } catch { /* ignore */ }
+            }
           })();
+          await firstFrame;
         } else {
-          throw new Error("No device selected. Run SCAN first.");
+          throw new Error("No configured JSON telemetry bridge or selected serial port. Run discovery first.");
         }
-        telemetry.cameraStatus = "ready";
-        telemetry.gpsFix = "3d";
-        telemetry.signalStrength = 90;
-        diag.lastFrameAt = Date.now(); emitDiag();
-        setStatus("connected");
+        if (status !== "connected" || diag.framesReceived < 1) {
+          throw new Error("A valid telemetry frame is required before the asset is marked connected.");
+        }
         startHeartbeat();
-        send({ cmd: "subscribe", topics: ["telemetry", "battery", "gps"] });
-      } catch (e: any) {
-        setError(e?.message);
+      } catch (error: any) {
+        setError(error?.message || "Telemetry connection failed");
+        try { ws?.close(); } catch { /* ignore */ }
+        try { await serialPort?.close?.(); } catch { /* ignore */ }
+        ws = null;
+        serialPort = null;
         setStatus("disconnected");
-        throw e;
+        throw error;
       }
     },
 
     async disconnect() {
-      try { ws?.close(); } catch {} ws = null;
-      try { await serialPort?.close?.(); } catch {} serialPort = null;
-      try { bleDevice?.gatt?.disconnect?.(); } catch {} bleDevice = null;
+      telemetryWaiter?.reject(new Error("Connection closed by operator."));
+      try { ws?.close(); } catch { /* ignore */ }
+      ws = null;
+      try { await serialPort?.close?.(); } catch { /* ignore */ }
+      serialPort = null;
       if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+      telemetry = {
+        lat: undefined, lng: undefined, altitude: 0, groundSpeed: 0, verticalSpeed: 0,
+        heading: 0, battery: 0, signalStrength: 0, gpsAccuracy: 0, gpsFix: "none",
+        flightDuration: 0, distanceCovered: 0, cameraStatus: "off",
+      };
       diag = { transport: "none", framesReceived: 0, bytesReceived: 0 };
+      emit();
       emitDiag();
       setStatus("disconnected");
     },
 
-    async calibrate()      { send({ cmd: "calibrate" }); setStatus("calibrating"); await new Promise((r) => setTimeout(r, 1500)); setStatus("connected"); },
-    async arm()            { send({ cmd: "arm" }); setStatus("armed"); },
-    async startMission()   { send({ cmd: "takeoff" }); telemetry.cameraStatus = "recording"; setStatus("flying"); },
-    async pauseMission()   { send({ cmd: "hover" });  if (status === "flying") setStatus("paused"); },
-    async resumeMission()  { send({ cmd: "resume" }); if (status === "paused") setStatus("flying"); },
-    async returnToHome()   { send({ cmd: "rth" });    setStatus("returning"); },
-    async emergencyLand()  { send({ cmd: "land" });   setStatus("emergency"); await new Promise((r) => setTimeout(r, 1500)); telemetry.altitude = 0; setStatus("connected"); },
+    async calibrate() { throw new Error("Live calibration is disabled. This adapter is read-only until a specific aircraft model and safe protocol are validated."); },
+    async arm() { throw new Error("Arming is disabled. This adapter is read-only."); },
+    async startMission() { throw new Error("Takeoff and mission execution are disabled. This adapter is read-only."); },
+    async pauseMission() { throw new Error("Flight commands are disabled. This adapter is read-only."); },
+    async resumeMission() { throw new Error("Flight commands are disabled. This adapter is read-only."); },
+    async returnToHome() { throw new Error("Return-to-home is disabled. This adapter is read-only."); },
+    async emergencyLand() { throw new Error("Remote landing is disabled. Use the aircraft's verified physical safety controls."); },
 
-    onTelemetry(cb) { tListeners.add(cb); cb({ ...telemetry }); return () => { tListeners.delete(cb); }; },
-    onStatus(cb)    { sListeners.add(cb); cb(status);          return () => { sListeners.delete(cb); }; },
-    onDiagnostics(cb) { dListeners.add(cb); cb({ ...diag });   return () => { dListeners.delete(cb); }; },
+    onTelemetry(callback) { tListeners.add(callback); callback({ ...telemetry }); return () => { tListeners.delete(callback); }; },
+    onStatus(callback) { sListeners.add(callback); callback(status); return () => { sListeners.delete(callback); }; },
+    onDiagnostics(callback) { dListeners.add(callback); callback({ ...diag }); return () => { dListeners.delete(callback); }; },
     getDiagnostics() { return { ...diag }; },
   };
 }
