@@ -27,24 +27,25 @@ export function useTestMode() {
 
   const load = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("system_settings")
-        .select("value")
-        .eq("key", TEST_MODE_SETTINGS_KEY)
-        .maybeSingle();
-      if (!error && data) {
-        const val = (data.value ?? {}) as any;
-        apply({
-          enabled: !!val.enabled,
-          note: val.note ?? undefined,
-          updatedAt: val.updated_at ?? undefined,
-        });
-      } else {
-        // Test Mode is a server-controlled global entitlement. Never trust a
-        // localStorage value when the authoritative setting cannot be read.
+      // Read the authoritative value through the server function. This avoids
+      // relying on broad client SELECT permissions for system_settings.
+      const { data, error } = await supabase.functions.invoke("test-mode", {
+        body: { action: "get" },
+      });
+      if (error || data?.error || !data?.state) {
         apply(DEFAULT_TEST_MODE);
-        if (error) console.warn("[testMode] backend setting unavailable; failing closed", error);
+        if (error || data?.error) {
+          console.warn("[testMode] server state unavailable; failing closed", error || data.error);
+        }
+        return;
       }
+
+      const val = data.state as TestModeState;
+      apply({
+        enabled: !!val.enabled,
+        note: val.note ?? undefined,
+        updatedAt: val.updatedAt ?? undefined,
+      });
     } catch (err) {
       console.warn("[testMode] load failed; disabling local Test Mode", err);
       apply(DEFAULT_TEST_MODE);
