@@ -256,6 +256,8 @@ export default function AgroInventory() {
 
   useEffect(() => {
     barcodeScannerRef.current = createAgroInventoryBarcodeScanner((code) => {
+      // Ignore short, slowly typed fragments; retain ordinary manual input.
+      if (code.trim().length < 3) return;
       setBarcodeQuery(code);
       setBarcodeTargetId("");
     });
