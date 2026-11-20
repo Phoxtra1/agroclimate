@@ -49,8 +49,8 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
       const providedNumericKeys = numericKeys.filter((key) => p[key] !== undefined && p[key] !== null);
       if (!providedNumericKeys.length || providedNumericKeys.some((key) => !Number.isFinite(Number(p[key])))) return false;
 
-      const lat = p.lat === undefined ? telemetry.lat : Number(p.lat);
-      const lng = p.lng === undefined ? telemetry.lng : Number(p.lng);
+      const lat = p.lat == null ? telemetry.lat : Number(p.lat);
+      const lng = p.lng == null ? telemetry.lng : Number(p.lng);
       const batteryValue = p.battery ?? p.batteryPct;
       const signalValue = p.signal ?? p.rssi;
       const accuracyValue = p.gpsAccuracy;
