@@ -85,6 +85,8 @@ export interface InventoryMetrics {
   netProfit: number;
 }
 
+export type InventoryTable = "inventory_items" | "labor_records" | "land_costs" | "harvest_records" | "harvest_losses" | "sales_records";
+
 export const INVENTORY_TABLES: InventoryTable[] = [
   "inventory_items", "labor_records", "land_costs", "harvest_records", "harvest_losses", "sales_records",
 ];
