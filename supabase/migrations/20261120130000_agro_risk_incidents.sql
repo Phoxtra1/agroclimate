@@ -26,7 +26,16 @@ CREATE POLICY "Users read own AgroRisk incidents"
 DROP POLICY IF EXISTS "Users report own AgroRisk incidents" ON public.agro_risk_incidents;
 CREATE POLICY "Users report own AgroRisk incidents"
   ON public.agro_risk_incidents FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid() AND status = 'unverified' AND source = 'user_report');
+  WITH CHECK (
+    user_id = auth.uid()
+    AND status = 'unverified'
+    AND source = 'user_report'
+    AND (
+      farm_id IS NULL OR EXISTS (
+        SELECT 1 FROM public.farms f WHERE f.id = farm_id AND f.user_id = auth.uid()
+      )
+    )
+  );
 
 DROP POLICY IF EXISTS "Users delete own AgroRisk incidents" ON public.agro_risk_incidents;
 CREATE POLICY "Users delete own AgroRisk incidents"
