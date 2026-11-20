@@ -195,7 +195,9 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
         for (let photoIndex = 0; photoIndex < item.photo_keys.length; photoIndex++) {
           const k = item.photo_keys[photoIndex];
           const cached = photos[k];
-          if (!cached) continue;
+          if (!cached || cached.user_id !== item.user_id) {
+            throw new Error("A queued harvest photo is missing or belongs to another account. The harvest remains queued for recovery.");
+          }
           const blob = await dataUrlToBlob(cached.data_url);
           const ext = (cached.filename.split(".").pop() || "jpg").toLowerCase();
           const path = buildHarvestPhotoPath(cached.user_id, item.id, photoIndex, ext);
