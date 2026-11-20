@@ -454,7 +454,72 @@ REVOKE INSERT ON public.tracking_sessions FROM authenticated;
 REVOKE INSERT, UPDATE ON public.transport_agreements FROM authenticated;
 -- Drivers may publish GPS observations, but cannot directly change job/session status.
 REVOKE UPDATE ON public.tracking_sessions FROM authenticated;
-GRANT UPDATE (
-  current_lat, current_lon, speed_kn, heading, last_location_at,
-  location_accuracy_m, location_source, is_simulated, eta, distance_m, route
-) ON public.tracking_sessions TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.update_agtrans_tracking_location(
+  p_job_id uuid,
+  p_lat double precision,
+  p_lon double precision,
+  p_accuracy_m numeric,
+  p_captured_at timestamptz,
+  p_speed_kmh numeric DEFAULT NULL,
+  p_heading numeric DEFAULT NULL,
+  p_eta text DEFAULT NULL,
+  p_distance_m numeric DEFAULT NULL,
+  p_route jsonb DEFAULT NULL
+)
+RETURNS public.tracking_sessions
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+DECLARE
+  j public.delivery_jobs%ROWTYPE;
+  s public.tracking_sessions%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  SELECT * INTO j FROM public.delivery_jobs WHERE id = p_job_id FOR UPDATE;
+  IF NOT FOUND OR j.driver_id <> auth.uid() THEN
+    RAISE EXCEPTION 'Only the assigned driver can publish this trip GPS';
+  END IF;
+  IF j.status IN ('Delivered', 'Completed', 'Cancelled') THEN
+    RAISE EXCEPTION 'GPS sharing is closed for this delivery';
+  END IF;
+  IF p_lat IS NULL OR p_lat < -90 OR p_lat > 90 OR p_lon IS NULL OR p_lon < -180 OR p_lon > 180 THEN
+    RAISE EXCEPTION 'Invalid GPS coordinates';
+  END IF;
+  IF p_accuracy_m IS NULL OR p_accuracy_m <= 0 OR p_accuracy_m > 100 THEN
+    RAISE EXCEPTION 'GPS accuracy must be between 0 and 100 metres';
+  END IF;
+  IF p_captured_at IS NULL OR p_captured_at > now() + interval '15 seconds'
+     OR p_captured_at < now() - interval '90 seconds' THEN
+    RAISE EXCEPTION 'GPS fix is stale or has an invalid timestamp';
+  END IF;
+  IF p_speed_kmh IS NOT NULL AND (p_speed_kmh < 0 OR p_speed_kmh > 150) THEN
+    RAISE EXCEPTION 'Invalid vehicle speed';
+  END IF;
+  IF p_heading IS NOT NULL AND (p_heading < 0 OR p_heading >= 360) THEN
+    RAISE EXCEPTION 'Invalid vehicle heading';
+  END IF;
+
+  UPDATE public.tracking_sessions
+  SET current_lat = p_lat,
+      current_lon = p_lon,
+      speed_kn = p_speed_kmh,
+      heading = p_heading,
+      last_location_at = p_captured_at,
+      location_accuracy_m = p_accuracy_m,
+      location_source = 'device_gps',
+      is_simulated = FALSE,
+      eta = p_eta,
+      distance_m = p_distance_m,
+      route = p_route
+  WHERE delivery_job_id = p_job_id
+    AND driver_id = auth.uid()
+  RETURNING * INTO s;
+
+  IF NOT FOUND THEN RAISE EXCEPTION 'Active tracking session not found'; END IF;
+  RETURN s;
+END;
+$;
+
+GRANT EXECUTE ON FUNCTION public.update_agtrans_tracking_location(uuid, double precision, double precision, numeric, timestamptz, numeric, numeric, text, numeric, jsonb) TO authenticated;
