@@ -27,10 +27,9 @@ export class ResilientObservationDelivery {
     const validation = validateDeviceObservation(item);
     if (!validation.valid) throw new Error("Invalid device observation: " + validation.issues.join("; "));
     if (this.queue.some((queued) => queued.eventId === item.eventId)) return;
+    if (this.queue.length >= this.maxQueueSize) throw new Error("Offline device queue is full; no observation was discarded.");
     this.queue.push(item);
-    if (this.queue.length > this.maxQueueSize) this.queue.splice(0, this.queue.length - this.maxQueueSize);
     this.persist();
-    void this.flush();
   }
   async flush(): Promise<{ delivered: number; remaining: number }> {
     if (this.flushing) return { delivered: 0, remaining: this.queue.length };
@@ -87,6 +86,7 @@ export class DeviceIntegrationRuntime {
     if (!device || device.state === "revoked") throw new Error("Observation source is not an active registered device.");
     if (device.tenantId !== item.tenantId || device.component !== item.component) throw new Error("Observation tenant or component does not match its registered device.");
     this.delivery.enqueue(item);
+    void this.delivery.flush();
   }
   pendingObservations(): readonly DeviceObservation[] { return this.delivery.pending(); }
   flushObservations(): Promise<{ delivered: number; remaining: number }> { return this.delivery.flush(); }
