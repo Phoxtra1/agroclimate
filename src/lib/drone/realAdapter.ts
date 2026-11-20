@@ -180,13 +180,13 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
         } else {
           throw new Error("No device selected. Run SCAN first.");
         }
-        telemetry.cameraStatus = "ready";
-        telemetry.gpsFix = "3d";
-        telemetry.signalStrength = 90;
-        diag.lastFrameAt = Date.now(); emitDiag();
+        // A transport handshake is not a GPS fix, camera readiness or telemetry frame.
+        // Keep sensor values unchanged until actual device payloads arrive.
         setStatus("connected");
         startHeartbeat();
-        send({ cmd: "subscribe", topics: ["telemetry", "battery", "gps"] });
+        if (ws?.readyState === WebSocket.OPEN) {
+          send({ cmd: "subscribe", topics: ["telemetry", "battery", "gps"] });
+        }
       } catch (e: any) {
         setError(e?.message);
         setStatus("disconnected");
@@ -204,13 +204,15 @@ export function createRealAdapter({ protocol }: RealAdapterOptions): ConnectionA
       setStatus("disconnected");
     },
 
-    async calibrate()      { send({ cmd: "calibrate" }); setStatus("calibrating"); await new Promise((r) => setTimeout(r, 1500)); setStatus("connected"); },
-    async arm()            { send({ cmd: "arm" }); setStatus("armed"); },
-    async startMission()   { send({ cmd: "takeoff" }); telemetry.cameraStatus = "recording"; setStatus("flying"); },
-    async pauseMission()   { send({ cmd: "hover" });  if (status === "flying") setStatus("paused"); },
-    async resumeMission()  { send({ cmd: "resume" }); if (status === "paused") setStatus("flying"); },
-    async returnToHome()   { send({ cmd: "rth" });    setStatus("returning"); },
-    async emergencyLand()  { send({ cmd: "land" });   setStatus("emergency"); await new Promise((r) => setTimeout(r, 1500)); telemetry.altitude = 0; setStatus("connected"); },
+    // Phase 1 is read-only. No flight or calibration command is enabled until a
+    // specific aircraft, command protocol, acknowledgement and safety checks are validated.
+    async calibrate()      { throw new Error("Calibration is disabled: this adapter is read-only until a verified aircraft protocol is implemented."); },
+    async arm()            { throw new Error("Arming is disabled: no validated command protocol is configured."); },
+    async startMission()   { throw new Error("Take-off is disabled: no validated command protocol is configured."); },
+    async pauseMission()   { throw new Error("Flight control is disabled: no validated command protocol is configured."); },
+    async resumeMission()  { throw new Error("Flight control is disabled: no validated command protocol is configured."); },
+    async returnToHome()   { throw new Error("Return-to-home is disabled: no validated command protocol is configured."); },
+    async emergencyLand()  { throw new Error("Flight control is disabled: no validated command protocol is configured."); },
 
     onTelemetry(cb) { tListeners.add(cb); cb({ ...telemetry }); return () => { tListeners.delete(cb); }; },
     onStatus(cb)    { sListeners.add(cb); cb(status);          return () => { sListeners.delete(cb); }; },
