@@ -118,6 +118,13 @@ const REQUIRED_FIELDS: Record<InventoryTable, string[]> = {
   sales_records: ["crop_name"],
 };
 
+const DEFAULT_FIELDS: Partial<Record<InventoryTable, string[]>> = {
+  inventory_items: ["unit"],
+  harvest_records: ["unit"],
+  harvest_losses: ["unit"],
+  sales_records: ["unit"],
+};
+
 const DATE_FIELDS: Record<InventoryTable, string[]> = {
   inventory_items: [],
   labor_records: [],
@@ -166,7 +173,10 @@ export function normalizeInventoryRecord(table: InventoryTable, data: Record<str
   }
 
   for (const [key, value] of Object.entries(payload)) {
-    if (typeof value === "string" && value.trim() === "") payload[key] = null;
+    if (typeof value === "string" && value.trim() === "") {
+      if (DEFAULT_FIELDS[table]?.includes(key)) delete payload[key];
+      else payload[key] = null;
+    }
   }
   return payload;
 }
