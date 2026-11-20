@@ -604,7 +604,7 @@ export default function EnvironmentalMonitor() {
   }>(() => ({
     lat: position.lat, lon: position.lon, locationName: position.locationName, manual: false,
   }));
-  const { forecast, source: weatherSource, lastUpdated: weatherLastUpdated } = useWeather(
+  const { forecast, source: weatherSource, lastUpdated: weatherLastUpdated, forecastLocation } = useWeather(
     assessmentTarget.lat,
     assessmentTarget.lon,
   );
@@ -613,7 +613,8 @@ export default function EnvironmentalMonitor() {
     (position.source === "cached" && !!position.updatedAt && Date.now() - position.updatedAt < 24 * 60 * 60 * 1000);
   const weatherIsFresh = weatherSource === "live" ||
     (weatherSource === "cache" && !!weatherLastUpdated && Date.now() - weatherLastUpdated.getTime() < 60 * 60 * 1000);
-  const weatherUsable = locationIsFresh && weatherIsFresh;
+  const forecastMatchesTarget = !!forecastLocation && Math.abs(forecastLocation.lat - assessmentTarget.lat) < 0.1 && Math.abs(forecastLocation.lon - assessmentTarget.lon) < 0.1;
+  const weatherUsable = forecastMatchesTarget && locationIsFresh && weatherIsFresh;
   const envState = useEnvironmentState(forecast);
 
   const currentUserId = useRef<string | null>(user?.id ?? null);
