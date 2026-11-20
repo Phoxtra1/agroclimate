@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter } from "@/services/hardware/browserAdapters";
+import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric } from "@/services/hardware/browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
 import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
 
@@ -15,6 +15,16 @@ const observation: DeviceObservation = {
   measuredAt: "2026-11-20T08:00:00Z", receivedAt: "2026-11-20T08:01:00Z",
   quality: "valid", sourceProtocol: "ble-gatt",
 };
+
+describe("hardware capability mapping", () => {
+  it("maps scale and weather capabilities to their concrete observation metrics", () => {
+    expect(hardwareCapabilitySupportsMetric("weight-measurement", "weight")).toBe(true);
+    expect(hardwareCapabilitySupportsMetric("wind", "wind_speed")).toBe(true);
+    expect(hardwareCapabilitySupportsMetric("wind", "wind_direction")).toBe(true);
+    expect(hardwareCapabilitySupportsMetric("relative-humidity", "relative_humidity")).toBe(true);
+    expect(hardwareCapabilitySupportsMetric("weight-measurement", "temperature")).toBe(false);
+  });
+});
 
 describe("hardware runtime and browser adapters", () => {
   it("turns keyboard-wedge scanner keystrokes into complete barcode events", () => {
