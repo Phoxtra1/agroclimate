@@ -115,9 +115,9 @@ export class WebBluetoothSensorAdapter implements HardwareAdapter {
   readonly adapterId = "web-bluetooth-gatt-configurable-v1";
   readonly protocol = "ble-gatt" as const;
   readonly components: readonly HardwareComponent[] = [
-    "post-harvest", "agroforecast", "agrorisk", "agro-inventory", "market-link",
+    "agroforecast", "agrorisk", "agro-inventory", "market-link",
   ];
-  private sessions = new Map<string, { device: BluetoothDeviceLike; characteristic: BluetoothCharacteristicLike; listener: (event: any) => void }>();
+  private sessions = new Map<string, { device: BluetoothDeviceLike; subscriptions: Array<{ characteristic: BluetoothCharacteristicLike; listener: (event: any) => void }> }>();
 
   constructor(
     private readonly context: AdapterContext,
@@ -133,32 +133,49 @@ export class WebBluetoothSensorAdapter implements HardwareAdapter {
   async connect(device: DeviceRegistration): Promise<AdapterConnection> {
     if (!this.bluetooth.bluetooth) return { connected: false, detail: "Web Bluetooth is not available in this browser or context." };
     if (this.sessions.has(device.deviceId)) return { connected: true, detail: "BLE session is already active." };
-    const mapping = this.mappings.find((item) =>
+    const mappings = this.mappings.filter((item) =>
       device.capabilities.some((capability) => capability.replace(/-/g, "_") === item.metric));
-    if (!mapping) return { connected: false, detail: "No manufacturer-validated characteristic mapping is configured for this device." };
-    const selected = await this.bluetooth.bluetooth.requestDevice({ filters: [{ services: [mapping.serviceUuid] }] });
+    if (!mappings.length) return { connected: false, detail: "No manufacturer-validated characteristic mapping is configured for this device." };
+    const services = [...new Set(mappings.map((item) => item.serviceUuid))];
+    const selected = await this.bluetooth.bluetooth.requestDevice({ filters: [{ services }] });
     if (!selected.gatt) return { connected: false, detail: "Selected BLE device does not expose GATT." };
     const server = await selected.gatt.connect();
-    const service = await server.getPrimaryService(mapping.serviceUuid);
-    const characteristic = await service.getCharacteristic(mapping.characteristicUuid);
-    const listener = (event: any) => {
-      const view = event?.target?.value as DataView | undefined;
-      if (!view) return;
-      const value = mapping.decode(view);
-      if (value === null || !Number.isFinite(value)) return;
-      void this.context.onObservation(observation(device, mapping.metric, value, mapping.unit, this.protocol, this.context.now?.() ?? new Date()));
-    };
-    characteristic.addEventListener("characteristicvaluechanged", listener);
-    await characteristic.startNotifications();
-    this.sessions.set(device.deviceId, { device: selected, characteristic, listener });
-    return { connected: true, connectedAt: new Date().toISOString(), detail: "BLE GATT notifications active; values use the configured manufacturer decoder." };
+    const subscriptions: Array<{ characteristic: BluetoothCharacteristicLike; listener: (event: any) => void }> = [];
+    try {
+      for (const mapping of mappings) {
+        const service = await server.getPrimaryService(mapping.serviceUuid);
+        const characteristic = await service.getCharacteristic(mapping.characteristicUuid);
+        const listener = (event: any) => {
+          const view = event?.target?.value as DataView | undefined;
+          if (!view) return;
+          const value = mapping.decode(view);
+          if (value === null || !Number.isFinite(value)) return;
+          void this.context.onObservation(observation(device, mapping.metric, value, mapping.unit, this.protocol, this.context.now?.() ?? new Date()));
+        };
+        characteristic.addEventListener("characteristicvaluechanged", listener);
+        await characteristic.startNotifications();
+        subscriptions.push({ characteristic, listener });
+      }
+    } catch (error) {
+      for (const item of subscriptions) {
+        item.characteristic.removeEventListener("characteristicvaluechanged", item.listener);
+        try { await item.characteristic.stopNotifications(); } catch { /* partial setup cleanup */ }
+      }
+      selected.gatt.disconnect();
+      throw error;
+    }
+    this.sessions.set(device.deviceId, { device: selected, subscriptions });
+    return { connected: true, connectedAt: new Date().toISOString(), detail: `BLE GATT notifications active for ${subscriptions.length} configured characteristics.` };
   }
 
   async disconnect(deviceId: string): Promise<void> {
     const session = this.sessions.get(deviceId);
     if (!session) return;
-    session.characteristic.removeEventListener("characteristicvaluechanged", session.listener);
-    try { await session.characteristic.stopNotifications(); } finally { session.device.gatt?.disconnect(); }
+    for (const item of session.subscriptions) {
+      item.characteristic.removeEventListener("characteristicvaluechanged", item.listener);
+      try { await item.characteristic.stopNotifications(); } catch { /* disconnect cleanup */ }
+    }
+    session.device.gatt?.disconnect();
     this.sessions.delete(deviceId);
   }
 }
