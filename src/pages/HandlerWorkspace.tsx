@@ -78,7 +78,7 @@ export default function HandlerWorkspace() {
     const [t, s, e] = await Promise.all([
       supabase.from("handler_tasks").select("*").eq("handler_id", h.id).order("created_at", { ascending: false }),
       supabase.from("work_sessions").select("*").eq("handler_id", h.id).is("clock_out", null).order("clock_in", { ascending: false }).limit(1),
-      supabase.from("task_evidence").select("task_id").eq("handler_id", h.id),
+      supabase.from("task_evidence").select("task_id,evidence_type").eq("handler_id", h.id),
     ]);
 
     if (t.error || s.error || e.error) {
@@ -86,7 +86,7 @@ export default function HandlerWorkspace() {
       toast({ title: "Some handler records could not be loaded", description: messages.join("; "), variant: "destructive" });
     }
     setTasks(t.data || []);
-    setEvidenceCounts((e.data || []).reduce((counts: Record<string, number>, item: { task_id: string }) => { counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
+    setEvidenceCounts((e.data || []).reduce((counts: Record<string, number>, item: { task_id: string; evidence_type: string }) => { if (item.evidence_type === "photo" || item.evidence_type === "video") counts[item.task_id] = (counts[item.task_id] || 0) + 1; return counts; }, {}));
     setActiveSession(s.data?.[0] || null);
     setLoading(false);
   }, [user]);
