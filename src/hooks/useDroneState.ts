@@ -79,7 +79,7 @@ export const useDroneState = () => {
         name: d.name || "Unnamed aircraft",
         model: d.model || "—",
         protocol: (d.protocol || "aih") as any,
-        signal: d.status === "offline" ? 0 : 90,
+        signal: 0, // Registry presence is not evidence of a live radio link or signal measurement.
         firmware: d.manufacturer || undefined,
         aircraftType: (d.aircraft_type || "drone") as any,
         type: (d.aircraft_type || "drone") as any,
@@ -139,13 +139,16 @@ export const useDroneState = () => {
     // Persist aircraft-type hint so AGNav marker + other views can react in real time
     try { localStorage.setItem("aih_active_type", (target.type || target.aircraftType || "drone") as string); } catch { /* Storage may be unavailable in private browsing or restricted contexts. */ }
     await adapterRef.current.connect(target.id);
-    // Best-effort: mark the registered row as connected so admin/registry views update immediately
-    try {
-      await supabase.from("drones").update({
-        status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
-      }).eq("id", target.id);
-    } catch { /* Registry updates are best-effort; the hardware connection is authoritative. */ }
-  }, [available, scan]);
+    // Simulator sessions must never mark a registered physical aircraft as connected.
+    // For live protocols, only persist a connection after the adapter has completed its connect call.
+    if (protocol !== "simulator") {
+      try {
+        await supabase.from("drones").update({
+          status: "connected", last_handshake_at: new Date().toISOString(), last_seen_at: new Date().toISOString(),
+        }).eq("id", target.id);
+      } catch { /* Registry updates are best-effort; adapter status remains authoritative. */ }
+    }
+  }, [available, scan, protocol]);
 
   const disconnect = useCallback(async () => {
     const priorId = activeDrone?.id;
