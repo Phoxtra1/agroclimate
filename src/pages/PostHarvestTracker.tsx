@@ -336,7 +336,7 @@ export default function PostHarvestTracker() {
       window.removeEventListener("offline", onOffline);
       clearInterval(t);
     };
-  }, []);
+  }, [user?.id]);
 
   const dangerCount = entries.filter((e) => computeRisk(e).level === "danger").length;
   const latestMappedStorage = entries.find((entry) => entry.storage_location?.trim())?.storage_location;
