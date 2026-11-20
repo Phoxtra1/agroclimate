@@ -386,8 +386,8 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
             if (Number.isFinite(value)) void this.context.onObservation(observation(device, metric, value, unit, this.protocol, now));
           };
           const p = frame.payload;
-          if (frame.messageId === 24 && p.byteLength >= 32) {
-            const fixType = p.getUint8(30);
+          if (frame.messageId === 24 && p.byteLength >= 30) {
+            const fixType = p.getUint8(28);
             if (fixType >= 2) {
               emit("latitude", p.getInt32(8, true) / 1e7, "°");
               emit("longitude", p.getInt32(12, true) / 1e7, "°");
