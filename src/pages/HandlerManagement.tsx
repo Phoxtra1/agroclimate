@@ -110,9 +110,14 @@ export default function HandlerManagement() {
   const [showQR, setShowQR] = useState(false);
   const [newFarm, setNewFarm] = useState({ name: "", location: "" });
 
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
+
   const fetchData = useCallback(async () => {
+    const farmerId = user?.id;
+    if ((farmerId ?? null) !== currentUserId.current) return;
     const version = ++fetchVersion.current;
-    if (!user) {
+    if (!farmerId) {
       setHandlers([]); setTasks([]); setSessions([]); setIssues([]); setFarmQRs([]); setEvidence([]);
       setLoading(false);
       return;
@@ -120,30 +125,38 @@ export default function HandlerManagement() {
     setLoading(true);
     setHandlers([]); setTasks([]); setSessions([]); setIssues([]); setFarmQRs([]); setEvidence([]);
 
-    const [h, t, s, i, q, e] = await Promise.all([
-      supabase.from("handlers").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("handler_tasks").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("work_sessions").select("*").order("clock_in", { ascending: false }).limit(100),
-      supabase.from("handler_issues").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("farm_qr_codes").select("*").eq("farmer_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("task_evidence").select("*").order("created_at", { ascending: false }).limit(500),
+    const [h, t, i, q] = await Promise.all([
+      supabase.from("handlers").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
+      supabase.from("handler_tasks").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
+      supabase.from("handler_issues").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
+      supabase.from("farm_qr_codes").select("*").eq("farmer_id", farmerId).order("created_at", { ascending: false }),
     ]);
-    if (version !== fetchVersion.current) return;
+    if (version !== fetchVersion.current || farmerId !== currentUserId.current) return;
 
-    const errors = [h.error, t.error, s.error, i.error, q.error, e.error].filter(Boolean);
-    if (errors.length) {
-      toast({ title: "Some handler records could not be loaded", description: errors.map((error) => error?.message).join("; "), variant: "destructive" });
-    }
     const handlerRows = h.data || [];
     const taskRows = t.data || [];
     const handlerIds = handlerRows.map((item) => item.id);
     const taskIds = taskRows.map((item) => item.id);
+    const [s, e] = await Promise.all([
+      handlerIds.length
+        ? supabase.from("work_sessions").select("*").in("handler_id", handlerIds).order("clock_in", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      handlerIds.length && taskIds.length
+        ? supabase.from("task_evidence").select("*").in("handler_id", handlerIds).in("task_id", taskIds).order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (version !== fetchVersion.current || farmerId !== currentUserId.current) return;
+
+    const errors = [h.error, t.error, i.error, q.error, s.error, e.error].filter(Boolean);
+    if (errors.length) {
+      toast({ title: "Some handler records could not be loaded", description: errors.map((error) => error?.message).join("; "), variant: "destructive" });
+    }
     setHandlers(handlerRows);
     setTasks(taskRows);
-    setSessions((s.data || []).filter((item) => handlerIds.includes(item.handler_id)));
+    setSessions(s.data || []);
     setIssues(i.data || []);
     setFarmQRs(q.data || []);
-    setEvidence((e.data || []).filter((item) => taskIds.includes(item.task_id) && handlerIds.includes(item.handler_id)));
+    setEvidence(e.data || []);
     setLoading(false);
   }, [user?.id, toast]);
 
