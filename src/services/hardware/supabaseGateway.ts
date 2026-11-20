@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DeviceObservation, DeviceRegistration, HardwareComponent, DeviceProtocol } from "./types";
-import type { ObservationSink } from "./browserAdapters";
+import type { ObservationSink, PostHarvestReadingSink } from "./browserAdapters";
 
 export interface ProvisionedDevice {
   id: string; user_id: string; component: HardwareComponent; device_name: string;
@@ -56,7 +56,6 @@ export function toDeviceRegistration(device: ProvisionedDevice, ownerUserId: str
     siteId: device.site_id ?? undefined, registeredAt: device.created_at, state: device.status === "active" ? "registered" : "revoked" };
 }
 
-import type { PostHarvestReadingSink } from "./browserAdapters";
 
 export interface ProvisionedPostHarvestStation {
   id: string; user_id: string; device_name: string; hardware_id: string;
