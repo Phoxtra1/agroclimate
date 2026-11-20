@@ -183,6 +183,10 @@ export function usePostHarvest() {
 }
 
 export async function uploadHarvestPhoto(userId: string, file: File, idempotencyKey?: string, photoIndex = 0): Promise<string> {
+  if (!file.type.startsWith("image/")) throw new Error("Harvest evidence must be an image.");
+  if (file.size > 20 * 1024 * 1024) throw new Error("Harvest images must be 20 MB or smaller.");
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || session?.user?.id !== userId) throw new Error("The signed-in farm account changed before photo upload.");
   const prepared = await compressImage(file);
   const mimeType = prepared.type || file.type || "image/jpeg";
   const ext = mimeType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
