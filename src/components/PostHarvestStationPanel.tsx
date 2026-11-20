@@ -32,7 +32,17 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!user) { setDevices([]); setObservations([]); setLoading(false); return; }
+    if (!user) {
+      setDevices([]);
+      setObservations([]);
+      setIssuedToken(null);
+      setLoading(false);
+      return;
+    }
+    // Do not retain a previous account's station list or one-time device credential.
+    setDevices([]);
+    setObservations([]);
+    setIssuedToken(null);
     setLoading(true);
     const [deviceResult, observationResult] = await Promise.all([
       supabase.from("post_harvest_station_devices" as any)
