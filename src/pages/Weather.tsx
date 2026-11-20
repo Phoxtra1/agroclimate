@@ -317,8 +317,8 @@ function SoilStatusBadge({ status }: { status: CropWaterAdvisory["soilStatus"] }
 // MAIN PAGE COMPONENT
 // ────────────────────────────────────────────────────────────
 export default function Weather() {
-  const { position, loading: geoLoading } = useGeolocation();
-  const { forecast, isLive, loading: weatherLoading, lastUpdated, refresh } = useWeather(
+  const { position, loading: geoLoading, retry: retryLocation } = useGeolocation();
+  const { forecast, source, loading: weatherLoading, lastUpdated, refresh } = useWeather(
     position?.lat,
     position?.lon
   );
@@ -336,6 +336,7 @@ export default function Weather() {
 
   const currentCrops = CROPS.filter((c) => c.season.includes(currentMonth));
   const isLoading = geoLoading || weatherLoading;
+  const advisoryAvailable = source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000);
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
@@ -363,17 +364,19 @@ export default function Weather() {
           <span className="font-medium">{position?.community || position?.locationName || "Accra, Ghana"}</span>
           {position?.district && <span>• {position.district}</span>}
           {position?.region && <span>• {position.region}</span>}
+          <Badge variant="outline" className="text-[10px]">
+            {position?.source === "gps" ? "GPS location" : position?.source === "cached" ? "Saved location" : "Default location"}
+          </Badge>
+          {position?.source !== "gps" && (
+            <button onClick={retryLocation} className="text-xs underline underline-offset-2" disabled={geoLoading}>
+              Use GPS
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {isLive ? (
-            <span className="flex items-center gap-1 text-green-600 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Live
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-amber-600 font-medium">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Offline/Demo
-            </span>
-          )}
+          <span className={source === "live" ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
+            {source === "live" ? "Live provider data" : source === "cache" ? "Cached provider data" : "Demo sample data"}
+          </span>
           {lastUpdated && (
             <span>
               Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -402,7 +405,7 @@ export default function Weather() {
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <CloudRain className="h-5 w-5 mx-auto text-blue-400" />
                 <p className="text-lg font-bold mt-2">{today.rainMm ?? 0} mm</p>
-                <p className="text-xs text-muted-foreground">Rainfall</p>
+                <p className="text-xs text-muted-foreground">{today.rainSource === "provider" ? "Rainfall · provider" : today.rainSource === "estimated" ? "Rainfall · estimated" : "Rainfall · sample"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Gauge className="h-5 w-5 mx-auto text-amber-600" />
@@ -412,7 +415,7 @@ export default function Weather() {
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Leaf className="h-5 w-5 mx-auto text-green-600" />
                 <p className="text-lg font-bold mt-2">{today.evapotranspiration ?? 0}</p>
-                <p className="text-xs text-muted-foreground">ET₀ (mm/day)</p>
+                <p className="text-xs text-muted-foreground">{today.evapotranspirationSource === "provider" ? "ET₀ · provider" : today.evapotranspirationSource === "estimated" ? "ET₀ · estimated" : "ET₀ · sample"} (mm/day)</p>
               </div>
             </div>
 
