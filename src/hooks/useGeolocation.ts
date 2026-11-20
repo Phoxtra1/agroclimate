@@ -36,7 +36,16 @@ function readGeoCache(): GeoPosition | null {
       typeof parsed?.lat !== "number" || !Number.isFinite(parsed.lat) || parsed.lat < -90 || parsed.lat > 90 ||
       typeof parsed?.lon !== "number" || !Number.isFinite(parsed.lon) || parsed.lon < -180 || parsed.lon > 180
     ) return null;
-    return { ...DEFAULT_POSITION, ...parsed, source: "cached" };
+    return {
+      lat: parsed.lat,
+      lon: parsed.lon,
+      locationName: typeof parsed.locationName === "string" ? parsed.locationName : "Saved coordinates",
+      community: typeof parsed.community === "string" ? parsed.community : "",
+      district: typeof parsed.district === "string" ? parsed.district : "",
+      region: typeof parsed.region === "string" ? parsed.region : "",
+      country: typeof parsed.country === "string" ? parsed.country : "",
+      source: "cached",
+    };
   } catch {
     return null;
   }
