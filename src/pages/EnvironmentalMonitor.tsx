@@ -1389,7 +1389,7 @@ export default function EnvironmentalMonitor() {
                 </div>
               </CardHeader>
 
-              <CardContent className="p-0 relative">
+              <CardContent className="p-0 relative">\n                <div className="border-b bg-amber-500/5 px-4 py-2 text-xs text-muted-foreground">Reference hazard polygons are illustrative geographic context, not live satellite detections or official hazard boundaries. Reported incidents are user-submitted and are not independently verified.</div>
                 {/* Information bar depending on active mode */}
                 <div className="bg-primary/10 border-b border-primary/20 px-4 py-2.5 text-xs text-foreground flex items-center justify-between z-10 relative">
                   {activeMode === "quick" && (
@@ -1742,7 +1742,7 @@ export default function EnvironmentalMonitor() {
                       </div>
                       <p className="text-sm font-bold text-foreground">Farm Vulnerability Score</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Calculated from terrain elevation differentials, current weather forecast patterns, and community logs.
+                        Rule-based vulnerability estimate using terrain calculations, {weatherSource === "live" ? "live provider weather" : weatherSource === "cache" ? "cached provider weather" : "sample fallback weather"}, and user-reported incident records. This is not a direct sensor measurement or an official hazard warning.
                       </p>
                     </div>
                   </CardContent>
