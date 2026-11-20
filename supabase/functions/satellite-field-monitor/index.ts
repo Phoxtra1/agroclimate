@@ -102,6 +102,9 @@ async function fetchScenes(field: Field): Promise<Scene[]> {
 }
 
 async function getIndexStats(scene: Scene, geometry: Field["field_geojson"], index: "ndvi" | "ndmi"): Promise<Stats> {
+  if (new URL(scene.itemUrl).origin !== EARTH_SEARCH) {
+    throw new Error("Satellite catalogue returned an untrusted scene URL");
+  }
   const assets = index === "ndvi" ? ["nir", "red"] : ["nir", "swir16"];
   const endpoint = new URL(`${TITILER}/stac/statistics`);
   endpoint.searchParams.set("url", scene.itemUrl);
@@ -248,23 +251,9 @@ serve(async (req) => {
             if (alertError) throw alertError;
 
             if (alert?.id) {
-              await supabase.from("transport_notifications").insert({
-                user_id: field.user_id,
-                type: "satellite_crop_stress",
-                title,
-                message,
-                data: {
-                  satellite_alert_id: alert.id,
-                  field_id: field.id,
-                  field_name: field.name,
-                  scene_id: scene.id,
-                  severity,
-                  confidence,
-                  ndvi_baseline: baselineNdvi,
-                  ndvi_current: ndvi.mean,
-                  ndvi_drop_percent: percentDrop,
-                },
-              });
+              // Satellite alerts are persisted in satellite_field_alerts and surfaced
+              // by the Satellite page. Do not route them through AGTrans transport
+              // notifications, which are a separate product workflow.
               result.alertsCreated += 1;
             }
           }
