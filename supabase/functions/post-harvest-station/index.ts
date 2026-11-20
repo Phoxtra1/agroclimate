@@ -140,9 +140,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (insertError?.code === "23505") {
-      const { data: existing } = await admin.from("post_harvest_station_observations")
+      const { data: existing, error: lookupError } = await admin.from("post_harvest_station_observations")
         .select("id,device_id,harvest_entry_id,observed_at,received_at,temperature_c,humidity_pct,sequence_no")
         .eq("device_id", device.id).eq("idempotency_key", idempotencyKey).maybeSingle();
+      if (lookupError || !existing) {
+        console.error("[post-harvest-station] duplicate lookup failed", lookupError);
+        return json({ error: "The duplicate reading could not be confirmed. Retry with the same idempotency_key." }, 503);
+      }
       return json({ accepted: true, duplicate: true, observation: existing });
     }
     if (insertError) return json({ error: "Could not persist sensor observation" }, 500);
