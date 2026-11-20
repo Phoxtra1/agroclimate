@@ -32,7 +32,7 @@ CREATE POLICY "Users report own AgroRisk incidents"
     AND source = 'user_report'
     AND (
       farm_id IS NULL OR EXISTS (
-        SELECT 1 FROM public.farms f WHERE f.id = farm_id AND f.user_id = auth.uid()
+        SELECT 1 FROM public.farms f WHERE f.id = agro_risk_incidents.farm_id AND f.user_id = auth.uid()
       )
     )
   );
