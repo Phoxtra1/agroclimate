@@ -31,7 +31,7 @@ export function DroneConnectionCenter(props: UseDroneState) {
 
   const isConnected = !["disconnected", "connecting"].includes(status);
   const isSimulator = protocol === "simulator";
-  const isReadOnlyLive = protocol === "custom";
+  const isReadOnlyLive = protocol === "custom" || protocol === "mavlink";
   const isFlying = ["flying", "returning", "paused", "landing", "emergency"].includes(status);
 
   // Check if active aircraft is a manned commercial type (locked controls)
