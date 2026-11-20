@@ -6,6 +6,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useTestMode } from "@/hooks/useTestMode";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 import { Button } from "@/components/ui/button";
+import { LoadingScreen } from "@/components/LoadingScreen";
 
 interface Props {
   component: PremiumComponent;
@@ -29,7 +30,8 @@ export function PremiumGate({ component, children }: Props) {
   const isTestModeActive = testMode;
 
   if (testLoading || subLoading) {
-    return <>{children}</>;
+    // Never render protected content until entitlement checks have completed.
+    return <LoadingScreen />;
   }
 
   // Bypass paywall if Test Mode is active OR user's plan has access according to pricing logic
