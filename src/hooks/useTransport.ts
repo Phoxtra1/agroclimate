@@ -220,6 +220,7 @@ export function useAGTrans() {
   const initialLoadRef = useRef(true);
   const activeUserIdRef = useRef<string | null>(null);
   const loadVersionRef = useRef(0);
+  const historyVersionRef = useRef(0);
 
   const safeSelect = async <T,>(table: string, opts?: { order?: boolean; limit?: number }) => {
     try {
@@ -241,6 +242,7 @@ export function useAGTrans() {
   const loadData = useCallback(async () => {
     const version = ++loadVersionRef.current;
     if (!user) {
+      historyVersionRef.current += 1;
       setRequests([]);
       setDeliveryJobs([]);
       setTrackingSessions([]);
@@ -256,6 +258,7 @@ export function useAGTrans() {
     setLoading(true);
     // Clear private transport state only on an actual account transition, not on every realtime refresh.
     if (activeUserIdRef.current !== user.id) {
+      historyVersionRef.current += 1;
       setRequests([]);
       setDeliveryJobs([]);
       setTrackingSessions([]);
@@ -909,11 +912,13 @@ export function useAGTrans() {
   };
 
   const loadDriverHistory = useCallback(async () => {
-    if (!user || !driverProfile) return;
+    const version = ++historyVersionRef.current;
+    if (!user || !driverProfile) { setHistory(null); return; }
     const [jobs, ratings] = await Promise.all([
       safeSelect<DeliveryJob>("delivery_jobs"),
       safeSelect<{ request_id: string; score: number; comment?: string; created_at: string }>("agtrans_ratings"),
     ]);
+    if (version !== historyVersionRef.current) return;
     const mine = jobs.filter((j) => j.driver_id === user.id);
     setHistory({
       completed: mine.filter((j) => j.status === "Completed" || j.status === "Delivered"),
@@ -921,7 +926,7 @@ export function useAGTrans() {
       cancelled: mine.filter((j) => j.status === "Cancelled"),
       ratings: ratings.filter((r) => r.request_id && mine.some((j) => j.request_id === r.request_id)),
     });
-  }, [user, driverProfile]);
+  }, [user?.id, driverProfile?.id]);
 
   return {
     requests,
