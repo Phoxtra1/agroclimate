@@ -120,15 +120,18 @@ export function AgriCostCalculator({
       !item.item_type.toLowerCase().includes("chem"));
     const laborCost = allocateLabor(crop);
     const landCost = landCosts.reduce((sum, record) => sum + Number(record.cost_amount || 0), 0) / Math.max(crops.length, 1);
-    const totalYield = cropHarvest.reduce((sum, record) => sum + Number(record.quantity || 0), 0);
     const unit = cropHarvest[0]?.unit || cropSales[0]?.unit || "kg";
-    const soldQuantity = cropSales.reduce((sum, record) => sum + Number(record.quantity_sold || 0), 0);
-    const salesValue = cropSales.reduce((sum, record) =>
+    // Never add kilograms to bags/crates or derive a price from sales in another unit.
+    const sameUnitHarvest = cropHarvest.filter((record) => record.unit === unit);
+    const sameUnitSales = cropSales.filter((record) => record.unit === unit);
+    const totalYield = sameUnitHarvest.reduce((sum, record) => sum + Number(record.quantity || 0), 0);
+    const soldQuantity = sameUnitSales.reduce((sum, record) => sum + Number(record.quantity_sold || 0), 0);
+    const salesValue = sameUnitSales.reduce((sum, record) =>
       sum + Number(record.quantity_sold || 0) * Number(record.price_per_unit || 0), 0);
     const weightedPrice = soldQuantity > 0 ? salesValue / soldQuantity : 0;
 
     return {
-      scenario_title: `Calculated estimate: ${crop}`,
+      scenario_title: `Calculated estimate: ${crop} (${unit})`,
       crop_name: crop,
       land_prep_cost: landCost,
       seed_cost: seedCost,
