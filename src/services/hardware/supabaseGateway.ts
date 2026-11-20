@@ -55,3 +55,48 @@ export function toDeviceRegistration(device: ProvisionedDevice, ownerUserId: str
     capabilities: device.capabilities as DeviceRegistration["capabilities"], farmId: device.farm_id ?? undefined,
     siteId: device.site_id ?? undefined, registeredAt: device.created_at, state: device.status === "active" ? "registered" : "revoked" };
 }
+
+import type { PostHarvestReadingSink } from "./browserAdapters";
+
+export interface ProvisionedPostHarvestStation {
+  id: string; user_id: string; device_name: string; hardware_id: string;
+  model: string | null; status: "active" | "revoked"; harvest_entry_id: string | null; created_at: string;
+}
+export interface PostHarvestProvisioningResult {
+  device: ProvisionedPostHarvestStation; device_token: string; token_notice: string;
+}
+
+export async function provisionPostHarvestStation(input: {
+  deviceName: string; hardwareId: string; model?: string; harvestEntryId?: string;
+}): Promise<PostHarvestProvisioningResult> {
+  const { data, error } = await supabase.functions.invoke("post-harvest-station", {
+    body: { action: "register", device_name: input.deviceName, hardware_id: input.hardwareId,
+      model: input.model, harvest_entry_id: input.harvestEntryId },
+  });
+  if (error) throw new Error(error.message || "Post-Harvest station provisioning failed.");
+  if (!data?.device?.id || !data?.device_token) throw new Error(data?.error || "Post-Harvest gateway returned an incomplete response.");
+  return data as PostHarvestProvisioningResult;
+}
+
+export async function revokePostHarvestStation(deviceId: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("post-harvest-station", {
+    body: { action: "revoke", device_id: deviceId },
+  });
+  if (error || data?.revoked !== true) throw new Error(data?.error || error?.message || "Post-Harvest station revocation failed.");
+}
+
+export function createPostHarvestStationSink(
+  resolveDeviceToken: (deviceId: string) => Promise<string | null>,
+): PostHarvestReadingSink {
+  return async (device, reading) => {
+    const token = await resolveDeviceToken(device.deviceId);
+    if (!token) throw new Error("No managed Post-Harvest station credential is available.");
+    const { data, error } = await supabase.functions.invoke("post-harvest-station", {
+      body: { action: "ingest", temperature_c: reading.temperatureC, humidity_pct: reading.humidityPct,
+        observed_at: reading.observedAt, idempotency_key: reading.idempotencyKey,
+        sequence_no: reading.sequenceNo, firmware: reading.firmware, sensor_model: reading.sensorModel },
+      headers: { "x-device-token": token },
+    });
+    if (error || data?.accepted !== true) throw new Error(data?.error || error?.message || "Post-Harvest station reading was not accepted.");
+  };
+}
