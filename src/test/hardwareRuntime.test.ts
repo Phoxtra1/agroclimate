@@ -80,6 +80,6 @@ describe("hardware runtime and browser adapters", () => {
     const delivery = new ResilientObservationDelivery(async () => undefined, { read: () => [], write: () => undefined });
     const runtime = new DeviceIntegrationRuntime(delivery);
     runtime.registerDevice(device);
-    expect(() => runtime.acceptObservation({ ...observation, tenantId: "other-tenant" })).toThrow(/tenant or component/);
+    expect(() => runtime.acceptObservation({ ...observation, tenantId: "other-tenant" })).toThrow(/tenant, component or protocol/);
   });
 });
