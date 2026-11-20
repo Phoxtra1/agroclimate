@@ -660,6 +660,11 @@ export function useAGTrans() {
 
     const request = requests.find((r) => r.id === requestId);
     if (!request) throw new Error("Request not found");
+    const alreadyAssigned = request.driver_id === user.id;
+    const unassignedOpenRequest = !request.driver_id && request.status === "searching_driver";
+    if (!alreadyAssigned && !(action === "accept" && unassignedOpenRequest)) {
+      throw new Error("This request is not assigned to your driver account.");
+    }
 
     if (action === "decline") {
       const { error } = await supabase
@@ -669,7 +674,7 @@ export function useAGTrans() {
           negotiation_status: "declined",
           rejection_reason: payload?.counter_note || "Driver declined",
         } as any)
-        .eq("id", requestId);
+        .eq("id", requestId).eq("driver_id", user.id);
       if (error) throw error;
       await notifyUser(request.supplier_id, "driver_declined", "Driver Declined", `Driver declined transport request ${request.tracking_code}`);
       return;
@@ -683,26 +688,34 @@ export function useAGTrans() {
           driver_counter_price: payload?.counter_price,
           counter_note: payload?.counter_note,
         } as any)
-        .eq("id", requestId);
+        .eq("id", requestId).eq("driver_id", user.id);
       if (error) throw error;
       await notifyUser(request.supplier_id, "counter_offer", "Counter Offer Received", `Driver countered with ${payload?.counter_price} GHS`);
       return;
     }
 
-    // accept
+    // Accept using a compare-and-set so two drivers cannot claim the same open request.
     const agreedFee = request.agreed_fee ?? request.supplier_offer_price ?? 0;
-    await supabase
-      .from("agtrans_requests")
-      .update({
-        status: "accepted",
-        negotiation_status: "accepted",
-        agreed_fee: agreedFee,
-        agreement_timestamp: new Date().toISOString(),
-        driver_id: user.id,
-      } as any)
-      .eq("id", requestId);
+    let claimQuery = supabase.from("agtrans_requests").update({
+      status: "accepted",
+      negotiation_status: "accepted",
+      agreed_fee: agreedFee,
+      agreement_timestamp: new Date().toISOString(),
+      driver_id: user.id,
+    } as any).eq("id", requestId).eq("status", request.status);
+    claimQuery = alreadyAssigned ? claimQuery.eq("driver_id", user.id) : claimQuery.is("driver_id", null);
+    const { data: claimed, error: claimError } = await claimQuery.select("id").maybeSingle();
+    if (claimError) throw claimError;
+    if (!claimed) throw new Error("Another participant changed or claimed this request. Refresh and retry.");
 
-    await createDeliveryJob(request, agreedFee);
+    try {
+      await createDeliveryJob({ ...request, driver_id: user.id, status: "accepted" }, agreedFee);
+    } catch (error) {
+      await supabase.from("agtrans_requests")
+        .update({ status: request.status, negotiation_status: request.negotiation_status || "pending" } as any)
+        .eq("id", requestId).eq("driver_id", user.id).eq("status", "accepted");
+      throw error;
+    }
 
     await notifyUser(request.supplier_id, "driver_accepted", "Driver Accepted", `Driver accepted transport request ${request.tracking_code}`);
     if (request.buyer_id) {
@@ -715,6 +728,7 @@ export function useAGTrans() {
 
     const request = requests.find((r) => r.id === requestId);
     if (!request) throw new Error("Request not found");
+    if (request.supplier_id !== user.id) throw new Error("Only the supplier who created this request can respond to the driver's counter-offer.");
 
     if (action === "counter") {
       const { error } = await supabase
@@ -724,24 +738,33 @@ export function useAGTrans() {
           supplier_offer_price: payload?.supplier_offer_price,
           counter_note: payload?.counter_note,
         } as any)
-        .eq("id", requestId);
+        .eq("id", requestId).eq("supplier_id", user.id);
       if (error) throw error;
       await notifyUser(request.driver_id || "", "counter_offer", "Counter Offer Received", `Supplier countered with ${payload?.supplier_offer_price} GHS`);
       return;
     }
 
     const agreedFee = request.driver_counter_price ?? request.supplier_offer_price ?? 0;
-    await supabase
-      .from("agtrans_requests")
+    const { data: accepted, error: acceptError } = await supabase.from("agtrans_requests")
       .update({
         status: "accepted",
         negotiation_status: "accepted",
         agreed_fee: agreedFee,
         agreement_timestamp: new Date().toISOString(),
       } as any)
-      .eq("id", requestId);
+      .eq("id", requestId).eq("supplier_id", user.id).eq("negotiation_status", request.negotiation_status || "counter")
+      .select("id").maybeSingle();
+    if (acceptError) throw acceptError;
+    if (!accepted) throw new Error("This request changed before your acceptance. Refresh and retry.");
 
-    await createDeliveryJob(request, agreedFee);
+    try {
+      await createDeliveryJob({ ...request, status: "accepted" }, agreedFee);
+    } catch (error) {
+      await supabase.from("agtrans_requests")
+        .update({ status: request.status, negotiation_status: request.negotiation_status || "counter" } as any)
+        .eq("id", requestId).eq("supplier_id", user.id).eq("status", "accepted");
+      throw error;
+    }
 
     await notifyUser(request.driver_id || "", "supplier_accepted", "Supplier Accepted", `Supplier accepted your counter offer for ${request.tracking_code}`);
     if (request.buyer_id) {
