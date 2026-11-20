@@ -47,7 +47,7 @@ export type StrategicBoard = {
   currentStatSub: string;
 };
 
-// Generate realistic daily time series matching the screenshot's trend curves
+// Generate illustrative sample daily time series; these are not provider observations.
 function generateTimeSeries(
   days: number,
   baseMean: number,
@@ -94,9 +94,9 @@ export const STRATEGIC_BOARDS: StrategicBoard[] = [
     beta: true,
     category: "maritime",
     summary:
-      "The live state of shipping from the Gulf of Aden, through the Bab el-Mandeb strait, up past Hodeidah to Yanbu. Ship movements come from ship transponders (AIS); counts at anchorages come from radar satellite (SAR).",
+      "Illustrative strategic-board example for the Gulf of Aden, Bab el-Mandeb, Hodeidah and Yanbu. The sample layout shows how AIS ship movements and SAR anchorage counts could be combined when verified feeds are connected.",
     regionalRead:
-      "Regional read — what the stations say together (descriptive, not a forecast). Each station is an independent measurement: confirmed daily gate crossings from ship transponders (AIS); the middle-half spread band per corridor station; distinct ships per week off Yanbu.",
+      "Illustrative regional read showing how independent AIS/SAR station measurements could be summarized. The values on this board are generated examples, not current measurements.",
     statusBadges: ["FANNED OUT", "ABOVE USUAL", "STALE 11d"],
     staleDays: 11,
     center: [13.25, 43.15],
@@ -236,10 +236,10 @@ export const STRATEGIC_BOARDS: StrategicBoard[] = [
     title: "West Africa — Tema Port & Volta Agricultural Belt",
     category: "agriculture",
     summary:
-      "Live observation of crop health, grain silos, fertilizer imports, and agricultural transit flows from Tema Deepwater Port through Kumasi to the Northern Savanna grain basket. Corroborates Sentinel-2 NDVI with port customs cargo manifests.",
+      "Illustrative West African agricultural monitoring board. The example combines the kinds of crop, storage, port and freight indicators that could be connected from Sentinel-2, verified silo telemetry and customs/freight data; current values are not provider-fed.",
     regionalRead:
-      "Vegetation vigor across the middle belt remains robust (mean NDVI 0.68) with timely rainfall. Tema port grain bulk discharge is steady with 18.2k MT processed in the last 24h.",
-    statusBadges: ["VIGOROUS", "SEASONAL ON TRACK", "LIVE AIS"],
+      "Sample regional narrative only: example NDVI, rainfall and Tema throughput figures are illustrative and do not describe current field or port conditions.",
+    statusBadges: ["VIGOROUS", "SEASONAL ON TRACK", "SAMPLE AIS"],
     center: [6.8, -0.5],
     zoom: 7,
     primaryStationId: "tema-grain",
@@ -332,7 +332,7 @@ export const STRATEGIC_BOARDS: StrategicBoard[] = [
       "Bulk ore carriers crossing the Atlantic & Indian Oceans from Kamsar, Guinea to Shandong & Caofeidian ports. Inventory estimation derived from optical satellite pile profiling and SAR vessel drafts.",
     regionalRead:
       "Port stockpiles across northern Chinese discharge hubs are hovering at 34.1 Mt, up 2.4 Mt on the month due to continuous Capesize transits arriving via the Cape of Good Hope.",
-    statusBadges: ["STOCKPILES HIGH", "VESSELS QUEUED", "LIVE RADAR"],
+    statusBadges: ["STOCKPILES HIGH", "VESSELS QUEUED", "SAMPLE RADAR"],
     center: [10.65, -14.6],
     zoom: 6,
     primaryStationId: "kamsar",

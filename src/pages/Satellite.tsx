@@ -1877,7 +1877,7 @@ export default function Satellite() {
             <div className="flex items-center justify-between border-b border-slate-800 p-4">
               <div>
                 <h3 className="text-base font-bold text-amber-400">{activeBoard.title}</h3>
-                <p className="text-xs text-slate-400">Comprehensive station registry and live observations</p>
+                <p className="text-xs text-slate-400">Illustrative station registry and reference values</p>
               </div>
               <button
                 onClick={() => setFullBoardModal(false)}
