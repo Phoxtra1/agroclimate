@@ -70,6 +70,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import {
   calculatePolygonAreaHectares,
+  buildFieldPolygon,
   describeNdmi,
   describeNdvi,
   getFieldIndexStatistics,
@@ -291,6 +292,8 @@ export default function Satellite() {
   // Saved Fields & Alerts from Supabase
   const [savedFields, setSavedFields] = useState<SatelliteField[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
+  const savedFieldsRequest = useRef(0);
+  const [savingMonitoredField, setSavingMonitoredField] = useState(false);
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
   const [maritimePanelOpen, setMaritimePanelOpen] = useState(false);
   const [geoFeaturePanelOpen, setGeoFeaturePanelOpen] = useState(false);
@@ -675,7 +678,95 @@ export default function Satellite() {
   };
 
   // Supabase Monitored Fields & Alerts Loading
+  const saveMonitoredField = async () => {
+    if (!user) {
+      toast.error("Sign in to save a monitored field.");
+      return;
+    }
+    if (fieldPoints.length < 3) {
+      toast.error("Draw a field boundary with at least three points first.");
+      return;
+    }
+    const name = window.prompt("Name this monitored field:");
+    if (!name?.trim()) return;
+    const cropType = window.prompt("Crop type (optional):")?.trim() || null;
+    let fieldGeojson: GeoJSON.Polygon;
+    try {
+      fieldGeojson = buildFieldPolygon(fieldPoints);
+    } catch (error) {
+      toast.error("Invalid field boundary", { description: error instanceof Error ? error.message : "Review the boundary points." });
+      return;
+    }
+    const areaHectares = calculatePolygonAreaHectares(fieldPoints);
+    setSavingMonitoredField(true);
+    try {
+      const { error } = await supabase.from("satellite_fields").insert({
+        user_id: user.id,
+        name: name.trim(),
+        crop_type: cropType,
+        field_geojson: fieldGeojson as any,
+        area_hectares: areaHectares,
+        monitoring_enabled: true,
+        max_cloud_cover: Number(maxCloud),
+        ndvi_drop_threshold: 0.15,
+      });
+      if (error) throw error;
+      toast.success("Field boundary saved for satellite monitoring", {
+        description: "The field is saved. Monitoring alerts will appear when the satellite monitor is configured and processes new imagery.",
+      });
+      await refreshSavedFields();
+    } catch (error) {
+      toast.error("Could not save monitored field", {
+        description: error instanceof Error ? error.message : "Please retry.",
+      });
+    } finally {
+      setSavingMonitoredField(false);
+    }
+  };
+
+  const setFieldMonitoring = async (field: SatelliteField, enabled: boolean) => {
+    if (!user) return;
+    const { error } = await supabase.from("satellite_fields")
+      .update({ monitoring_enabled: enabled })
+      .eq("id", field.id).eq("user_id", user.id);
+    if (error) {
+      toast.error("Could not update field monitoring", { description: error.message });
+      return;
+    }
+    toast.success(enabled ? "Field monitoring enabled" : "Field monitoring paused");
+    await refreshSavedFields();
+  };
+
+  const deleteMonitoredField = async (field: SatelliteField) => {
+    if (!user || !window.confirm(`Delete monitored field "${field.name}" and its saved observations and alerts?`)) return;
+    const { error } = await supabase.from("satellite_fields")
+      .delete().eq("id", field.id).eq("user_id", user.id);
+    if (error) {
+      toast.error("Could not delete monitored field", { description: error.message });
+      return;
+    }
+    toast.success("Monitored field deleted");
+    await refreshSavedFields();
+  };
+
+  const updateSatelliteAlertStatus = async (alert: SatelliteAlert, status: "acknowledged" | "resolved") => {
+    if (!user) return;
+    const ownedField = savedFields.some((field) => field.id === alert.field_id);
+    if (!ownedField) {
+      toast.error("This alert is not associated with one of your monitored fields.");
+      return;
+    }
+    const { error } = await supabase.from("satellite_field_alerts")
+      .update({ status }).eq("id", alert.id);
+    if (error) {
+      toast.error("Could not update alert status", { description: error.message });
+      return;
+    }
+    await refreshSavedFields();
+  };
+
   const refreshSavedFields = useCallback(async () => {
+    const request = ++savedFieldsRequest.current;
     if (!user) {
       setSavedFields([]);
       setSavedAlerts([]);
@@ -689,7 +780,10 @@ export default function Satellite() {
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+    if (request !== savedFieldsRequest.current) return;
     if (fieldsError) {
+      setSavedFields([]);
+      setSavedAlerts([]);
       toast.error("Could not load monitored fields", { description: fieldsError.message });
       return;
     }
@@ -701,7 +795,9 @@ export default function Satellite() {
         .in("field_id", fields.map((f) => f.id))
         .order("created_at", { ascending: false })
         .limit(20);
+      if (request !== savedFieldsRequest.current) return;
       if (alertsError) {
+        setSavedAlerts([]);
         toast.error("Could not load field alerts", { description: alertsError.message });
         return;
       }
@@ -709,7 +805,7 @@ export default function Satellite() {
     } else {
       setSavedAlerts([]);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     void refreshSavedFields();
@@ -723,6 +819,7 @@ export default function Satellite() {
     const refresh = () => { void refreshSavedFields(); };
     window.addEventListener("online", refresh);
     return () => {
+      savedFieldsRequest.current += 1;
       void supabase.removeChannel(channel);
       window.clearInterval(interval);
       window.removeEventListener("online", refresh);
@@ -1604,6 +1701,16 @@ export default function Satellite() {
               </Button>
               <Button
                 size="sm"
+                variant="secondary"
+                onClick={saveMonitoredField}
+                disabled={fieldPoints.length < 3 || savingMonitoredField}
+                className="h-7 text-xs"
+              >
+                {savingMonitoredField ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Save monitored field
+              </Button>
+              <Button
+                size="sm"
                 variant="ghost"
                 onClick={() => setFieldPoints([])}
                 className="h-7 text-xs text-slate-400 hover:text-white"
@@ -1963,7 +2070,41 @@ export default function Satellite() {
               </button>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-5">
+              <section>
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">MONITORED FIELDS ({savedFields.length})</span>
+                </div>
+                {savedFields.length === 0 ? (
+                  <p className="text-xs text-slate-400">No saved field boundaries yet. Draw a field on the map and choose “Save monitored field”.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {savedFields.map((field) => (
+                      <div key={field.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-200">{field.name}</span>
+                          <Badge variant={field.monitoring_enabled ? "default" : "outline"}>
+                            {field.monitoring_enabled ? "Monitoring on" : "Paused"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-[10px] text-slate-400">
+                          {field.crop_type || "Crop not specified"} · {Number(field.area_hectares).toFixed(2)} ha
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => void setFieldMonitoring(field, !field.monitoring_enabled)}>
+                            {field.monitoring_enabled ? "Pause" : "Resume"}
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => void deleteMonitoredField(field)}>
+                            Delete field
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+              <section>
+                <span className="text-xs font-bold text-amber-400">FIELD ALERTS ({savedAlerts.length})</span>
               {savedAlerts.length === 0 ? (
                 <p className="text-xs text-slate-400 py-6 text-center">
                   No automated crop alerts recorded yet. Monitor a field boundary to establish an NDVI historical baseline.
@@ -1984,9 +2125,18 @@ export default function Satellite() {
                     <div className="mt-2 text-[10px] text-slate-500">
                       Date: {new Date(alert.captured_at).toLocaleDateString()} &bull; Status: {alert.status}
                     </div>
+                    {alert.status !== "resolved" && (
+                      <div className="mt-2 flex gap-2">
+                        {alert.status === "open" && (
+                          <Button size="sm" variant="outline" onClick={() => void updateSatelliteAlertStatus(alert, "acknowledged")}>Acknowledge</Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => void updateSatelliteAlertStatus(alert, "resolved")}>Resolve</Button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}
+              </section>
             </div>
           </div>
         </div>
