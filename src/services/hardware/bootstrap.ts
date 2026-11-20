@@ -1,7 +1,7 @@
 import {
   BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter,
   WebBluetoothPostHarvestAdapter, WebBluetoothSensorAdapter, WebHidScaleAdapter,
-  WebSerialMavlinkAdapter, WebSerialSensorAdapter, STANDARD_BLE_SENSOR_MAPPINGS,
+  WebSerialMavlinkAdapter, WebSerialSensorAdapter, STANDARD_BLE_SENSOR_MAPPINGS, decodeNmea0183Line,
   type BleCharacteristicMapping, type PostHarvestStationReading, type SerialAdapterOptions,
 } from "./browserAdapters";
 import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "./deviceRuntime";
@@ -15,6 +15,7 @@ export interface AgroClimateHardwareRuntimeOptions {
   decodeHidScaleReport?: (data: DataView) => number | null;
   hidScaleUnit?: string;
   mavlinkBaudRate?: number;
+  agtransNmeaBaudRate?: number;
   aircraftType?: import("@/services/aih/types").AircraftType;
   postHarvest?: { serviceUuid: string; characteristicUuid: string; decodeReading: (value: DataView) => PostHarvestStationReading | null };
 }
@@ -28,6 +29,10 @@ export function createAgroClimateHardwareRuntime(options: AgroClimateHardwareRun
   runtime.registerAdapter(new BrowserCameraAdapter());
   const bleMappings = [...STANDARD_BLE_SENSOR_MAPPINGS, ...(options.bleMappings ?? [])];
   if (bleMappings.length) runtime.registerAdapter(new WebBluetoothSensorAdapter(context, bleMappings));
+  runtime.registerAdapter(new WebSerialSensorAdapter(context, {
+    adapterId: "agtrans-nmea0183-serial-v1", components: ["agtrans"],
+    baudRate: options.agtransNmeaBaudRate ?? 4800, decodeLine: decodeNmea0183Line,
+  }));
   if (options.serialOptions) runtime.registerAdapter(new WebSerialSensorAdapter(context, options.serialOptions));
   if (options.decodeHidScaleReport) runtime.registerAdapter(new WebHidScaleAdapter(context, options.decodeHidScaleReport, options.hidScaleUnit ?? "kg"));
   runtime.registerAdapter(new WebSerialMavlinkAdapter(context, options.mavlinkBaudRate ?? 57600, options.aircraftType ?? "drone"));
