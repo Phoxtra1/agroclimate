@@ -51,7 +51,10 @@ export class DeviceIntegrationRuntime {
   readonly registry = new HardwareAdapterRegistry();
   private registrations = new Map<string, DeviceRegistration>();
   private active = new Map<string, HardwareAdapter>();
-  constructor(private readonly delivery: ResilientObservationDelivery) {}
+  private readonly onOnline = () => { void this.delivery.flush(); };
+  constructor(private readonly delivery: ResilientObservationDelivery) {
+    if (typeof window !== "undefined") window.addEventListener("online", this.onOnline);
+  }
   registerAdapter(adapter: HardwareAdapter): void { this.registry.register(adapter); }
   registerDevice(device: DeviceRegistration): void {
     if (!device.deviceId.trim() || !device.tenantId.trim() || !device.ownerUserId.trim()) throw new Error("Device ID, tenant ID and owner user ID are required.");
@@ -90,4 +93,8 @@ export class DeviceIntegrationRuntime {
   }
   pendingObservations(): readonly DeviceObservation[] { return this.delivery.pending(); }
   flushObservations(): Promise<{ delivered: number; remaining: number }> { return this.delivery.flush(); }
+  async dispose(): Promise<void> {
+    if (typeof window !== "undefined") window.removeEventListener("online", this.onOnline);
+    await Promise.all([...this.active.keys()].map((deviceId) => this.disconnect(deviceId)));
+  }
 }
