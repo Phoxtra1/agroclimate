@@ -55,3 +55,34 @@ export const URGENCY_LABEL: Record<string, string> = {
   urgent: "Urgent",
   cold_chain: "Cold-chain",
 };
+
+export type DeliveryJobStatus =
+  | "Assigned"
+  | "Driver En Route"
+  | "Loading"
+  | "Picked Up"
+  | "In Transit"
+  | "Near Delivery"
+  | "Delivered"
+  | "Completed"
+  | "Cancelled";
+
+const DELIVERY_JOB_TRANSITIONS: Record<DeliveryJobStatus, DeliveryJobStatus[]> = {
+  Assigned: ["In Transit", "Cancelled"],
+  "Driver En Route": ["Loading", "In Transit", "Cancelled"],
+  Loading: ["Picked Up", "Cancelled"],
+  "Picked Up": ["In Transit", "Cancelled"],
+  "In Transit": ["Near Delivery", "Delivered", "Cancelled"],
+  "Near Delivery": ["Delivered", "Cancelled"],
+  Delivered: ["Completed"],
+  Completed: [],
+  Cancelled: [],
+};
+
+export function canTransitionDeliveryJob(current: DeliveryJobStatus, next: DeliveryJobStatus): boolean {
+  return DELIVERY_JOB_TRANSITIONS[current]?.includes(next) ?? false;
+}
+
+export function isTerminalDeliveryJob(status: DeliveryJobStatus): boolean {
+  return status === "Delivered" || status === "Completed" || status === "Cancelled";
+}
