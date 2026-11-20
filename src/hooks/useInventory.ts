@@ -194,23 +194,24 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   };
 
   // CRUD helpers
-const addRecord = async (table: InventoryTable, data: Record<string, unknown>) => {
+const addRecord = async (table: InventoryTable, data: Record<string, unknown>): Promise<boolean> => {
   if (!user) {
     toast({ title: "Sign in required", description: "Sign in before saving farm records.", variant: "destructive" });
-    return;
+    return false;
   }
   const validationError = validateInventoryRecord(table, data);
   if (validationError) {
     toast({ title: "Check the record", description: validationError, variant: "destructive" });
-    return;
+    return false;
   }
   const { error } = await supabase.from(table as any).insert({ ...data, user_id: user.id } as any);
   if (error) {
     toast({ title: "Error adding record", description: error.message, variant: "destructive" });
-    return;
+    return false;
   }
   toast({ title: "Added successfully" });
   await fetchAll();
+  return true;
 };
 
 const updateRecord = async (table: InventoryTable, id: string, data: Record<string, unknown>) => {
