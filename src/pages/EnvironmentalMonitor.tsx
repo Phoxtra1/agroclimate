@@ -867,11 +867,11 @@ export default function EnvironmentalMonitor() {
 
   // Keep the map centred on the device location until the user selects a farm or map point.
   useEffect(() => {
-    if (!Number.isFinite(position.lat) || !Number.isFinite(position.lon)) return;
+    if (!Number.isFinite(position.lat) || !Number.isFinite(position.lon) || assessmentTarget.manual) return;
     setMapCenter([position.lat, position.lon]);
     setClickPoint([position.lat, position.lon]);
     setClickLocationName(position.locationName);
-  }, [position.lat, position.lon, position.locationName]);
+  }, [position.lat, position.lon, position.locationName, assessmentTarget.manual]);
 
   // ---------------------------------------------------------------------------
   // INTERACTIVE MAP CLICK ROUTER
@@ -880,12 +880,9 @@ export default function EnvironmentalMonitor() {
     setClickPoint([lat, lon]);
 
     if (activeMode === "boundary") {
-      setDrawnBoundary(prev => {
-        const newDrawn = [...prev, [lat, lon] as [number, number]];
-        // Recalculate risks dynamically inside boundaries
-        updateRiskAssessment(lat, lon, newDrawn, "Custom Farm Boundary");
-        return newDrawn;
-      });
+      const newDrawn = [...drawnBoundary, [lat, lon] as [number, number]];
+      setDrawnBoundary(newDrawn);
+      updateRiskAssessment(lat, lon, newDrawn, "Custom Farm Boundary");
     } else if (activeMode === "quick") {
       setClickLocationName("Loading coordinates address...");
       const addr = await fetchAddress(lat, lon);
@@ -1035,6 +1032,9 @@ export default function EnvironmentalMonitor() {
           locationName: position.locationName,
           manual: false,
         });
+        setMapCenter([position.lat, position.lon]);
+        setClickPoint([position.lat, position.lon]);
+        setClickLocationName(position.locationName);
       }
     } catch (error) {
       alert(error instanceof Error ? error.message : "Could not delete farm.");
