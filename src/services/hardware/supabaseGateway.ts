@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DeviceObservation, DeviceRegistration, HardwareComponent, DeviceProtocol } from "./types";
-import type { ObservationSink } from "./browserAdapters";
+import type { ObservationSink, PostHarvestReadingSink } from "./browserAdapters";
 
 export interface ProvisionedDevice {
   id: string; user_id: string; component: HardwareComponent; device_name: string;
