@@ -46,7 +46,7 @@ export function parseInventoryNumericValue(value: unknown): number | null {
 
 export function validateInventoryRecord(table: InventoryTable, data: Record<string, unknown>, isUpdate = false): string | null {
   for (const field of REQUIRED_TEXT[table]) {
-    if ((!isUpdate || field in data) && (typeof data[field] !== "string" || !String(data[field]).trim())) {
+    if ((!isUpdate || field in data) && (typeof data[field] !== "string" || !data[field].trim())) {
       return `${field.replace(/_/g, " ")} is required.`;
     }
   }
