@@ -291,6 +291,8 @@ export default function Satellite() {
   // Saved Fields & Alerts from Supabase
   const [savedFields, setSavedFields] = useState<SatelliteField[]>([]);
   const [savedAlerts, setSavedAlerts] = useState<SatelliteAlert[]>([]);
+  const savedFieldsRequest = useRef(0);
+  const [savingMonitoredField, setSavingMonitoredField] = useState(false);
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
   const [maritimePanelOpen, setMaritimePanelOpen] = useState(false);
   const [geoFeaturePanelOpen, setGeoFeaturePanelOpen] = useState(false);
@@ -675,7 +677,53 @@ export default function Satellite() {
   };
 
   // Supabase Monitored Fields & Alerts Loading
+  const saveMonitoredField = async () => {
+    if (!user) {
+      toast.error("Sign in to save a monitored field.");
+      return;
+    }
+    if (fieldPoints.length < 3) {
+      toast.error("Draw a field boundary with at least three points first.");
+      return;
+    }
+    const name = window.prompt("Name this monitored field:");
+    if (!name?.trim()) return;
+    const cropType = window.prompt("Crop type (optional):")?.trim() || null;
+    const ring = [...fieldPoints.map((point) => [point.lon, point.lat]), [fieldPoints[0].lon, fieldPoints[0].lat]];
+    const fieldGeojson: GeoJSON.Polygon = { type: "Polygon", coordinates: [ring] };
+    const areaHectares = calculatePolygonAreaHectares(fieldPoints);
+    if (!Number.isFinite(areaHectares) || areaHectares <= 0) {
+      toast.error("The field boundary does not produce a valid area.");
+      return;
+    }
+    setSavingMonitoredField(true);
+    try {
+      const { error } = await supabase.from("satellite_fields").insert({
+        user_id: user.id,
+        name: name.trim(),
+        crop_type: cropType,
+        field_geojson: fieldGeojson as any,
+        area_hectares: areaHectares,
+        monitoring_enabled: true,
+        max_cloud_cover: Number(maxCloud),
+        ndvi_drop_threshold: 0.15,
+      });
+      if (error) throw error;
+      toast.success("Field boundary saved for satellite monitoring", {
+        description: "Automated monitoring will begin when the scheduled satellite monitor processes this field.",
+      });
+      await refreshSavedFields();
+    } catch (error) {
+      toast.error("Could not save monitored field", {
+        description: error instanceof Error ? error.message : "Please retry.",
+      });
+    } finally {
+      setSavingMonitoredField(false);
+    }
+  };
+
   const refreshSavedFields = useCallback(async () => {
+    const request = ++savedFieldsRequest.current;
     if (!user) {
       setSavedFields([]);
       setSavedAlerts([]);
@@ -689,7 +737,10 @@ export default function Satellite() {
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+    if (request !== savedFieldsRequest.current) return;
     if (fieldsError) {
+      setSavedFields([]);
+      setSavedAlerts([]);
       toast.error("Could not load monitored fields", { description: fieldsError.message });
       return;
     }
@@ -701,7 +752,9 @@ export default function Satellite() {
         .in("field_id", fields.map((f) => f.id))
         .order("created_at", { ascending: false })
         .limit(20);
+      if (request !== savedFieldsRequest.current) return;
       if (alertsError) {
+        setSavedAlerts([]);
         toast.error("Could not load field alerts", { description: alertsError.message });
         return;
       }
@@ -709,7 +762,7 @@ export default function Satellite() {
     } else {
       setSavedAlerts([]);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     void refreshSavedFields();
@@ -723,6 +776,7 @@ export default function Satellite() {
     const refresh = () => { void refreshSavedFields(); };
     window.addEventListener("online", refresh);
     return () => {
+      savedFieldsRequest.current += 1;
       void supabase.removeChannel(channel);
       window.clearInterval(interval);
       window.removeEventListener("online", refresh);
@@ -1601,6 +1655,16 @@ export default function Satellite() {
               >
                 {analysisLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                 Analyse Sentinel Indices
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={saveMonitoredField}
+                disabled={fieldPoints.length < 3 || savingMonitoredField}
+                className="h-7 text-xs"
+              >
+                {savingMonitoredField ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Save monitored field
               </Button>
               <Button
                 size="sm"
