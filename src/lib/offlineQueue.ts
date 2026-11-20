@@ -124,7 +124,7 @@ export async function queueHarvest(
   try {
     writePhotos(photos);
     writeQueue([...queue, item]);
-  } catch (error) {
+  } catch {
     // Roll back the photo cache if the queue record could not be persisted.
     try { writePhotos(originalPhotos); } catch { /* storage is unavailable */ }
     throw new Error("This device could not store the harvest offline. Free some device storage and retry.");
