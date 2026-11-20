@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Cpu, RefreshCw, Copy, Thermometer, Droplets, Loader2 } from "lucide-react";
+import { Cpu, RefreshCw, Copy, Thermometer, Droplets, Loader2, Ban } from "lucide-react";
 
 type StationDevice = {
   id: string; device_name: string; hardware_id: string; model: string | null;
@@ -81,6 +81,19 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
     } finally { setSaving(false); }
   };
 
+  const revokeDevice = async (device: StationDevice) => {
+    if (!confirm(`Revoke access for "${device.device_name}"? The station will no longer be able to upload readings.`)) return;
+    const { data, error } = await supabase.functions.invoke("post-harvest-station", {
+      body: { action: "revoke", device_id: device.id },
+    });
+    if (error || !data?.revoked) {
+      toast.error("Could not revoke station", { description: data?.error || error?.message || "Request failed" });
+      return;
+    }
+    toast.success("Station credential revoked");
+    await refresh();
+  };
+
   const copyToken = async () => {
     if (!issuedToken) return;
     try { await navigator.clipboard.writeText(issuedToken); toast.success("Device token copied"); }
@@ -131,7 +144,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
               return <div key={device.id} className="rounded-lg border p-3 space-y-2">
                 <div className="flex flex-wrap justify-between gap-2">
                   <div><div className="font-medium">{device.device_name}</div><div className="text-xs text-muted-foreground">{device.model || "Model not specified"} · {device.hardware_id}</div></div>
-                  <Badge variant={device.status === "revoked" ? "destructive" : seen ? "default" : "secondary"}>{device.status === "revoked" ? "Revoked" : seen ? "Recently connected" : "Registered · no recent signal"}</Badge>
+                  <div className="flex items-center gap-2"><Badge variant={device.status === "revoked" ? "destructive" : seen ? "default" : "secondary"}>{device.status === "revoked" ? "Revoked" : seen ? "Recently connected" : "Registered · no recent signal"}</Badge>{device.status === "active" && <Button size="sm" variant="outline" onClick={() => void revokeDevice(device)}><Ban className="h-3 w-3 mr-1" /> Revoke</Button>}</div>
                 </div>
                 {reading ? <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-md bg-muted p-2 flex items-center gap-2"><Thermometer className="h-4 w-4" /><span>{Number(reading.temperature_c).toFixed(1)} °C</span></div>
