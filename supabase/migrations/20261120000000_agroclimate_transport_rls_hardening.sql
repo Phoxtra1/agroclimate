@@ -209,6 +209,32 @@ GRANT UPDATE (
 ) ON public.tracking_sessions TO authenticated;
 REVOKE DELETE ON public.tracking_sessions FROM authenticated;
 
+-- Global Test Mode disables product paywalls, so it must never be writable
+-- directly by ordinary authenticated clients. The test-mode Edge Function uses
+-- the service role for writes and performs its own administrator check.
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+REVOKE INSERT, UPDATE, DELETE ON public.system_settings FROM anon, authenticated;
+GRANT SELECT ON public.system_settings TO authenticated;
+
+DO $
+DECLARE policy_row RECORD;
+BEGIN
+  FOR policy_row IN
+    SELECT policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'system_settings'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.system_settings', policy_row.policyname);
+  END LOOP;
+END $;
+
+CREATE POLICY "Authenticated can read only Test Mode setting"
+  ON public.system_settings
+  FOR SELECT
+  TO authenticated
+  USING (key = 'test_mode');
+
 -- Platform-wide metric reads must be restricted to actual administrators.
 DROP POLICY IF EXISTS "Authenticated view all profiles for overview" ON public.profiles;
 DROP POLICY IF EXISTS "Authenticated view all drivers for overview" ON public.agtrans_drivers;
