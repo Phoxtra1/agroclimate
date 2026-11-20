@@ -310,6 +310,70 @@ export class WebHidScaleAdapter implements HardwareAdapter {
 }
 
 
+export interface PostHarvestStationReading {
+  temperatureC: number;
+  humidityPct: number;
+  observedAt: string;
+  idempotencyKey: string;
+  sequenceNo?: number;
+  firmware?: string;
+  sensorModel?: string;
+}
+export type PostHarvestReadingSink = (device: DeviceRegistration, reading: PostHarvestStationReading) => Promise<void>;
+
+/** Dedicated BLE driver for the existing Post-Harvest station gateway (not the shared telemetry table). */
+export class WebBluetoothPostHarvestAdapter implements HardwareAdapter {
+  readonly adapterId = "post-harvest-ble-station-v1";
+  readonly protocol = "ble-gatt" as const;
+  readonly components: readonly HardwareComponent[] = ["post-harvest"];
+  private sessions = new Map<string, { device: BluetoothDeviceLike; characteristic: BluetoothCharacteristicLike; listener: (event: any) => void }>();
+
+  constructor(
+    private readonly serviceUuid: string,
+    private readonly characteristicUuid: string,
+    private readonly decodeReading: (value: DataView) => PostHarvestStationReading | null,
+    private readonly sink: PostHarvestReadingSink,
+    private readonly bluetooth: BluetoothNavigatorLike = typeof navigator !== "undefined" ? navigator as unknown as BluetoothNavigatorLike : {},
+  ) {}
+
+  supports(device: DeviceRegistration): boolean {
+    return device.component === "post-harvest" && device.protocol === this.protocol &&
+      device.capabilities.includes("temperature") && device.capabilities.includes("relative-humidity");
+  }
+
+  async connect(device: DeviceRegistration): Promise<AdapterConnection> {
+    if (!this.bluetooth.bluetooth) return { connected: false, detail: "Web Bluetooth is unavailable for the Post-Harvest station." };
+    if (this.sessions.has(device.deviceId)) return { connected: true, detail: "Post-Harvest BLE station is already active." };
+    const selected = await this.bluetooth.bluetooth.requestDevice({ filters: [{ services: [this.serviceUuid] }] });
+    if (!selected.gatt) return { connected: false, detail: "Selected station does not expose BLE GATT." };
+    const server = await selected.gatt.connect();
+    const service = await server.getPrimaryService(this.serviceUuid);
+    const characteristic = await service.getCharacteristic(this.characteristicUuid);
+    const listener = (event: any) => {
+      const view = event?.target?.value as DataView | undefined;
+      if (!view) return;
+      let reading: PostHarvestStationReading | null = null;
+      try { reading = this.decodeReading(view); } catch { return; }
+      if (!reading || !Number.isFinite(reading.temperatureC) || !Number.isFinite(reading.humidityPct) ||
+          reading.temperatureC < -40 || reading.temperatureC > 85 || reading.humidityPct < 0 || reading.humidityPct > 100 ||
+          !reading.idempotencyKey.trim() || !Number.isFinite(Date.parse(reading.observedAt))) return;
+      void this.sink(device, reading);
+    };
+    characteristic.addEventListener("characteristicvaluechanged", listener);
+    await characteristic.startNotifications();
+    this.sessions.set(device.deviceId, { device: selected, characteristic, listener });
+    return { connected: true, connectedAt: new Date().toISOString(), detail: "Dedicated Post-Harvest BLE station stream is active." };
+  }
+
+  async disconnect(deviceId: string): Promise<void> {
+    const session = this.sessions.get(deviceId);
+    if (!session) return;
+    session.characteristic.removeEventListener("characteristicvaluechanged", session.listener);
+    try { await session.characteristic.stopNotifications(); } finally { session.device.gatt?.disconnect(); }
+    this.sessions.delete(deviceId);
+  }
+}
+
 type MavlinkSerialPort = {
   open(options: { baudRate: number }): Promise<void>;
   close(): Promise<void>;
