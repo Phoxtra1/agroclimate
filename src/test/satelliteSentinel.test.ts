@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildTileJsonUrl,
+  buildFieldPolygon,
   calculatePolygonAreaHectares,
   describeNdmi,
   describeNdvi,
@@ -10,6 +11,30 @@ import {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("Satellite monitored field boundaries", () => {
+  it("builds a closed GeoJSON polygon from valid map points", () => {
+    const polygon = buildFieldPolygon([
+      { lat: 5, lon: -1 },
+      { lat: 5, lon: -0.999 },
+      { lat: 5.001, lon: -0.999 },
+      { lat: 5.001, lon: -1 },
+    ]);
+    expect(polygon.type).toBe("Polygon");
+    expect(polygon.coordinates[0][0]).toEqual(polygon.coordinates[0].at(-1));
+    expect(polygon.coordinates[0]).toHaveLength(5);
+  });
+
+  it("rejects too few, duplicate and out-of-range boundary points", () => {
+    expect(() => buildFieldPolygon([{ lat: 5, lon: -1 }, { lat: 5.1, lon: -1 }])).toThrow("at least three points");
+    expect(() => buildFieldPolygon([
+      { lat: 5, lon: -1 }, { lat: 5, lon: -1 }, { lat: 5, lon: -1 },
+    ])).toThrow("distinct points");
+    expect(() => buildFieldPolygon([
+      { lat: 95, lon: -1 }, { lat: 5, lon: -0.999 }, { lat: 5.001, lon: -1 },
+    ])).toThrow("invalid latitude");
+  });
 });
 
 describe("Sentinel-2 analysis helpers", () => {
