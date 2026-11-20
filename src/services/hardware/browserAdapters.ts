@@ -244,19 +244,72 @@ export interface SerialAdapterOptions {
   baudRate: number;
   /** Parse one newline-delimited device message into zero or more metric values. */
   decodeLine: (line: string) => Array<{ metric: ObservationMetric; value: number; unit: string }>;
+  components?: readonly HardwareComponent[];
+  adapterId?: string;
+}
+
+/** Strict NMEA 0183 RMC/GGA decoder for dedicated vehicle GPS trackers. */
+export function decodeNmea0183Line(line: string): Array<{ metric: ObservationMetric; value: number; unit: string }> {
+  const sentence = line.trim();
+  const star = sentence.lastIndexOf("*");
+  if (!sentence.startsWith("$") || star < 2 || star + 3 !== sentence.length) return [];
+  const expected = Number.parseInt(sentence.slice(star + 1), 16);
+  if (!Number.isInteger(expected) || expected < 0 || expected > 255) return [];
+  let checksum = 0;
+  for (let index = 1; index < star; index++) checksum ^= sentence.charCodeAt(index);
+  if (checksum !== expected) return [];
+
+  const fields = sentence.slice(1, star).split(",");
+  const messageType = fields[0]?.slice(-3);
+  const parseCoordinate = (raw: string | undefined, hemisphere: string | undefined, max: number): number | null => {
+    if (!raw || !hemisphere) return null;
+    const encoded = Number(raw);
+    if (!Number.isFinite(encoded) || encoded < 0) return null;
+    const degrees = Math.floor(encoded / 100);
+    const minutes = encoded - degrees * 100;
+    if (minutes < 0 || minutes >= 60 || degrees > max || (degrees === max && minutes > 0)) return null;
+    const sign = hemisphere === "S" || hemisphere === "W" ? -1 : hemisphere === "N" || hemisphere === "E" ? 1 : 0;
+    if (!sign) return null;
+    return sign * (degrees + minutes / 60);
+  };
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  let speedKnots: number | null = null;
+  if (messageType === "RMC" && fields[2] === "A") {
+    latitude = parseCoordinate(fields[3], fields[4], 90);
+    longitude = parseCoordinate(fields[5], fields[6], 180);
+    const speed = Number(fields[7]);
+    if (fields[7] && Number.isFinite(speed) && speed >= 0) speedKnots = speed;
+  } else if (messageType === "GGA" && Number(fields[6]) > 0) {
+    latitude = parseCoordinate(fields[2], fields[3], 90);
+    longitude = parseCoordinate(fields[4], fields[5], 180);
+  } else {
+    return [];
+  }
+  if (latitude === null || longitude === null) return [];
+  const result: Array<{ metric: ObservationMetric; value: number; unit: string }> = [
+    { metric: "latitude", value: latitude, unit: "°" },
+    { metric: "longitude", value: longitude, unit: "°" },
+  ];
+  if (speedKnots !== null) result.push({ metric: "vehicle_speed", value: speedKnots, unit: "kn" });
+  return result;
 }
 
 export class WebSerialSensorAdapter implements HardwareAdapter {
-  readonly adapterId = "web-serial-configurable-v1";
+  readonly adapterId: string;
   readonly protocol = "usb-serial" as const;
-  readonly components: readonly HardwareComponent[] = ["agro-inventory", "agroforecast", "agrorisk"];
+  readonly components: readonly HardwareComponent[];
+
   private sessions = new Map<string, { port: SerialPortLike; reader?: ReadableStreamDefaultReader<Uint8Array>; closed: boolean }>();
 
   constructor(
     private readonly context: AdapterContext,
     private readonly options: SerialAdapterOptions,
     private readonly serial: SerialNavigatorLike = typeof navigator !== "undefined" ? navigator as unknown as SerialNavigatorLike : {},
-  ) {}
+  ) {
+    this.adapterId = options.adapterId ?? "web-serial-configurable-v1";
+    this.components = options.components ?? ["agro-inventory", "agroforecast", "agrorisk"];
+  }
 
   supports(device: DeviceRegistration): boolean {
     return device.protocol === this.protocol && this.components.includes(device.component);
