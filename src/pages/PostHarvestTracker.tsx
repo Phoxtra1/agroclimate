@@ -313,16 +313,17 @@ function AdviceModal({ entry, open, onClose }: { entry: HarvestEntry | null; ope
 }
 
 export default function PostHarvestTracker() {
+  const { user } = useAuth();
   const { entries, loading, deleteEntry, fetchEntries } = usePostHarvest();
   const [adviceEntry, setAdviceEntry] = useState<HarvestEntry | null>(null);
-  const [pending, setPending] = useState(getPendingCount());
+  const [pending, setPending] = useState(() => getPendingCount(user?.id));
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   const [syncing, setSyncing] = useState(false);
   const [capturingEntryId, setCapturingEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     installOfflineSync();
-    const refresh = () => setPending(getPendingCount());
+    const refresh = () => setPending(getPendingCount(user?.id));
     const onOnline = () => { setOnline(true); refresh(); };
     const onOffline = () => setOnline(false);
     window.addEventListener("agc:queue-changed", refresh);
@@ -408,7 +409,7 @@ export default function PostHarvestTracker() {
     setSyncing(true);
     const r = await syncPendingHarvests();
     setSyncing(false);
-    setPending(getPendingCount());
+    setPending(getPendingCount(user?.id));
     if (r.synced) { toast.success(`Synced ${r.synced} entr${r.synced === 1 ? "y" : "ies"}`); fetchEntries(); }
     if (r.failed) toast.error(`${r.failed} still pending — will retry`);
     if (!r.synced && !r.failed) toast.message("Nothing to sync");
