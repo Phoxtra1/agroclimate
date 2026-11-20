@@ -3,6 +3,7 @@
 // Auto-syncs when the browser regains connectivity.
 
 import { supabase } from "@/integrations/supabase/client";
+import { buildHarvestPhotoPath, createHarvestIdempotencyKey } from "@/lib/harvestIdempotency";
 
 const QUEUE_KEY = "agc_pending_harvests_v1";
 const PHOTOS_KEY = "agc_pending_photos_v1";
@@ -92,9 +93,7 @@ export async function queueHarvest(
     throw new Error("Sign in with the farm account before saving offline harvest records.");
   }
 
-  const itemId = idempotencyKey || (typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `harvest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+  const itemId = idempotencyKey || createHarvestIdempotencyKey();
   const queue = readQueue();
   const existing = queue.find((item) => item.user_id === entry.user_id && item.id === itemId);
   if (existing) return existing;
@@ -199,7 +198,7 @@ export async function syncPendingHarvests(): Promise<{ synced: number; failed: n
           if (!cached) continue;
           const blob = await dataUrlToBlob(cached.data_url);
           const ext = (cached.filename.split(".").pop() || "jpg").toLowerCase();
-          const path = `${cached.user_id}/harvest-${item.id}-${photoIndex}.${ext}`;
+          const path = buildHarvestPhotoPath(cached.user_id, item.id, photoIndex, ext);
           const { error: upErr } = await supabase.storage
             .from("harvest-photos")
             .upload(path, blob, { contentType: cached.type, upsert: true });
