@@ -521,6 +521,17 @@ function readMavlinkFrames(input: Uint8Array, buffer: number[]): Array<{ message
   return frames;
 }
 
+export function decodeMavlinkGpsRawInt(payload: DataView): { fixType: number; latitude: number; longitude: number } | null {
+  if (payload.byteLength < 30) return null;
+  const fixType = payload.getUint8(8);
+  if (fixType < 2) return null;
+  const latitude = payload.getInt32(9, true) / 1e7;
+  const longitude = payload.getInt32(13, true) / 1e7;
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+  return { fixType, latitude, longitude };
+}
+
 export class WebSerialMavlinkAdapter implements HardwareAdapter {
   readonly adapterId = "mavlink-v1-v2-serial";
   readonly protocol = "mavlink" as const;
@@ -564,17 +575,16 @@ export class WebSerialMavlinkAdapter implements HardwareAdapter {
             if (Number.isFinite(value)) void this.context.onObservation(observation(device, metric, value, unit, this.protocol, now));
           };
           const p = frame.payload;
-          if (frame.messageId === 24 && p.byteLength >= 30) {
-            // GPS_RAW_INT layout: fix_type at byte 8, latitude at 9, longitude at 13.
-            // The previous offsets read satellite-count/adjacent bytes as the fix and
-            // shifted both coordinates, producing invalid live aircraft positions.
-            const fixType = p.getUint8(8);
-            if (fixType >= 2) {
-              const latitude = p.getInt32(9, true) / 1e7;
-              const longitude = p.getInt32(13, true) / 1e7;
-              emit("latitude", latitude, "°");
-              emit("longitude", longitude, "°");
-              TelemetryGateway.updateTelemetry(device.deviceId, { latitude, longitude, gpsStatus: fixType >= 4 ? "rtk" : fixType === 3 ? "3d" : "2d", connectionStatus: "connected" });
+          if (frame.messageId === 24) {
+            const gps = decodeMavlinkGpsRawInt(p);
+            if (gps) {
+              emit("latitude", gps.latitude, "°");
+              emit("longitude", gps.longitude, "°");
+              TelemetryGateway.updateTelemetry(device.deviceId, {
+                latitude: gps.latitude, longitude: gps.longitude,
+                gpsStatus: gps.fixType >= 4 ? "rtk" : gps.fixType === 3 ? "3d" : "2d",
+                connectionStatus: "connected",
+              });
             }
           } else if (frame.messageId === 33 && p.byteLength >= 28) {
             const latitude = p.getInt32(4, true) / 1e7;
