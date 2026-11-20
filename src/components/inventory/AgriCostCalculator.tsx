@@ -70,7 +70,7 @@ export function AgriCostCalculator({
         .select("*").eq("user_id", userId).order("created_at", { ascending: false });
       if (version !== requestVersion.current || userId !== currentUserId.current) return;
       if (error) throw error;
-      setScenarios((data || []) as Scenario[]);
+      setScenarios((data || []) as unknown as Scenario[]);
     } catch (error) {
       if (version === requestVersion.current && userId === currentUserId.current) {
         setScenarios([]);
