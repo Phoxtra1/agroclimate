@@ -21,3 +21,6 @@ verify_jwt = false
 
 [functions.test-mode]
 verify_jwt = true
+
+[functions.post-harvest-station]
+verify_jwt = false
