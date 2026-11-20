@@ -174,16 +174,31 @@ function makeFormatCurrency(currencyCode: string, locale: string) {
   };
 }
 
+function summarizeQuantitiesByUnit(
+  records: Array<{ unit: string; quantity?: number; quantity_lost?: number }>,
+  field: "quantity" | "quantity_lost",
+): string {
+  const totals = new Map<string, number>();
+  for (const record of records) {
+    const unit = record.unit?.trim() || "units";
+    totals.set(unit, (totals.get(unit) || 0) + Number(record[field] || 0));
+  }
+  return Array.from(totals.entries())
+    .map(([unit, quantity]) => `${quantity.toLocaleString()} ${unit}`)
+    .join(" · ") || "0";
+}
+
 // Reusable Dialog for adding/editing records
 function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   title: string;
   fields: { name: string; label: string; type?: string; required?: boolean; placeholder?: string }[];
-  onSave: (data: any) => void | boolean | Promise<void | boolean>;
+  onSave: (data: any) => Promise<boolean>;
   trigger: React.ReactNode;
   initialData?: any;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>(initialData || {});
+  const [saving, setSaving] = useState(false);
 
   const handleOpen = useCallback((isOpen: boolean) => {
     setOpen(isOpen);
@@ -192,10 +207,16 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
   }, [initialData]);
 
   const handleSave = async () => {
-    const result = await onSave(form);
-    if (result === false) return;
-    setOpen(false);
-    setForm({});
+    setSaving(true);
+    try {
+      const saved = await onSave(form);
+      if (saved) {
+        setOpen(false);
+        setForm({});
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -213,11 +234,11 @@ function RecordDialog({ title, fields, onSave, trigger, initialData }: {
                 placeholder={f.placeholder || f.label}
                 value={form[f.name] ?? ""}
                 className="h-9"
-                onChange={(e) => setForm((prev: any) => ({ ...prev, [f.name]: f.type === "number" ? Number(e.target.value) : e.target.value }))}
+                onChange={(e) => setForm((prev: any) => ({ ...prev, [f.name]: e.target.value }))}
               />
             </div>
           ))}
-          <Button onClick={handleSave} className="w-full mt-2">Save Record</Button>
+          <Button onClick={() => void handleSave()} className="w-full mt-2" disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}{saving ? "Saving…" : "Save Record"}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -286,6 +307,15 @@ export default function AgroInventory() {
       { name: "farm_plot", label: "Farm Plot" },
       { name: "notes", label: "Notes" },
     ],
+    land: [
+      { name: "land_description", label: "Land Description", required: true, placeholder: "e.g. North field lease" },
+      { name: "size_acres", label: "Size (acres)", type: "number", required: true },
+      { name: "cost_type", label: "Cost Type", required: true, placeholder: "rent or purchase" },
+      { name: "cost_amount", label: `Cost Amount (${selectedCurrency.code})`, type: "number", required: true },
+      { name: "season", label: "Season" },
+      { name: "farm_plot", label: "Farm Plot" },
+      { name: "notes", label: "Notes" },
+    ],
     sales: [
       { name: "crop_name", label: "Product Sold", required: true, placeholder: "e.g. Maize, Eggs, Tomatoes" },
       { name: "quantity_sold", label: "Quantity Sold", type: "number", required: true },
@@ -312,6 +342,9 @@ export default function AgroInventory() {
 
     return { totalInputsCost, totalLaborCost, totalLandCost, totalHarvestQty, totalLossQty, totalRevenue, totalExpenses, netProfit };
   }, [inventoryItems, laborRecords, landCosts, harvestRecords, harvestLosses, salesRecords]);
+
+  const harvestQuantitySummary = summarizeQuantitiesByUnit(harvestRecords, "quantity");
+  const lossQuantitySummary = summarizeQuantitiesByUnit(harvestLosses, "quantity_lost");
 
   // Use local totals if metrics from hook are empty/zero, otherwise prefer hook metrics
   const displayMetrics = {
@@ -419,8 +452,8 @@ export default function AgroInventory() {
         <MetricCard icon={Package} label="Inputs" value={formatCurrency(displayMetrics.totalInputsCost)} color="text-blue-600" bg="bg-blue-50/50" />
         <MetricCard icon={Users} label="Labor" value={formatCurrency(displayMetrics.totalLaborCost)} color="text-indigo-600" bg="bg-indigo-50/50" />
         <MetricCard icon={MapPin} label="Land" value={formatCurrency(displayMetrics.totalLandCost)} color="text-violet-600" bg="bg-violet-50/50" />
-        <MetricCard icon={Wheat} label="Harvest" value={`${displayMetrics.totalHarvestQty.toLocaleString()}`} color="text-primary" bg="bg-primary/10" />
-        <MetricCard icon={AlertTriangle} label="Losses" value={`${displayMetrics.totalLosses.toLocaleString()}`} color="text-destructive" bg="bg-destructive/10" />
+        <MetricCard icon={Wheat} label="Harvest by Unit" value={harvestQuantitySummary} color="text-primary" bg="bg-primary/10" />
+        <MetricCard icon={AlertTriangle} label="Losses by Unit" value={lossQuantitySummary} color="text-destructive" bg="bg-destructive/10" />
         <MetricCard icon={ShoppingCart} label="Revenue" value={formatCurrency(displayMetrics.totalRevenue)} color="text-emerald-600" bg="bg-emerald-50/50" />
         <MetricCard icon={DollarSign} label="Expenses" value={formatCurrency(displayMetrics.totalExpenses)} color="text-orange-600" bg="bg-orange-50/50" />
         <MetricCard icon={TrendingUp} label="Net Profit" value={formatCurrency(displayMetrics.netProfit)} color={displayMetrics.netProfit >= 0 ? "text-emerald-700" : "text-destructive"} bg={displayMetrics.netProfit >= 0 ? "bg-emerald-50" : "bg-destructive/10"} />
@@ -436,7 +469,7 @@ export default function AgroInventory() {
             <div className="flex-1">
               <p className="text-sm font-semibold">Season Summary</p>
               <p className="text-[11px] text-muted-foreground">
-                Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {displayMetrics.totalLosses.toLocaleString()} units | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
+                Recorded net profit excludes costs not entered in Agro Inventory. Total costs: {formatCurrency(displayMetrics.totalExpenses)} | Losses: {lossQuantitySummary} | Revenue: {formatCurrency(displayMetrics.totalRevenue)} | <strong className={displayMetrics.netProfit >= 0 ? "text-emerald-600" : "text-destructive"}>Profit: {formatCurrency(displayMetrics.netProfit)}</strong>
               </p>
             </div>
             <Link to="/produce-safety">
@@ -453,6 +486,7 @@ export default function AgroInventory() {
           <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
             <TabsTrigger value="inputs" className="text-xs px-4">Inputs</TabsTrigger>
             <TabsTrigger value="labor" className="text-xs px-4">Labor</TabsTrigger>
+            <TabsTrigger value="land" className="text-xs px-4">Land</TabsTrigger>
             <TabsTrigger value="harvest" className="text-xs px-4">Harvest</TabsTrigger>
             <TabsTrigger value="loss" className="text-xs px-4">Losses</TabsTrigger>
             <TabsTrigger value="sales" className="text-xs px-4">Sales</TabsTrigger>
@@ -461,7 +495,15 @@ export default function AgroInventory() {
 
           {/* ===== COST SCENARIOS TAB ===== */}
           <TabsContent value="cost-scenarios" className="space-y-4">
-            <AgriCostCalculator currencyCode={selectedCurrency.code} />
+            <AgriCostCalculator
+              currencyCode={selectedCurrency.code}
+              inventoryItems={inventoryItems}
+              laborRecords={laborRecords}
+              landCosts={landCosts}
+              harvestRecords={harvestRecords}
+              salesRecords={salesRecords}
+              crops={crops}
+            />
           </TabsContent>
 
         {/* ===== INPUTS TAB (unchanged logic) ===== */}
@@ -489,9 +531,10 @@ export default function AgroInventory() {
                       <TableCell className="p-3">{item.quantity} {item.unit}</TableCell>
                       <TableCell className="p-3 font-semibold">{formatCurrency(item.quantity * item.price_per_unit)}</TableCell>
                       <TableCell className="text-right p-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("inventory_items", item.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive/70" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <RecordDialog title="Edit Input" fields={fieldConfigs.inputs} initialData={item} onSave={(data) => updateRecord("inventory_items", item.id, data)} trigger={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit input"><Edit2 className="h-4 w-4" /></Button>} />
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete input" onClick={() => void deleteRecord("inventory_items", item.id)}><Trash2 className="h-4 w-4 text-destructive/70" /></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -534,9 +577,10 @@ export default function AgroInventory() {
                        <TableCell className="p-3">{formatCurrency(r.cost_per_day || 0)}</TableCell>
                        <TableCell className="p-3 font-semibold">{formatCurrency((r.worker_count || 0) * (r.days_worked || 0) * (r.cost_per_day || 0))}</TableCell>
                       <TableCell className="text-right p-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("labor_records", r.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive/70" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <RecordDialog title="Edit Labor Record" fields={fieldConfigs.labor} initialData={r} onSave={(data) => updateRecord("labor_records", r.id, data)} trigger={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit labor record"><Edit2 className="h-4 w-4" /></Button>} />
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete labor record" onClick={() => void deleteRecord("labor_records", r.id)}><Trash2 className="h-4 w-4 text-destructive/70" /></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -548,6 +592,42 @@ export default function AgroInventory() {
               <span>Total Labor Cost</span>
               <span>{formatCurrency(totals.totalLaborCost)}</span>
             </div>
+          </SectionCard>
+        </TabsContent>
+
+
+        {/* ===== LAND COSTS TAB ===== */}
+        <TabsContent value="land" className="space-y-4">
+          <SectionCard title="Land Costs" badge={`${landCosts.length}`}
+            addDialog={<RecordDialog title="Add Land Cost" fields={fieldConfigs.land} onSave={(data) => addRecord("land_costs", data)} trigger={<Button size="sm" className="h-8"><Plus className="h-4 w-4 mr-1" /> New Land Cost</Button>} />}
+          >
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead>Land / Plot</TableHead><TableHead>Size</TableHead><TableHead>Cost Type</TableHead><TableHead>Cost</TableHead><TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {landCosts.map((record) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">{record.land_description}</TableCell>
+                      <TableCell>{record.size_acres} acres</TableCell>
+                      <TableCell className="capitalize">{record.cost_type}</TableCell>
+                      <TableCell>{formatCurrency(record.cost_amount)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <RecordDialog title="Edit Land Cost" fields={fieldConfigs.land} initialData={record} onSave={(data) => updateRecord("land_costs", record.id, data)} trigger={<Button variant="ghost" size="icon" aria-label="Edit land cost"><Edit2 className="h-4 w-4" /></Button>} />
+                          <Button variant="ghost" size="icon" aria-label="Delete land cost" onClick={() => void deleteRecord("land_costs", record.id)}><Trash2 className="h-4 w-4 text-destructive/70" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {landCosts.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No land cost records yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="px-4 py-3 border-t bg-muted/20 text-sm font-semibold flex justify-between"><span>Total Land Cost</span><span>{formatCurrency(totals.totalLandCost)}</span></div>
           </SectionCard>
         </TabsContent>
 
@@ -575,9 +655,10 @@ export default function AgroInventory() {
                       <TableCell className="p-3"><Badge variant="outline" className="text-[10px]">{r.quality_grade || "N/A"}</Badge></TableCell>
                       <TableCell className="p-3 text-muted-foreground text-xs">{r.harvest_date || "N/A"}</TableCell>
                       <TableCell className="text-right p-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("harvest_records", r.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive/70" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <RecordDialog title="Edit Harvest Record" fields={fieldConfigs.harvest} initialData={r} onSave={(data) => updateRecord("harvest_records", r.id, data)} trigger={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit harvest record"><Edit2 className="h-4 w-4" /></Button>} />
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete harvest record" onClick={() => void deleteRecord("harvest_records", r.id)}><Trash2 className="h-4 w-4 text-destructive/70" /></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -587,7 +668,7 @@ export default function AgroInventory() {
             </div>
             <div className="px-4 py-3 border-t bg-muted/20 text-sm font-semibold flex justify-between">
               <span>Total Harvest Quantity</span>
-              <span>{totals.totalHarvestQty.toLocaleString()} units</span>
+              <span>{harvestQuantitySummary}</span>
             </div>
           </SectionCard>
         </TabsContent>
@@ -614,9 +695,10 @@ export default function AgroInventory() {
                        <TableCell className="p-3"><Badge variant="destructive" className="text-[10px]">{r.loss_reason || "Unknown"}</Badge></TableCell>
                        <TableCell className="p-3">{r.quantity_lost} {r.unit}</TableCell>
                       <TableCell className="text-right p-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("harvest_losses", r.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive/70" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <RecordDialog title="Edit Loss Record" fields={fieldConfigs.loss} initialData={r} onSave={(data) => updateRecord("harvest_losses", r.id, data)} trigger={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit loss record"><Edit2 className="h-4 w-4" /></Button>} />
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete loss record" onClick={() => void deleteRecord("harvest_losses", r.id)}><Trash2 className="h-4 w-4 text-destructive/70" /></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -626,7 +708,7 @@ export default function AgroInventory() {
             </div>
             <div className="px-4 py-3 border-t bg-destructive/10 text-sm font-semibold flex justify-between">
               <span>Total Quantity Lost</span>
-              <span className="text-destructive">{totals.totalLossQty.toLocaleString()} units</span>
+              <span className="text-destructive">{lossQuantitySummary}</span>
             </div>
           </SectionCard>
         </TabsContent>
@@ -657,9 +739,10 @@ export default function AgroInventory() {
                       <TableCell className="p-3 font-semibold text-emerald-600">{formatCurrency((r.quantity_sold || 0) * (r.price_per_unit || 0))}</TableCell>
                       <TableCell className="p-3 text-muted-foreground text-xs">{r.buyer_name || "N/A"}</TableCell>
                       <TableCell className="text-right p-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteRecord("sales_records", r.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive/70" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <RecordDialog title="Edit Sale Record" fields={fieldConfigs.sales} initialData={r} onSave={(data) => updateRecord("sales_records", r.id, data)} trigger={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit sale record"><Edit2 className="h-4 w-4" /></Button>} />
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete sale record" onClick={() => void deleteRecord("sales_records", r.id)}><Trash2 className="h-4 w-4 text-destructive/70" /></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
