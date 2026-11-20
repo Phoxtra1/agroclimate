@@ -46,6 +46,13 @@ describe("Agro Inventory record validation", () => {
     }, true)).toThrow("Worker count must be a whole number");
   });
 
+  it("omits an empty unit so the database default can apply", () => {
+    const payload = normalizeInventoryRecord("inventory_items", {
+      item_name: "Maize seed", item_type: "seed", quantity: "4", price_per_unit: "20", unit: "",
+    }, true);
+    expect(payload).not.toHaveProperty("unit");
+  });
+
   it("omits an empty optional harvest date so the database default can apply", () => {
     const payload = normalizeInventoryRecord("harvest_records", {
       crop_name: "Cassava", quantity: "5", harvest_date: "",
