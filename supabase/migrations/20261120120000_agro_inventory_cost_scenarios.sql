@@ -24,7 +24,13 @@ CREATE TABLE IF NOT EXISTS public.agri_cost_scenarios (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+ALTER TABLE public.agri_cost_scenarios
+  ADD COLUMN IF NOT EXISTS other_input_cost numeric NOT NULL DEFAULT 0 CHECK (other_input_cost >= 0);
+ALTER TABLE public.agri_cost_scenarios
+  ADD COLUMN IF NOT EXISTS currency_code text NOT NULL DEFAULT 'USD' CHECK (char_length(currency_code) = 3);
+
 ALTER TABLE public.agri_cost_scenarios ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.agri_cost_scenarios FROM PUBLIC, anon;
 
 DROP POLICY IF EXISTS "Users manage own agri cost scenarios" ON public.agri_cost_scenarios;
 CREATE POLICY "Users manage own agri cost scenarios"
