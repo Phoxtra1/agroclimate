@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { useWeather } from "@/hooks/useWeather";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -745,6 +746,36 @@ export default function EnvironmentalMonitor() {
       incidentRequestVersion.current += 1;
     };
   }, [reloadFarms, reloadIncidents]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+    const channel = supabase.channel(`agro-risk-owner-${userId}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "farms", filter: `user_id=eq.${userId}`,
+      }, () => { void reloadFarms(); })
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "geo_features", filter: `owner_id=eq.${userId}`,
+      }, () => { void reloadFarms(); })
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "agro_risk_incidents", filter: `user_id=eq.${userId}`,
+      }, () => { void reloadIncidents(); })
+      .subscribe();
+
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        void reloadFarms();
+        void reloadIncidents();
+      }
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+      void supabase.removeChannel(channel);
+    };
+  }, [user?.id, reloadFarms, reloadIncidents]);
 
   // Reverse Geocoding helper for quick map pin
   const fetchAddress = async (lat: number, lon: number): Promise<string> => {
