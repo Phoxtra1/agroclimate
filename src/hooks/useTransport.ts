@@ -237,17 +237,34 @@ export function useAGTrans() {
 
   const loadData = useCallback(async () => {
     if (!user) {
+      setRequests([]);
+      setDeliveryJobs([]);
+      setTrackingSessions([]);
+      setDrivers([]);
+      setDriverProfile(null);
+      setHistory(null);
+      seenRequestsRef.current.clear();
+      initialLoadRef.current = true;
       setLoading(false);
       return;
     }
     setLoading(true);
+    // Clear private transport state immediately when switching accounts.
+    setRequests([]);
+    setDeliveryJobs([]);
+    setTrackingSessions([]);
+    setDrivers([]);
+    setDriverProfile(null);
+    setHistory(null);
+    seenRequestsRef.current.clear();
+    initialLoadRef.current = true;
     try {
       const { data: dp } = await supabase
         .from("agtrans_drivers")
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (dp) setDriverProfile(dp as unknown as DriverProfile);
+      setDriverProfile(dp ? (dp as unknown as DriverProfile) : null);
 
       const reqs = await safeSelect<TransportRequest>("agtrans_requests", { order: true, limit: 100 });
       setRequests(reqs);
