@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Activity, Clock3, Copy, Loader2, Plus, RefreshCw, ShieldAlert, Unplug, Wifi, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,7 @@ export function SharedDevicePanel({ component }: { component: SharedDeviceCompon
     return () => { void supabase.removeChannel(channel); };
   }, [refresh, component, user?.id]);
 
-  const submitRegistration = async (event: React.FormEvent) => {
+  const submitRegistration = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.device_name.trim() || !form.hardware_id.trim()) {
       toast({ title: "Device name and hardware ID are required.", variant: "destructive" });
