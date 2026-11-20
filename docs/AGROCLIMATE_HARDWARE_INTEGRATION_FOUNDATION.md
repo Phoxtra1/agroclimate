@@ -1,14 +1,14 @@
 # AgroClimate Hardware Integration Foundation
 
-**Status:** Architecture and compatibility baseline only  
-**Scope:** Farm Handler and Post-Harvest Tracker first  
-**Application impact:** None. This document does not change routes, screens, database tables, migrations, authentication, storage policies, or existing workflows.
+**Status:** Architecture baseline plus partial runtime integration  
+**Scope:** Farm Handler and Post-Harvest Tracker first, with shared readiness profiles for all nine hardware-facing components  
+**Application impact:** The repository now includes a shared typed hardware contract, browser-based device capabilities, a Post-Harvest Station registry and HTTPS ingestion path, and existing AGTrans GPS provenance. This document records the architecture and verified implementation boundaries; it does not itself change runtime behavior.
 
 ## 1. Non-negotiable integration rules
 
 1. The existing AgroClimate application remains the system of record. Hardware supplies observations and evidence; it does not replace existing application workflows.
 2. Integrations are additive and opt-in. A user without a paired device must continue using the current phone/browser workflow exactly as before.
-3. Do not add device SDKs, browser permissions, new routes, database migrations, background services, or UI controls until a specific device and its interface have been verified.
+3. Do not add vendor-specific SDKs, device drivers, browser pairing flows, or protocol-specific adapters until an exact device and its interface have been verified. A device-agnostic HTTPS ingestion contract may be used where its schema, ownership, credential handling, and RLS have been reviewed.
 4. Never make a device connection a prerequisite for rendering a page. Device discovery and connection must be isolated behind optional adapters and must fail closed to the existing manual workflow.
 5. Do not write guessed sensor fields into existing tables. Sensor observations require a reviewed data contract and a confirmed persistence design before implementation.
 6. No automatic device control is in scope. Initial integration is read-only telemetry and evidence capture.
@@ -33,6 +33,30 @@ The current Handler Workspace already uses browser capabilities and existing Sup
 The existing tracker records harvest batches and supporting information, including crop, quantity/unit, harvest date, storage location/method, notes, and photos. It already has an offline harvest queue and a retry/synchronization path.
 
 **Implication:** Existing manual harvest logging remains the fallback and baseline. A sensor must not be allowed to create or modify harvest batches implicitly. Sensor readings should be associated with a known storage location and, where the user explicitly selects it, a harvest batch.
+
+## 2A. Verified hardware integration work already present
+
+The following capabilities are implemented in the repository. They are software integration foundations, not proof that a physical device has been paired or field-tested.
+
+### Shared hardware foundation
+- Typed capability, component-profile, device-state, protocol, and observation contracts cover Farm Handler, Agro Inventory, Post-Harvest, Market Link, AGTrans, AgroForecast, AgroRisk, Aerial Console, and Satellite.
+- A shared adapter registry supports explicit protocol/component matching. It is an in-memory registry, not persistent device enrollment.
+- Shared observation validation covers metric/unit compatibility, finite values, timestamps, coordinate bounds, and quality state. It does not replace server-side device ownership checks.
+
+### Post-Harvest Station
+- Persistent device registration is available through `post_harvest_station_devices`.
+- Device credentials are stored as hashes in a service-role-only credential table; the one-time token is issued at registration and can be revoked.
+- The `post-harvest-station` Edge Function accepts authenticated device readings over HTTPS.
+- Temperature/humidity observations are stored separately from harvest entries, with device ownership, timestamp, sequence number, and per-device idempotency key.
+- Owner-scoped RLS protects device and observation reads; the station panel displays registered devices and recent readings.
+- The generic gateway currently supports temperature and relative humidity. It does not prove compatibility with any particular BLE logger, gateway, or vendor cloud API.
+
+### Existing phone and vehicle telemetry paths
+- Farm Handler uses browser camera and optional browser geolocation for field evidence and attendance.
+- AGTrans already publishes driver phone GPS through a server-validated RPC with driver/job ownership, accuracy and freshness checks, and source provenance.
+- AgroForecast uses browser location and external weather-provider data with location/source provenance. A physical weather-station ingestion adapter is not yet implemented.
+- Aerial Console has a generic read-only JSON telemetry bridge and simulator. Vendor/MAVLink aircraft protocols remain unverified or unavailable until an exact aircraft and protocol are selected.
+- Satellite and Market Link primarily use geospatial/provider data and user-submitted evidence; they do not currently require dedicated user-owned hardware.
 
 ## 3. Phase-one device compatibility matrix
 
@@ -60,14 +84,15 @@ Farm worker's Android phone/tablet
   ├─ Existing AgroClimate web app
   ├─ Existing Handler Workspace and Supabase workflows
   ├─ Camera and browser geolocation
-  └─ Optional future device adapter (not yet implemented)
+  └─ Existing browser camera/geolocation paths; optional vendor adapters remain future work
 
 Storage area
   ├─ Temperature/humidity logger(s)
   └─ Optional sensor gateway
-       └─ Authenticated HTTPS ingestion endpoint (future, after schema review)
-            └─ Validated sensor observation store (future, separate from harvest batches)
-                 └─ Post-Harvest Tracker presentation (future, additive)
+       └─ Existing Post-Harvest Station HTTPS ingestion endpoint
+            └─ Registered device credential + owner-scoped observation store
+                 └─ Post-Harvest Station panel (implemented)
+                      └─ Physical logger/gateway compatibility test (still required)
 ```
 
 The browser app must not become responsible for maintaining a permanent BLE connection or acting as an always-on sensor gateway. For continuous storage monitoring, a logger with local memory or a dedicated gateway is preferred. It should retain readings during internet outages and forward them when connectivity returns.
@@ -103,9 +128,15 @@ This is a proposed contract, not a claim that these columns or tables exist. Bef
 
 ## 7. Implementation sequence and release gates
 
-### Gate 0 — Architecture baseline (this change)
-- Document current app boundaries and hardware compatibility assumptions.
-- No runtime code, route, schema, or UI changes.
+### Gate 0 — Architecture baseline (completed)
+- Current app boundaries and hardware compatibility assumptions are documented.
+- Shared typed hardware profiles, observation contracts, and adapter registry are present in the repository.
+
+### Gate 0B — Initial software integration foundations (partially completed)
+- Post-Harvest Station enrollment, one-time credentials, revocation, HTTPS ingestion, persistence, owner-scoped reads, and station dashboard are implemented.
+- Farm Handler and AGTrans use existing phone camera/GPS capabilities; AGTrans GPS has server-side provenance, accuracy, freshness, and ownership checks.
+- Aerial Console's generic JSON bridge is read-only; actual aircraft protocols are not yet verified.
+- Remaining work is to validate the new ingestion path against a selected physical logger/gateway and close the other component-specific gaps.
 
 ### Gate 1 — Select and verify actual devices
 - Shortlist one Android handset/tablet for Farm Handler field testing.
@@ -123,21 +154,20 @@ This is a proposed contract, not a claim that these columns or tables exist. Bef
 
 **Exit condition:** Existing workflows pass on the target device without regression or blank screens.
 
-### Gate 3 — Sensor proof of concept in isolation
-- Build a separate adapter/prototype against the selected logger or gateway.
+### Gate 3 — Physical sensor proof of concept (not yet completed)
+- Select a logger or gateway only after its exact model, manual, interface, export/API behavior, and calibration requirements are verified.
+- Connect it to the existing Post-Harvest Station HTTPS ingestion contract through its documented gateway/API or a verified adapter.
+- Validate units, timestamps, duplicate handling, local buffering, reconnect behavior, and comparison against a reference instrument.
 - Read-only data collection; no control commands.
-- Validate units, timestamps, duplicate handling, offline buffering, and reconnect behavior using test data.
-- Keep the prototype outside production routes until the contract and security review pass.
 
-**Exit condition:** Repeatable readings are collected and validated without changing existing harvest records.
+**Exit condition:** Repeatable physical readings reach the registered device record and dashboard without changing existing harvest records.
 
-### Gate 4 — Backend and UI integration proposal
-- Inspect live schema and RLS before proposing any migration.
-- Review device enrollment, ownership, ingestion authentication, retention, alert thresholds, and auditability.
-- Add a separate observation model and additive UI only through a reviewed PR.
-- Keep the manual harvest workflow and all existing pages intact.
+### Gate 4 — Extend the integration pattern to other components (in progress)
+- Reuse the existing shared contracts where appropriate, but inspect each component's schema and RLS before proposing additional persistence.
+- Add only the specific enrollment, ingestion, and UI pieces needed by a verified device/use case.
+- Keep Farm Handler manual/browser workflows, inventory entry, existing forecast providers, and all other current pages usable without connected hardware.
 
-**Exit condition:** Tests cover authenticated access, cross-account isolation, malformed payloads, stale data, duplicate events, offline recovery, and fallback behavior.
+**Exit condition:** Each selected component has tested ownership, authentication, malformed-payload rejection, stale-data handling, duplicate protection, offline recovery, and fallback behavior.
 
 ### Gate 5 — Controlled field pilot
 - Pilot with one farm and one storage location.
