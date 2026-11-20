@@ -31,10 +31,13 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   const [harvestEntryId, setHarvestEntryId] = useState("");
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const requestVersion = useRef(0);
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
 
   const refresh = useCallback(async () => {
-    const version = ++requestVersion.current;
     const userId = user?.id;
+    if ((userId ?? null) !== currentUserId.current) return;
+    const version = ++requestVersion.current;
     if (!userId) {
       setDevices([]);
       setObservations([]);
@@ -53,7 +56,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
         .select("id,device_id,harvest_entry_id,observed_at,received_at,temperature_c,humidity_pct,sequence_no")
         .eq("user_id", userId).order("observed_at", { ascending: false }).limit(20),
     ]);
-    if (version !== requestVersion.current) return;
+    if (version !== requestVersion.current || userId !== currentUserId.current) return;
     if (deviceResult.error) toast.error("Could not load station registry", { description: deviceResult.error.message });
     else setDevices((deviceResult.data || []) as unknown as StationDevice[]);
     if (observationResult.error) toast.error("Could not load station readings", { description: observationResult.error.message });
@@ -78,7 +81,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
   const register = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!deviceName.trim() || !hardwareId.trim()) return;
-    if (!user?.id) { toast.error("Sign in to register a station."); return; }
+    if (!user?.id || user.id !== currentUserId.current) { toast.error("Your session changed. Refresh and try again."); return; }
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke("post-harvest-station", {
@@ -100,7 +103,7 @@ export function PostHarvestStationPanel({ entries }: { entries: { id: string; cr
 
   const revokeDevice = async (device: StationDevice) => {
     if (!confirm(`Revoke access for "${device.device_name}"? The station will no longer be able to upload readings.`)) return;
-    if (!user?.id) { toast.error("Sign in to revoke a station."); return; }
+    if (!user?.id || user.id !== currentUserId.current) { toast.error("Your session changed. Refresh and try again."); return; }
     try {
       const { data, error } = await supabase.functions.invoke("post-harvest-station", {
         body: { action: "revoke", device_id: device.id },
