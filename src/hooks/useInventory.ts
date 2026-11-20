@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { validateInventoryRecord, type InventoryTable } from "@/lib/inventoryValidation";
 
 export interface InventoryItem {
   id: string;
@@ -95,8 +96,10 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   const [harvestLosses, setHarvestLosses] = useState<HarvestLoss[]>([]);
   const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const fetchAll = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!user) {
       setInventoryItems([]);
       setLaborRecords([]);
@@ -124,6 +127,7 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
         supabase.from("harvest_losses").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
         supabase.from("sales_records").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       ]);
+      if (version !== requestVersion.current) return;
       const failures = [inv, lab, land, harv, loss, sales].filter((result) => result.error);
       if (failures.length) {
         toast({
@@ -138,12 +142,20 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
       setHarvestRecords((harv.data || []) as any);
       setHarvestLosses((loss.data || []) as any);
       setSalesRecords((sales.data || []) as any);
+    } catch (error) {
+      if (version === requestVersion.current) {
+        toast({ title: "Inventory could not be refreshed", description: error instanceof Error ? error.message : "Check your connection and retry.", variant: "destructive" });
+        setInventoryItems([]); setLaborRecords([]); setLandCosts([]); setHarvestRecords([]); setHarvestLosses([]); setSalesRecords([]);
+      }
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [user]);
+  }, [user?.id, toast]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    void fetchAll();
+    return () => { requestVersion.current += 1; };
+  }, [fetchAll]);
 
   // Filter helper
   const applyFilter = <T extends { season?: string | null; crop_name?: string | null; farm_plot?: string | null }>(items: T[]) => {
@@ -158,7 +170,11 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   const filtered = {
     inventoryItems: applyFilter(inventoryItems),
     laborRecords: applyFilter(laborRecords),
-    landCosts: filterSeason ? landCosts.filter(l => l.season === filterSeason) : landCosts,
+    landCosts: landCosts.filter((land) => {
+      if (filterSeason && land.season !== filterSeason) return false;
+      if (filterPlot && land.farm_plot !== filterPlot) return false;
+      return true;
+    }),
     harvestRecords: applyFilter(harvestRecords),
     harvestLosses: applyFilter(harvestLosses),
     salesRecords: applyFilter(salesRecords),
@@ -178,73 +194,57 @@ export function useInventory(filterSeason?: string, filterCrop?: string, filterP
   };
 
   // CRUD helpers
-const addRecord = async (table: string, data: any) => {
-  if (!user) return;
-
-  const payload = {
-    ...data,
-    user_id: user.id,
-  };
-
-  const { error } = await supabase
-    .from(table as any)
-    .insert(payload);
-
-  if (error) {
-    toast({
-      title: "Error adding record",
-      description: error.message,
-      variant: "destructive",
-    });
-    return;
+const addRecord = async (table: InventoryTable, data: Record<string, unknown>): Promise<boolean> => {
+  if (!user) {
+    toast({ title: "Sign in required", description: "Sign in before saving farm records.", variant: "destructive" });
+    return false;
   }
-
+  const validationError = validateInventoryRecord(table, data);
+  if (validationError) {
+    toast({ title: "Check the record", description: validationError, variant: "destructive" });
+    return false;
+  }
+  const { error } = await supabase.from(table as any).insert({ ...data, user_id: user.id } as any);
+  if (error) {
+    toast({ title: "Error adding record", description: error.message, variant: "destructive" });
+    return false;
+  }
   toast({ title: "Added successfully" });
-  fetchAll();
+  await fetchAll();
+  return true;
 };
 
-const updateRecord = async (table: string, id: string, data: any) => {
-  if (!user) return;
-
-  const { error } = await supabase
-    .from(table as any)
-    .update(data)
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) {
-    toast({
-      title: "Error updating record",
-      description: error.message,
-      variant: "destructive",
-    });
-    return;
-  }
-
-  toast({ title: "Updated successfully" });
-  fetchAll();
-};
-
-  const deleteRecord = async (table: string, id: string) => {
+const updateRecord = async (table: InventoryTable, id: string, data: Record<string, unknown>) => {
   if (!user || !id) return;
-
-  const { error } = await supabase
-    .from(table as any)
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) {
-    toast({
-      title: "Error deleting record",
-      description: error.message,
-      variant: "destructive",
-    });
+  const safePatch = { ...data };
+  delete safePatch.id;
+  delete safePatch.user_id;
+  delete safePatch.created_at;
+  delete safePatch.updated_at;
+  const validationError = validateInventoryRecord(table, safePatch, true);
+  if (validationError) {
+    toast({ title: "Check the record", description: validationError, variant: "destructive" });
     return;
   }
+  const { error } = await supabase.from(table as any).update(safePatch as any)
+    .eq("id", id).eq("user_id", user.id);
+  if (error) {
+    toast({ title: "Error updating record", description: error.message, variant: "destructive" });
+    return;
+  }
+  toast({ title: "Updated successfully" });
+  await fetchAll();
+};
 
+const deleteRecord = async (table: InventoryTable, id: string) => {
+  if (!user || !id) return;
+  const { error } = await supabase.from(table as any).delete().eq("id", id).eq("user_id", user.id);
+  if (error) {
+    toast({ title: "Error deleting record", description: error.message, variant: "destructive" });
+    return;
+  }
   toast({ title: "Deleted successfully" });
-  fetchAll();
+  await fetchAll();
 };
 
   // Get unique values for filters
