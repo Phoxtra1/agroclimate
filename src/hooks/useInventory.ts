@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { parseInventoryNumericValue } from "@/lib/inventoryValidation";
 
 export interface InventoryItem {
   id: string;
@@ -163,8 +164,8 @@ export function normalizeInventoryRecord(table: InventoryTable, data: Record<str
     if (payload[field] === "" || payload[field] == null) {
       throw new Error(`${field.replace(/_/g, " ")} must be a non-negative number.`);
     }
-    const value = Number(payload[field]);
-    if (!Number.isFinite(value) || value < 0) {
+    const value = parseInventoryNumericValue(payload[field]);
+    if (value === null || value < 0) {
       throw new Error(`${field.replace(/_/g, " ")} must be a non-negative number.`);
     }
     if (POSITIVE_NUMERIC_FIELDS[table]?.includes(field) && value <= 0) {
