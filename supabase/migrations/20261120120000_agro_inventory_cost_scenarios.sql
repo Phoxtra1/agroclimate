@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.agri_cost_scenarios (
   estimated_yield_units numeric NOT NULL DEFAULT 0 CHECK (estimated_yield_units >= 0),
   unit text NOT NULL DEFAULT 'kg',
   market_price_per_unit numeric NOT NULL DEFAULT 0 CHECK (market_price_per_unit >= 0),
-  currency_code text NOT NULL DEFAULT 'USD' CHECK (char_length(currency_code) = 3),
+  currency_code text CHECK (currency_code IS NULL OR char_length(currency_code) = 3),
   data_source_type text NOT NULL DEFAULT 'estimated'
     CHECK (data_source_type IN ('user_entered', 'estimated', 'ai_derived')),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.agri_cost_scenarios (
 ALTER TABLE public.agri_cost_scenarios
   ADD COLUMN IF NOT EXISTS other_input_cost numeric NOT NULL DEFAULT 0 CHECK (other_input_cost >= 0);
 ALTER TABLE public.agri_cost_scenarios
-  ADD COLUMN IF NOT EXISTS currency_code text NOT NULL DEFAULT 'USD' CHECK (char_length(currency_code) = 3);
+  ADD COLUMN IF NOT EXISTS currency_code text CHECK (currency_code IS NULL OR char_length(currency_code) = 3);
 
 ALTER TABLE public.agri_cost_scenarios ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.agri_cost_scenarios FROM PUBLIC, anon;
