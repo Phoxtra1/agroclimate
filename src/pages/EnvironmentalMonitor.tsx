@@ -1168,9 +1168,9 @@ export default function EnvironmentalMonitor() {
     );
   }
 
-  const locationLabel = position.locationName !== "Unknown"
-    ? position.locationName
-    : `${position.lat.toFixed(2)}°, ${position.lon.toFixed(2)}°`;
+  const locationLabel = assessmentTarget.locationName !== "Unknown"
+    ? assessmentTarget.locationName
+    : `${assessmentTarget.lat.toFixed(2)}°, ${assessmentTarget.lon.toFixed(2)}°`;
 
   // Risk display configuration
   const overallScore = aiAgroRisk?.vulnerabilityScore ?? agroRiskData?.vulnerabilityScore ?? 0;
