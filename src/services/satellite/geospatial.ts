@@ -162,54 +162,202 @@ export function toPointGeometry(point: GeoPoint): GeoJSON.Point {
   return { type: "Point", coordinates: [point.lon, point.lat] };
 }
 
+function toFarmBoundaryGeometry(points: [number, number][]): GeoJSON.Polygon {
+  if (!Array.isArray(points) || points.length < 3) {
+    throw new Error("A farm boundary needs at least three points.");
+  }
+  if (points.some(([lat, lon]) =>
+    !Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180
+  )) {
+    throw new Error("Farm boundary contains invalid WGS84 coordinates.");
+  }
+  const unique = new Set(points.map(([lat, lon]) => `${lat.toFixed(7)},${lon.toFixed(7)}`));
+  if (unique.size < 3) throw new Error("Farm boundary needs at least three distinct points.");
+  const ring: [number, number][] = points.map(([lat, lon]) => [lon, lat]);
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+  return { type: "Polygon", coordinates: [ring] };
+}
+
 export async function saveFarm(input: {
   name: string;
   location: GeoPoint;
   user_id?: string;
+  boundary?: [number, number][];
 }) {
   const { data: userData, error: authError } = await supabase.auth.getUser();
   if (authError || !userData.user) throw new Error("Sign in to save a farm location.");
   if (input.user_id && input.user_id !== userData.user.id) {
     throw new Error("You can only save a farm location under your own account.");
   }
+  const name = input.name.trim();
+  if (!name) throw new Error("Farm name is required.");
   const point = toPointGeometry(input.location);
+  const boundaryGeometry = input.boundary ? toFarmBoundaryGeometry(input.boundary) : null;
+
   const { data: farm, error: farmError } = await (supabase.from("farms" as any) as any).insert({
     user_id: userData.user.id,
-    name: input.name.trim(),
+    name,
     lat: point.coordinates[1],
     lon: point.coordinates[0],
   }).select("*").single();
   if (farmError) throw new Error(farmError.message || "Could not save farm location.");
 
-  const { data: feature, error: featureError } = await (supabase.from("geo_features" as any) as any).insert({
-    owner_id: userData.user.id,
-    feature_type: "farm_location",
-    name: input.name.trim(),
-    visibility: "private",
-    geojson: point,
-    properties: { farm_record_id: String(farm.id), location_method: "user_supplied" },
-    source_name: "AgroClimate AgroRisk farm registration",
-    data_quality: "unverified",
-  }).select("id").single();
-  if (featureError || !feature) {
-    await (supabase.from("farms" as any) as any).delete().eq("id", farm.id);
-    throw new Error(featureError?.message || "Farm location was saved but could not be linked to the shared Satellite map.");
-  }
+  let pointFeatureId: string | null = null;
+  try {
+    const { data: pointFeature, error: pointError } = await (supabase.from("geo_features" as any) as any).insert({
+      owner_id: userData.user.id,
+      feature_type: "farm_location",
+      name,
+      visibility: "private",
+      geojson: point,
+      properties: { farm_record_id: String(farm.id), location_method: "user_supplied" },
+      source_name: "AgroClimate AgroRisk farm registration",
+      data_quality: "unverified",
+    }).select("id").single();
+    if (pointError || !pointFeature) throw new Error(pointError?.message || "Could not save farm map location.");
+    pointFeatureId = pointFeature.id;
 
-  const { data: linkedFarm, error: linkError } = await (supabase.from("farms" as any) as any)
-    .update({ geo_feature_id: feature.id }).eq("id", farm.id).select("*").single();
-  if (linkError) {
-    await (supabase.from("geo_features" as any) as any).delete().eq("id", feature.id);
-    await (supabase.from("farms" as any) as any).delete().eq("id", farm.id);
-    throw new Error(linkError.message || "Could not link the farm to the shared Satellite map.");
+    if (boundaryGeometry) {
+      const { error: boundaryError } = await (supabase.from("geo_features" as any) as any).insert({
+        owner_id: userData.user.id,
+        feature_type: "farm_boundary",
+        name: `${name} boundary`,
+        visibility: "private",
+        geojson: boundaryGeometry,
+        properties: { farm_record_id: String(farm.id), boundary_method: "user_drawn" },
+        source_name: "User-drawn AgroRisk farm boundary",
+        data_quality: "unverified",
+      });
+      if (boundaryError) throw new Error(boundaryError.message || "Could not save farm boundary.");
+    }
+
+    const { data: linkedFarm, error: linkError } = await (supabase.from("farms" as any) as any)
+      .update({ geo_feature_id: pointFeatureId }).eq("id", farm.id).eq("user_id", userData.user.id).select("*").single();
+    if (linkError) throw new Error(linkError.message || "Could not link the farm to the shared Satellite map.");
+    return linkedFarm;
+  } catch (error) {
+    if (pointFeatureId) {
+      await (supabase.from("geo_features" as any) as any).delete().eq("id", pointFeatureId).eq("owner_id", userData.user.id);
+    }
+    await (supabase.from("geo_features" as any) as any).delete()
+      .eq("owner_id", userData.user.id).eq("feature_type", "farm_boundary")
+      .contains("properties", { farm_record_id: String(farm.id) });
+    await (supabase.from("farms" as any) as any).delete().eq("id", farm.id).eq("user_id", userData.user.id);
+    throw error;
   }
-  return linkedFarm;
 }
 
 export async function listFarms(userId?: string) {
-  let query = (supabase.from("farms" as any) as any).select("*").order("created_at", { ascending: false });
-  if (userId) query = query.eq("user_id", userId);
-  const { data, error } = await query;
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) return [];
+  if (userId && userId !== userData.user.id) throw new Error("You can only list your own farms.");
+  const ownerId = userData.user.id;
+  const { data: farms, error } = await (supabase.from("farms" as any) as any)
+    .select("*").eq("user_id", ownerId).order("created_at", { ascending: false });
   if (error) throw new Error(error.message || "Could not load farm locations.");
-  return data ?? [];
+  if (!farms?.length) return [];
+
+  const { data: boundaries, error: boundaryError } = await (supabase.from("geo_features" as any) as any)
+    .select("properties,geojson").eq("owner_id", ownerId).eq("feature_type", "farm_boundary");
+  if (boundaryError) console.warn("[AgroRisk] Farm boundaries could not be loaded:", boundaryError.message);
+
+  return farms.map((farm: any) => {
+    const feature = (boundaries || []).find((item: any) => item.properties?.farm_record_id === String(farm.id));
+    const ring = feature?.geojson?.type === "Polygon" ? feature.geojson.coordinates?.[0] : null;
+    const boundary = Array.isArray(ring)
+      ? ring.slice(0, -1).map(([lon, lat]: [number, number]) => [lat, lon] as [number, number])
+      : undefined;
+    return { ...farm, boundary };
+  });
+}
+
+export async function deleteFarm(farmId: string) {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) throw new Error("Sign in to delete a farm.");
+  const ownerId = userData.user.id;
+  const { data: farm, error: readError } = await (supabase.from("farms" as any) as any)
+    .select("id,geo_feature_id").eq("id", farmId).eq("user_id", ownerId).maybeSingle();
+  if (readError) throw new Error(readError.message);
+  if (!farm) throw new Error("Farm not found or access denied.");
+
+  const { error: deleteError } = await (supabase.from("farms" as any) as any)
+    .delete().eq("id", farmId).eq("user_id", ownerId);
+  if (deleteError) throw new Error(deleteError.message || "Could not delete farm.");
+
+  if (farm.geo_feature_id) {
+    await (supabase.from("geo_features" as any) as any).delete()
+      .eq("id", farm.geo_feature_id).eq("owner_id", ownerId);
+  }
+  const { error: boundaryError } = await (supabase.from("geo_features" as any) as any).delete()
+    .eq("owner_id", ownerId).eq("feature_type", "farm_boundary")
+    .contains("properties", { farm_record_id: String(farmId) });
+  if (boundaryError) console.warn("[AgroRisk] Deleted farm but could not remove boundary feature:", boundaryError.message);
+}
+
+export type AgroRiskIncidentType = "Flooding" | "Waterlogging" | "Soil Erosion" | "Landslide" | "Drought";
+
+export interface AgroRiskIncidentRecord {
+  id: string;
+  user_id: string;
+  farm_id: string | null;
+  lat: number;
+  lon: number;
+  incident_type: AgroRiskIncidentType;
+  description: string;
+  status: "unverified";
+  source: "user_report";
+  reported_at: string;
+  created_at: string;
+}
+
+export async function saveAgroRiskIncident(input: {
+  lat: number;
+  lon: number;
+  type: AgroRiskIncidentType;
+  description: string;
+  farmId?: string;
+}) {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) throw new Error("Sign in to submit an incident report.");
+  if (!Number.isFinite(input.lat) || input.lat < -90 || input.lat > 90 ||
+      !Number.isFinite(input.lon) || input.lon < -180 || input.lon > 180) {
+    throw new Error("Incident coordinates are invalid.");
+  }
+  const description = input.description.trim();
+  if (!description || description.length > 2000) throw new Error("Incident description must be 1–2,000 characters.");
+
+  const { data, error } = await (supabase.from("agro_risk_incidents" as any) as any).insert({
+    user_id: userData.user.id,
+    farm_id: input.farmId ?? null,
+    lat: input.lat,
+    lon: input.lon,
+    incident_type: input.type,
+    description,
+    status: "unverified",
+    source: "user_report",
+    reported_at: new Date().toISOString(),
+  }).select("*").single();
+  if (error) throw new Error(error.message || "Could not save incident report.");
+  return data as AgroRiskIncidentRecord;
+}
+
+export async function listAgroRiskIncidents(userId?: string): Promise<AgroRiskIncidentRecord[]> {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) return [];
+  if (userId && userId !== userData.user.id) throw new Error("You can only list your own incident reports.");
+  const { data, error } = await (supabase.from("agro_risk_incidents" as any) as any)
+    .select("*").eq("user_id", userData.user.id).order("reported_at", { ascending: false }).limit(200);
+  if (error) throw new Error(error.message || "Could not load incident reports.");
+  return (data || []) as AgroRiskIncidentRecord[];
+}
+
+export async function deleteAgroRiskIncident(incidentId: string) {
+  const { data: userData, error: authError } = await supabase.auth.getUser();
+  if (authError || !userData.user) throw new Error("Sign in to delete an incident report.");
+  const { data, error } = await (supabase.from("agro_risk_incidents" as any) as any)
+    .delete().eq("id", incidentId).eq("user_id", userData.user.id).select("id").maybeSingle();
+  if (error) throw new Error(error.message || "Could not delete incident report.");
+  if (!data) throw new Error("Incident report not found or access denied.");
 }
