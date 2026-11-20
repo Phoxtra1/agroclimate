@@ -80,6 +80,32 @@ describe("Agro Inventory record validation", () => {
     expect(() => normalizeInventoryRecord("labor_records", { task_description: "Weeding", worker_count: "0", days_worked: "2", cost_per_day: "20" }, true)).toThrow("worker count must be greater than zero");
   });
 
+  it("rejects whitespace, booleans and objects as numeric measurements", () => {
+    expect(validateInventoryRecord("inventory_items", {
+      item_name: "Seed", item_type: "input", unit: "kg", quantity: "   ",
+    })).toContain("valid non-negative number");
+    expect(validateInventoryRecord("inventory_items", {
+      item_name: "Seed", item_type: "input", unit: "kg", quantity: true,
+    })).toContain("valid non-negative number");
+    expect(validateInventoryRecord("inventory_items", {
+      item_name: "Seed", item_type: "input", unit: "kg", quantity: { value: 12 },
+    })).toContain("valid non-negative number");
+    expect(validateInventoryRecord("inventory_items", {
+      item_name: "Seed", item_type: "input", unit: "kg", quantity: " 12.5 ",
+    })).toBeNull();
+  });
+
+  it("does not coerce whitespace or non-string non-number values into inventory quantities", () => {
+    for (const invalid of ["   ", true, false, null, { value: 5 }]) {
+      expect(() => normalizeInventoryRecord("inventory_items", {
+        item_name: "Seed", item_type: "input", quantity: invalid, price_per_unit: "2",
+      }, true)).toThrow("quantity must be a non-negative number");
+    }
+    expect(() => normalizeInventoryRecord("inventory_items", {
+      item_name: "Seed", item_type: "input", quantity: " 12.5 ", price_per_unit: "2",
+    }, true)).not.toThrow();
+  });
+
   it("requires whole worker counts while permitting zero-cost records", () => {
     expect(() => normalizeInventoryRecord("labor_records", {
       task_description: "Harvesting", worker_count: "1.5", days_worked: "2", cost_per_day: "50",
