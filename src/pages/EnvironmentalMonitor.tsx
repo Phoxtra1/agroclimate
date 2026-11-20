@@ -619,6 +619,7 @@ export default function EnvironmentalMonitor() {
   const envState = useEnvironmentState(forecast);
 
   const currentUserId = useRef<string | null>(user?.id ?? null);
+  const previousUserId = useRef<string | null>(user?.id ?? null);
   currentUserId.current = user?.id ?? null;
   const farmRequestVersion = useRef(0);
   const incidentRequestVersion = useRef(0);
@@ -737,6 +738,25 @@ export default function EnvironmentalMonitor() {
       setIncidents(localIncidents);
     }
   }, [user?.id]);
+
+  useEffect(() => {
+    const nextUserId = user?.id ?? null;
+    if (previousUserId.current === nextUserId) return;
+    previousUserId.current = nextUserId;
+    setFarms([]);
+    setIncidents([]);
+    setSelectedFarmId("");
+    setDrawnBoundary([]);
+    setAgroRiskData(null);
+    setAiAgroRisk(null);
+    setAiEnv(null);
+    setAssessmentTarget({
+      lat: position.lat,
+      lon: position.lon,
+      locationName: position.locationName,
+      manual: false,
+    });
+  }, [user?.id, position.lat, position.lon, position.locationName]);
 
   useEffect(() => {
     void reloadFarms();
