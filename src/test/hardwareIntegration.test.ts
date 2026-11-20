@@ -65,6 +65,35 @@ describe("AgroClimate hardware integration contracts", () => {
     );
   });
 
+  it("rejects future measurement timestamps beyond the allowed clock skew", () => {
+    expect(validateDeviceObservation({
+      ...observation,
+      measuredAt: "2026-11-20T08:08:00Z",
+    }, Date.parse("2026-11-20T08:02:00Z")).issues).toContain(
+      "measuredAt cannot be more than five minutes in the future.",
+    );
+  });
+
+  it("bounds identifiers and metadata payloads", () => {
+    const tooLarge = {
+      ...observation,
+      eventId: "e".repeat(161),
+      metadata: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`key-${index}`, "value"])),
+    };
+    const result = validateDeviceObservation(tooLarge, Date.parse("2026-11-20T08:02:00Z"));
+    expect(result.issues).toContain("eventId is required and must not exceed 160 characters.");
+    expect(result.issues).toContain("metadata cannot contain more than 20 entries.");
+  });
+
+  it("rejects non-finite metadata numbers and oversized metadata strings", () => {
+    const result = validateDeviceObservation({
+      ...observation,
+      metadata: { sensor_value: Number.POSITIVE_INFINITY, note: "x".repeat(257) },
+    }, Date.parse("2026-11-20T08:02:00Z"));
+    expect(result.issues).toContain("metadata numbers must be finite.");
+    expect(result.issues).toContain("metadata string values must not exceed 256 characters.");
+  });
+
   it("rejects observations marked rejected and future receipt timestamps", () => {
     expect(validateDeviceObservation({ ...observation, quality: "rejected" }).valid).toBe(false);
     expect(validateDeviceObservation({
