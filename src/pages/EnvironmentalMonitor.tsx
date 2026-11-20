@@ -871,6 +871,10 @@ export default function EnvironmentalMonitor() {
   // USER ACTIONS: REGISTER FARMS & REPORT HAZARDS
   // ---------------------------------------------------------------------------
   const handleRegisterFarm = async () => {
+    if (!user?.id) {
+      alert("Sign in to save a farm location.");
+      return;
+    }
     if (!farmName.trim()) return;
     if (activeMode === "boundary" && drawnBoundary.length < 3) {
       alert("Please draw at least 3 vertices on the map for your farm boundary.");
@@ -879,46 +883,54 @@ export default function EnvironmentalMonitor() {
     if (!clickPoint) return;
 
     setSavingFarm(true);
-    const newId = `farm_${Date.now()}`;
-    const newFarm: SavedFarm = {
-      id: newId,
-      name: farmName,
-      lat: clickPoint[0],
-      lon: clickPoint[1],
-      boundary: activeMode === "boundary" ? drawnBoundary : undefined
-    };
-
+    const boundary = activeMode === "boundary" ? drawnBoundary : undefined;
+    let savedFarm: SavedFarm;
     try {
-      // Try save to Supabase DB
-      await dbSaveFarm({
-        name: farmName,
+      const dbFarm = await dbSaveFarm({
+        name: farmName.trim(),
         location: { lat: clickPoint[0], lon: clickPoint[1] },
-        user_id: undefined // resolved in edge/provider
+        user_id: user.id,
+        boundary,
       });
-
-      // Save boundary locally mapping to it
-      if (activeMode === "boundary") {
-        const localBoundaries = JSON.parse(localStorage.getItem("agrorisk_farm_boundaries") || "{}");
-        localBoundaries[newId] = drawnBoundary;
-        localStorage.setItem("agrorisk_farm_boundaries", JSON.stringify(localBoundaries));
-      }
-    } catch (err) {
-      console.warn("DB save farm failed, storing farm fully locally:", err);
-      const localFarms = JSON.parse(localStorage.getItem("agrorisk_local_farms") || "[]");
-      localFarms.push(newFarm);
-      localStorage.setItem("agrorisk_local_farms", JSON.stringify(localFarms));
+      savedFarm = {
+        id: dbFarm.id,
+        name: dbFarm.name || farmName.trim(),
+        lat: Number(dbFarm.lat),
+        lon: Number(dbFarm.lon),
+        boundary,
+      };
+    } catch (error) {
+      console.warn("[AgroRisk] Database farm save failed; storing a private local fallback:", error);
+      savedFarm = {
+        id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: farmName.trim(),
+        lat: clickPoint[0],
+        lon: clickPoint[1],
+        boundary,
+      };
+      const localKey = userStorageKey("local_farms", user.id);
+      const localFarms = readUserStorage<SavedFarm[]>(localKey, []);
+      writeUserStorage(localKey, [savedFarm, ...localFarms]);
+      alert("Farm saved on this device only. It could not be synchronized to your account yet.");
+    } finally {
+      setSavingFarm(false);
     }
 
     setFarmName("");
-    if (activeMode === "boundary") {
-      setDrawnBoundary([]);
-    }
-    setSavingFarm(false);
-    setSelectedFarmId(newId);
-    reloadFarms();
+    setDrawnBoundary([]);
+    setSelectedFarmId(savedFarm.id);
+    setMapCenter([savedFarm.lat, savedFarm.lon]);
+    setClickPoint([savedFarm.lat, savedFarm.lon]);
+    setClickLocationName(savedFarm.name);
+    updateRiskAssessment(savedFarm.lat, savedFarm.lon, savedFarm.boundary, savedFarm.name);
+    await reloadFarms();
   };
 
-  const handleReportIncident = () => {
+  const handleReportIncident = async () => {
+    if (!user?.id) {
+      alert("Sign in to submit an incident report.");
+      return;
+    }
     if (!clickPoint) {
       alert("Please click a location on the map to specify the incident point.");
       return;
@@ -928,44 +940,73 @@ export default function EnvironmentalMonitor() {
       return;
     }
 
-    const newInc: IncidentReport = {
-      id: `incident_${Date.now()}`,
-      lat: clickPoint[0],
-      lon: clickPoint[1],
-      type: incidentType,
-      description: incidentDesc,
-      date: new Date().toLocaleDateString()
-    };
+    const farmId = selectedFarmId && !selectedFarmId.startsWith("local_") ? selectedFarmId : undefined;
+    let newIncident: IncidentReport;
+    try {
+      const saved = await dbSaveIncident({
+        lat: clickPoint[0],
+        lon: clickPoint[1],
+        type: incidentType,
+        description: incidentDesc.trim(),
+        farmId,
+      });
+      newIncident = {
+        id: saved.id,
+        lat: Number(saved.lat),
+        lon: Number(saved.lon),
+        type: saved.incident_type,
+        description: saved.description,
+        date: saved.reported_at,
+        status: "unverified",
+        source: "user_report",
+      };
+    } catch (error) {
+      console.warn("[AgroRisk] Incident report database save failed; storing a private local fallback:", error);
+      newIncident = {
+        id: `local_incident_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        lat: clickPoint[0],
+        lon: clickPoint[1],
+        type: incidentType,
+        description: incidentDesc.trim(),
+        date: new Date().toISOString(),
+        status: "unverified",
+        source: "user_report",
+      };
+      const localKey = userStorageKey("incidents", user.id);
+      const localIncidents = readUserStorage<IncidentReport[]>(localKey, []);
+      writeUserStorage(localKey, [newIncident, ...localIncidents]);
+      alert("Incident report saved on this device only. It could not be synchronized to your account yet.");
+    }
 
-    const localInc = JSON.parse(localStorage.getItem("agrorisk_incidents") || "[]");
-    localInc.push(newInc);
-    localStorage.setItem("agrorisk_incidents", JSON.stringify(localInc));
-
+    setIncidents((previous) => [newIncident, ...previous.filter((item) => item.id !== newIncident.id)]);
     setIncidentDesc("");
-    reloadIncidents();
-
-    // Re-evaluate risk for current coordinate with new incident nearby
     updateRiskAssessment(clickPoint[0], clickPoint[1], drawnBoundary, clickLocationName);
   };
 
-  const handleDeleteFarm = (id: string, e: React.MouseEvent) => {
+  const handleDeleteFarm = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this farm?")) return;
+    if (!user?.id || !confirm("Are you sure you want to delete this farm?")) return;
+    try {
+      if (!id.startsWith("local_")) await dbDeleteFarm(id);
+      const localKey = userStorageKey("local_farms", user.id);
+      const localFarms = readUserStorage<SavedFarm[]>(localKey, []);
+      writeUserStorage(localKey, localFarms.filter((farm) => farm.id !== id));
+      setFarms((previous) => previous.filter((farm) => farm.id !== id));
 
-    // Delete boundary
-    const localBoundaries = JSON.parse(localStorage.getItem("agrorisk_farm_boundaries") || "{}");
-    delete localBoundaries[id];
-    localStorage.setItem("agrorisk_farm_boundaries", JSON.stringify(localBoundaries));
-
-    // Delete local farm if local
-    const localFarms = JSON.parse(localStorage.getItem("agrorisk_local_farms") || "[]");
-    const filteredLocal = localFarms.filter((f: any) => f.id !== id);
-    localStorage.setItem("agrorisk_local_farms", JSON.stringify(filteredLocal));
-
-    reloadFarms();
-    if (selectedFarmId === id) {
-      setSelectedFarmId("");
-      setAgroRiskData(null);
+      if (selectedFarmId === id) {
+        setSelectedFarmId("");
+        setDrawnBoundary([]);
+        setAgroRiskData(null);
+        setAiAgroRisk(null);
+        setAssessmentTarget({
+          lat: position.lat,
+          lon: position.lon,
+          locationName: position.locationName,
+          manual: false,
+        });
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not delete farm.");
     }
   };
 
@@ -975,11 +1016,7 @@ export default function EnvironmentalMonitor() {
     setClickPoint([farm.lat, farm.lon]);
     setClickLocationName(farm.name);
     setMapZoom(14);
-    if (farm.boundary) {
-      setDrawnBoundary(farm.boundary);
-    } else {
-      setDrawnBoundary([]);
-    }
+    setDrawnBoundary(farm.boundary || []);
     updateRiskAssessment(farm.lat, farm.lon, farm.boundary, farm.name);
   };
 
