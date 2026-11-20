@@ -161,6 +161,18 @@ Deno.serve(async (req) => {
         console.error("[post-harvest-station] duplicate lookup failed", lookupError);
         return json({ error: "The duplicate reading could not be confirmed. Retry with the same idempotency_key." }, 503);
       }
+      // An idempotency key may be replayed only for the exact same observation.
+      // Reusing a key with altered measurements must not be silently accepted
+      // as a successful retry, because that would conceal conflicting device data.
+      const sameObservation =
+        existing.harvest_entry_id === (harvestEntryId || null) &&
+        Date.parse(existing.observed_at) === observedAt.getTime() &&
+        Number(existing.temperature_c) === temperature &&
+        Number(existing.humidity_pct) === humidity &&
+        (existing.sequence_no == null ? null : Number(existing.sequence_no)) === sequenceNo;
+      if (!sameObservation) {
+        return json({ error: "This idempotency_key has already been used for a different sensor reading." }, 409);
+      }
       const { error: touchError } = await admin.from("post_harvest_station_devices")
         .update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
       if (touchError) return json({ error: "Duplicate reading is stored, but device signal time could not be refreshed" }, 500);
