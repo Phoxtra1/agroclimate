@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { SharedDevicePanel } from "@/components/hardware/SharedDevicePanel";
 import { useInventory } from "@/hooks/useInventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -785,6 +786,7 @@ export default function AgroInventory() {
           </div>
         </CardContent>
       </Card>
+      <SharedDevicePanel component="agro-inventory" />
     </div>
   );
 }
