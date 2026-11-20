@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { canTransitionDeliveryJob } from "@/lib/agtrans/statusFlow";
 
 /* Many Supabase dynamic queries need runtime casts; disable the explicit-any rule for this file. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -218,6 +219,7 @@ export function useAGTrans() {
   const seenRequestsRef = useRef<Set<string>>(new Set());
   const initialLoadRef = useRef(true);
   const activeUserIdRef = useRef<string | null>(null);
+  const loadVersionRef = useRef(0);
 
   const safeSelect = async <T,>(table: string, opts?: { order?: boolean; limit?: number }) => {
     try {
@@ -237,6 +239,7 @@ export function useAGTrans() {
   };
 
   const loadData = useCallback(async () => {
+    const version = ++loadVersionRef.current;
     if (!user) {
       setRequests([]);
       setDeliveryJobs([]);
@@ -269,9 +272,11 @@ export function useAGTrans() {
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
+      if (version !== loadVersionRef.current) return;
       setDriverProfile(dp ? (dp as unknown as DriverProfile) : null);
 
       const reqs = await safeSelect<TransportRequest>("agtrans_requests", { order: true, limit: 100 });
+      if (version !== loadVersionRef.current) return;
       setRequests(reqs);
 
       if (!initialLoadRef.current) {
@@ -287,19 +292,22 @@ export function useAGTrans() {
       initialLoadRef.current = false;
 
       const drvs = await safeSelect<DriverProfile>("agtrans_drivers");
+      if (version !== loadVersionRef.current) return;
       setDrivers(drvs);
 
       const jobs = await safeSelect<DeliveryJob>("delivery_jobs", { order: true });
+      if (version !== loadVersionRef.current) return;
       setDeliveryJobs(jobs);
 
       const tracks = await safeSelect<TrackingSession>("tracking_sessions", { order: true });
+      if (version !== loadVersionRef.current) return;
       setTrackingSessions(tracks);
     } catch (err) {
       console.error("Error loading AGTrans data:", err);
     } finally {
-      setLoading(false);
+      if (version === loadVersionRef.current) setLoading(false);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     loadData();
@@ -326,7 +334,10 @@ export function useAGTrans() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tracking_sessions" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "transport_agreements" }, loadData)
       .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch { /* ignore */ } };
+    return () => {
+      loadVersionRef.current += 1;
+      try { supabase.removeChannel(ch); } catch { /* ignore */ }
+    };
   }, [user, loadData]);
 
   const notifyUser = async (userId: string, type: string, title: string, message: string, data?: any) => {
@@ -463,21 +474,10 @@ export function useAGTrans() {
         ...driverPayload,
         license_url,
         user_id: user.id,
-        verification_status: "pending",
-        approval_status: "pending",
         offer_status: "paused",
         availability_status: "offline",
-        admin_suspended: false,
-        reliability_score: 100,
-        completed_deliveries: 0,
-        late_deliveries: 0,
-        cancellations: 0,
-        disputes: 0,
-        driver_rating: 0,
-        rating_count: 0,
         vehicle_features: [],
         cargo_types_accepted: [],
-        remaining_capacity: 0,
       } as any, { onConflict: "user_id" })
       .select()
       .single();
@@ -503,10 +503,12 @@ export function useAGTrans() {
 
   const updateDriverProfile = async (payload: Partial<DriverProfile>) => {
     if (!user || !driverProfile) throw new Error("Not authenticated");
+    const safePayload = { ...payload } as Record<string, unknown>;
+    for (const key of ["id", "user_id", "verification_status", "approval_status", "rejection_reason", "admin_suspended", "reliability_score", "completed_deliveries", "late_deliveries", "cancellations", "disputes", "driver_rating", "rating_count", "remaining_capacity", "created_at", "updated_at"]) delete safePayload[key];
 
     const { data, error } = await supabase
       .from("agtrans_drivers")
-      .update(payload as any)
+      .update(safePayload as any)
       .eq("user_id", user.id)
       .select()
       .single();
@@ -527,8 +529,6 @@ export function useAGTrans() {
     const capacity = Number(values.vehicle_capacity_kg || driverProfile?.vehicle_capacity_kg || 0);
     return {
       driver_photo_url: cleanText(values.driver_photo_url) || driverProfile?.driver_photo_url,
-      driver_rating: driverProfile?.driver_rating ?? 0,
-      rating_count: driverProfile?.rating_count ?? 0,
       vehicle_features: normalizeArray(values.vehicle_features),
       cargo_types_accepted: normalizeArray(values.cargo_types_accepted),
       current_location_text: cleanText(values.current_location_text),
@@ -543,7 +543,6 @@ export function useAGTrans() {
       suggested_fee: values.suggested_fee !== undefined ? Number(values.suggested_fee) : driverProfile?.suggested_fee,
       offer_notes: cleanText(values.offer_notes),
       special_cargo_instructions: cleanText(values.special_cargo_instructions),
-      remaining_capacity: values.remaining_capacity !== undefined ? Number(values.remaining_capacity) : capacity,
       offer_status: (values.offer_status || "published") as OfferStatus,
       availability_status: "online" as AvailabilityStatus,
     };
