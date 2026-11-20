@@ -140,7 +140,7 @@ const THRESHOLDS = {
   PRESSURE_DROP_STORM: 1005,
 } as const;
 
-// Preset hazard zones for overlay (Volta floodplains and steep ranges)
+// Approximate reference overlays only; not surveyed hazard boundaries.
 const HAZARD_OVERLAYS = [
   { name: "Lower Volta Floodplain", coords: [[6.4, 0.2], [6.0, 0.3], [5.9, -0.1], [6.3, -0.1]], color: "#dc2626", fillOpacity: 0.25, risk: "CRITICAL FLOOD ZONE" },
   { name: "Kwahu Steep Mountain Slopes", coords: [[6.7, -0.8], [6.5, -0.6], [6.4, -0.9], [6.6, -1.1]], color: "#f97316", fillOpacity: 0.2, risk: "HIGH EROSION & LANDSLIDE ZONE" },
@@ -1026,7 +1026,7 @@ export default function EnvironmentalMonitor() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Raw Sensors
+              Weather &amp; Environment
             </button>
             <button
               onClick={() => setActiveTab("agrorisk")}
