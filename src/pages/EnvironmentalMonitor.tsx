@@ -586,8 +586,11 @@ export default function EnvironmentalMonitor() {
   const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
   const { latestByMetric: latestFieldMetrics } = useHardwareObservations(["agrorisk", "agroforecast"]);
-  const fieldSensorReadings = (["soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity", "rainfall", "water_level"] as ObservationMetric[])
-    .map((metric) => latestFieldMetrics.get(metric)).filter((item) => item !== undefined);
+  const fieldSensorReadings = useMemo(
+    () => (["soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity", "rainfall", "water_level"] as ObservationMetric[])
+      .map((metric) => latestFieldMetrics.get(metric)).filter((item) => item !== undefined),
+    [latestFieldMetrics],
+  );
   const calibratedFieldMeasurements = useMemo(
     () => getCalibratedFieldMeasurements(fieldSensorReadings),
     [fieldSensorReadings],
