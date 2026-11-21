@@ -27,7 +27,7 @@ export function createAgroClimateHardwareRuntime(options: AgroClimateHardwareRun
   if (!options.queueScope.trim()) throw new Error("A tenant/user queue scope is required for offline hardware observations.");
   const queueStore = new LocalObservationQueueStore(`agroclimate:device-observation-queue:${encodeURIComponent(options.queueScope)}`);
   const delivery = new ResilientObservationDelivery(createSupabaseDeviceObservationSink(options.resolveDeviceToken), queueStore);
-  const runtime = new DeviceIntegrationRuntime(delivery);
+  const runtime = new DeviceIntegrationRuntime(delivery, options.queueScope);
   const context = { onObservation: (item: Parameters<DeviceIntegrationRuntime["acceptObservation"]>[0]) => runtime.acceptObservation(item) };
   runtime.registerAdapter(new BrowserGeolocationAdapter(context));
   runtime.registerAdapter(new BrowserCameraAdapter());
