@@ -110,11 +110,14 @@ describe("Agro Inventory record validation", () => {
   });
 
   it("does not coerce whitespace or non-string non-number values into inventory quantities", () => {
-    for (const invalid of ["   ", true, false, null, { value: 5 }]) {
+    for (const invalid of ["   ", true, false, { value: 5 }]) {
       expect(() => normalizeInventoryRecord("inventory_items", {
         item_name: "Seed", item_type: "input", quantity: invalid, price_per_unit: "2",
       }, true)).toThrow("quantity must be a non-negative number");
     }
+    expect(() => normalizeInventoryRecord("inventory_items", {
+      item_name: "Seed", item_type: "input", quantity: null, price_per_unit: "2",
+    }, true)).toThrow("quantity is required");
     expect(() => normalizeInventoryRecord("inventory_items", {
       item_name: "Seed", item_type: "input", quantity: " 12.5 ", price_per_unit: "2",
     }, true)).not.toThrow();
