@@ -4,10 +4,12 @@ import {
   WebSerialMavlinkAdapter, WebSerialSensorAdapter, STANDARD_BLE_SENSOR_MAPPINGS, decodeNmea0183Line,
   type BleCharacteristicMapping, type PostHarvestStationReading, type SerialAdapterOptions,
 } from "./browserAdapters";
-import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "./deviceRuntime";
+import { DeviceIntegrationRuntime, LocalObservationQueueStore, ResilientObservationDelivery } from "./deviceRuntime";
 import { createPostHarvestStationSink, createSupabaseDeviceObservationSink } from "./supabaseGateway";
 
 export interface AgroClimateHardwareRuntimeOptions {
+  /** Authenticated tenant/user ID; isolates offline observations between accounts on shared browsers. */
+  queueScope: string;
   /** Must resolve secrets from Amineva protected device-credential storage. */
   resolveDeviceToken: (deviceId: string) => Promise<string | null>;
   bleMappings?: readonly BleCharacteristicMapping[];
@@ -22,7 +24,9 @@ export interface AgroClimateHardwareRuntimeOptions {
 
 /** Creates and registers browser adapters against the real Supabase delivery services. */
 export function createAgroClimateHardwareRuntime(options: AgroClimateHardwareRuntimeOptions): DeviceIntegrationRuntime {
-  const delivery = new ResilientObservationDelivery(createSupabaseDeviceObservationSink(options.resolveDeviceToken));
+  if (!options.queueScope.trim()) throw new Error("A tenant/user queue scope is required for offline hardware observations.");
+  const queueStore = new LocalObservationQueueStore(`agroclimate:device-observation-queue:${encodeURIComponent(options.queueScope)}`);
+  const delivery = new ResilientObservationDelivery(createSupabaseDeviceObservationSink(options.resolveDeviceToken), queueStore);
   const runtime = new DeviceIntegrationRuntime(delivery);
   const context = { onObservation: (item: Parameters<DeviceIntegrationRuntime["acceptObservation"]>[0]) => runtime.acceptObservation(item) };
   runtime.registerAdapter(new BrowserGeolocationAdapter(context));
