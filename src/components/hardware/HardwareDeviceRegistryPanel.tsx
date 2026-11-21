@@ -117,6 +117,20 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
     await refresh();
   };
 
+  const rotateCredential = async (device: DeviceRow) => {
+    if (!confirm(`Issue a replacement credential for "${device.device_name}"? The previous token will stop working.`)) return;
+    setError(null); setIssuedToken(null);
+    const { data, error: invokeError } = await supabase.functions.invoke("agroclimate-device-gateway", {
+      body: { action: "rotate", device_id: device.id },
+    });
+    if (invokeError || typeof data?.device_token !== "string") {
+      setError(invokeError?.message || data?.error || "Credential rotation failed.");
+      return;
+    }
+    setIssuedToken(data.device_token);
+    await refresh();
+  };
+
   const copyToken = async () => {
     if (!issuedToken) return;
     try {
@@ -170,7 +184,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
           {devices.length === 0 ? <p className="text-xs text-muted-foreground">No devices registered for this component.</p> : devices.map((device) => (
             <div key={device.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
               <div className="min-w-0"><p className="text-sm font-medium">{device.device_name}</p><p className="text-xs text-muted-foreground">{device.model || "Model not specified"} · {device.hardware_id} · {device.protocol}</p><p className="text-xs text-muted-foreground">Last signal: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never received"}</p></div>
-              <div className="flex items-center gap-2"><Badge variant={device.status === "active" ? "secondary" : "destructive"}>{device.status === "active" ? "Registered" : "Revoked"}</Badge>{device.status === "active" && <Button type="button" size="sm" variant="outline" onClick={() => void revoke(device)}><Ban className="mr-1 h-3 w-3" />Revoke</Button>}</div>
+              <div className="flex items-center gap-2"><Badge variant={device.status === "active" ? "secondary" : "destructive"}>{device.status === "active" ? "Registered" : "Revoked"}</Badge><Button type="button" size="sm" variant="outline" onClick={() => void rotateCredential(device)}>Rotate token</Button>{device.status === "active" && <Button type="button" size="sm" variant="outline" onClick={() => void revoke(device)}><Ban className="mr-1 h-3 w-3" />Revoke</Button>}</div>
             </div>
           ))}
         </CardContent>
