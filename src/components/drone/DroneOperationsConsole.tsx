@@ -72,7 +72,7 @@ export function DroneOperationsConsole() {
         <section className="rounded-lg border border-cyan-900/60 bg-slate-900/70 p-3 space-y-2" aria-label="Registered aircraft gateway telemetry">
           <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300">Registered Device Gateway · Read-only</h3><span className="text-[10px] text-slate-400">Independent of simulator and flight controls</span></div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {gatewayReadings.map((reading) => <div key={reading.metric} className="rounded border border-slate-800 bg-slate-950 p-2"><p className="text-[9px] uppercase text-slate-500">{reading.metric.replaceAll("_", " ")}</p><p className="text-sm font-mono text-cyan-200">{reading.value} {reading.unit}</p><p className="text-[9px] text-slate-500">{new Date(reading.measuredAt).toLocaleTimeString()}</p></div>)}
+            {gatewayReadings.map((reading) => <div key={reading.metric} className="rounded border border-slate-800 bg-slate-950 p-2"><p className="text-[9px] uppercase text-slate-500">{reading.metric.replace(/_/g, " ")}</p><p className="text-sm font-mono text-cyan-200">{reading.value} {reading.unit}</p><p className="text-[9px] text-slate-500">{new Date(reading.measuredAt).toLocaleTimeString()}</p></div>)}
           </div>
           <p className="text-[10px] text-slate-500">Device-reported measurements are displayed for monitoring only. They do not arm, move, calibrate or otherwise command an aircraft.</p>
         </section>
