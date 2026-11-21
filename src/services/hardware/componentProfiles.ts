@@ -44,7 +44,7 @@ export const COMPONENT_HARDWARE_PROFILES: Record<HardwareComponent, ComponentHar
   agtrans: {
     component: "agtrans",
     capabilities: ["vehicle-location", "vehicle-speed"],
-    candidateProtocols: ["browser-geolocation", "https-api", "mqtt-tls"],
+    candidateProtocols: ["browser-geolocation", "usb-serial", "https-api", "mqtt-tls"],
     requiresPhysicalDevice: false,
     notes: "Driver phone GNSS and dedicated vehicle-tracker telemetry are distinct provenance sources.",
   },
