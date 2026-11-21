@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HardwareLocalDeviceConnections } from "@/components/hardware/HardwareLocalDeviceConnections";
 
 type RegisterableComponent = "agro-inventory" | "market-link" | "agtrans" | "agroforecast" | "agrorisk" | "aerial-console";
 type DeviceRow = {
@@ -165,7 +166,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
       <Card className="mt-2">
         <CardContent className="space-y-4 pt-4">
           <p className="text-xs text-muted-foreground">
-            Register an actual device or gateway for this component. Registration issues a credential once; it does not mean the device is connected. The device or its gateway must send a valid HTTPS observation before its last-seen status changes. This panel records the source protocol; it does not directly pair BLE, USB or serial peripherals in the browser.
+            Register an actual device or gateway for this component. Registration issues a credential once; it does not mean the device is connected. The device or its gateway must send a valid HTTPS observation before its last-seen status changes. Use the direct browser pairing controls below for supported BLE, USB HID and USB serial devices. Networked devices and gateways continue to use the shared HTTPS ingestion endpoint.
           </p>
           <form onSubmit={register} className="grid gap-3 sm:grid-cols-2">
             <div><Label>Device name</Label><Input value={deviceName} onChange={(e) => setDeviceName(e.target.value)} maxLength={100} required placeholder="e.g. North field soil probe" /></div>
@@ -193,6 +194,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
               <div className="flex items-center gap-2"><Badge variant={device.status === "revoked" ? "destructive" : isRecentlySeen(device.last_seen_at) ? "default" : "secondary"}>{device.status === "revoked" ? "Revoked" : isRecentlySeen(device.last_seen_at) ? "Recently connected" : "Registered · no recent signal"}</Badge><Button type="button" size="sm" variant="outline" onClick={() => void rotateCredential(device)}>Rotate token</Button>{device.status === "active" && <Button type="button" size="sm" variant="outline" onClick={() => void revoke(device)}><Ban className="mr-1 h-3 w-3" />Revoke</Button>}</div>
             </div>
           ))}
+          <HardwareLocalDeviceConnections component={component} />
         </CardContent>
       </Card>
     </details>
