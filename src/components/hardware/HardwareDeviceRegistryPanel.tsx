@@ -165,7 +165,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
       <Card className="mt-2">
         <CardContent className="space-y-4 pt-4">
           <p className="text-xs text-muted-foreground">
-            Register an actual device or gateway for this component. Registration issues a credential once; it does not mean the device is connected. The device must send a valid observation before its last-seen status changes.
+            Register an actual device or gateway for this component. Registration issues a credential once; it does not mean the device is connected. The device or its gateway must send a valid HTTPS observation before its last-seen status changes. This panel records the source protocol; it does not directly pair BLE, USB or serial peripherals in the browser.
           </p>
           <form onSubmit={register} className="grid gap-3 sm:grid-cols-2">
             <div><Label>Device name</Label><Input value={deviceName} onChange={(e) => setDeviceName(e.target.value)} maxLength={100} required placeholder="e.g. North field soil probe" /></div>
