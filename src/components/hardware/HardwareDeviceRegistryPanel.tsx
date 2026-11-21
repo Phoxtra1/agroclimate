@@ -24,6 +24,12 @@ type DeviceRow = {
   created_at: string;
 };
 
+function isRecentlySeen(value: string | null): boolean {
+  if (!value) return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp <= Date.now() && Date.now() - timestamp < 2 * 60 * 1000;
+}
+
 const COMPONENT_LABELS: Record<RegisterableComponent, string> = {
   "agro-inventory": "Agro Inventory",
   "market-link": "Market Link",
@@ -184,7 +190,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
           {devices.length === 0 ? <p className="text-xs text-muted-foreground">No devices registered for this component.</p> : devices.map((device) => (
             <div key={device.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
               <div className="min-w-0"><p className="text-sm font-medium">{device.device_name}</p><p className="text-xs text-muted-foreground">{device.model || "Model not specified"} · {device.hardware_id} · {device.protocol}</p><p className="text-xs text-muted-foreground">Last signal: {device.last_seen_at ? new Date(device.last_seen_at).toLocaleString() : "Never received"}</p></div>
-              <div className="flex items-center gap-2"><Badge variant={device.status === "active" ? "secondary" : "destructive"}>{device.status === "active" ? "Registered" : "Revoked"}</Badge><Button type="button" size="sm" variant="outline" onClick={() => void rotateCredential(device)}>Rotate token</Button>{device.status === "active" && <Button type="button" size="sm" variant="outline" onClick={() => void revoke(device)}><Ban className="mr-1 h-3 w-3" />Revoke</Button>}</div>
+              <div className="flex items-center gap-2"><Badge variant={device.status === "revoked" ? "destructive" : isRecentlySeen(device.last_seen_at) ? "default" : "secondary"}>{device.status === "revoked" ? "Revoked" : isRecentlySeen(device.last_seen_at) ? "Recently connected" : "Registered · no recent signal"}</Badge><Button type="button" size="sm" variant="outline" onClick={() => void rotateCredential(device)}>Rotate token</Button>{device.status === "active" && <Button type="button" size="sm" variant="outline" onClick={() => void revoke(device)}><Ban className="mr-1 h-3 w-3" />Revoke</Button>}</div>
             </div>
           ))}
         </CardContent>
