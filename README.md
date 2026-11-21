@@ -1,73 +1,59 @@
-# Welcome to your Lovable project
+# AgroClimate
 
-## Project info
+AgroClimate is an agricultural and climate intelligence application developed by Amineva Global. It brings together climate and crop intelligence, satellite and geospatial tools, farm operations, produce safety, aerial operations, logistics and market services.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+AgroClimate is an independently developed solution in the Amineva ecosystem. Its application interface, Supabase backend, database, operational workflows and device integrations remain owned by this repository. Integration with Amineva Global must not replace or duplicate those application services.
 
-## How can I edit this code?
+## Technology
 
-There are several ways of editing your application.
+- React 18 and TypeScript
+- Vite
+- Supabase (authentication, database, storage and Edge Functions)
+- Tailwind CSS and shadcn/ui
+- Vite PWA / Workbox for the application-specific offline shell
 
-**Use Lovable**
+## Requirements
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- Node.js 20 or later
+- npm
 
-Changes made via Lovable will be committed automatically to this repo.
+## Local development
 
-**Use your preferred IDE**
+1. Clone the repository:
+   `git clone https://github.com/Phoxtra1/agroclimate.git`
+2. Enter the project:
+   `cd agroclimate`
+3. Install dependencies:
+   `npm ci`
+4. Create a local environment file:
+   `cp .env.example .env`
+5. Fill in the environment values from the authorised project configuration.
+6. Start the development server:
+   `npm run dev`
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Environment configuration
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Use `.env.example` as the variable-name reference. Never commit `.env`, production credentials, service-role keys, provider secrets or private tokens.
 
-Follow these steps:
+The browser application may use only publishable/anonymous Supabase credentials. Supabase service-role keys and third-party provider secrets must remain in Supabase Edge Function secrets or another trusted server-side secret store. Any provider key exposed through a `VITE_*` variable is bundled into the public browser application and must be treated as public.
+
+## Validation
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+npm run lint
+npm test
+npm run build
 ```
 
-**Edit a file directly in GitHub**
+The GitHub Actions workflow also runs TypeScript checks, tests and a production build for changes targeting `main`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Architecture and integration
 
-**Use GitHub Codespaces**
+- Keep AgroClimate's own backend, schema, Edge Functions and application workflows in this repository.
+- Keep hardware/device protocols and their server-side gateways within the AgroClimate/device integration boundary.
+- Amineva Global provides the central software environment and launch/integration point; it must not impose a replacement application menu or require the AgroClimate UI to be rebuilt inside the core shell.
+- Preserve standalone development and deployment capability unless an explicit integration decision changes it.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Ownership
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+AgroClimate is developed by **Amineva Global**.
