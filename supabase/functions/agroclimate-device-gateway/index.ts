@@ -57,6 +57,35 @@ const METRIC_CAPABILITIES: Record<string, string[]> = {
   temperature:["temperature"],relative_humidity:["relative-humidity"],soil_moisture:["soil-moisture"],soil_temperature:["soil-temperature"],soil_ph:["soil-ph"],electrical_conductivity:["electrical-conductivity"],rainfall:["rainfall"],wind_speed:["wind"],wind_direction:["wind"],water_level:["water-level"],weight:["weight-measurement"],barcode_count:["barcode-scan"],latitude:["location","vehicle-location","aircraft-telemetry"],longitude:["location","vehicle-location","aircraft-telemetry"],vehicle_speed:["vehicle-speed"],aircraft_altitude:["aircraft-telemetry"],aircraft_battery:["aircraft-telemetry"],
 };
 
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
+  const object = value as Record<string, unknown>;
+  return "{" + Object.keys(object).sort().map((key) => JSON.stringify(key) + ":" + stableJson(object[key])).join(",") + "}";
+}
+function metricValueIsPlausible(metric: string, value: number, unit: string): boolean {
+  const within = (min: number, max: number) => value >= min && value <= max;
+  switch (metric) {
+    case "temperature": case "soil_temperature": return within(-80, 100);
+    case "relative_humidity": return within(0, 100);
+    case "soil_moisture": return unit === "m³/m³" ? within(0, 1) : within(0, 100);
+    case "soil_ph": return within(0, 14);
+    case "wind_direction": return within(0, 360);
+    case "aircraft_battery": return unit === "%" ? within(0, 100) : within(0, 100);
+    case "latitude": return within(-90, 90);
+    case "longitude": return within(-180, 180);
+    case "rainfall": return within(0, 100000);
+    case "wind_speed": return within(0, 150);
+    case "weight": return within(0, 1000000);
+    case "vehicle_speed": return within(0, 1500);
+    case "aircraft_altitude": return within(-1000, 100000);
+    case "water_level": return within(0, 100000);
+    case "electrical_conductivity": return within(0, 1000000);
+    case "barcode_count": return within(0, 100000000);
+    default: return false;
+  }
+}
+
 async function ownerFromRequest(req: Request, url: string, anonKey: string) {
   const authorization = req.headers.get("Authorization");
   if (!authorization) return null;
