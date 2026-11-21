@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BarcodeScanBuffer, BrowserCameraAdapter, BrowserGeolocationAdapter, hardwareCapabilitySupportsMetric, STANDARD_BLE_SENSOR_MAPPINGS, decodeMavlinkGpsRawInt, decodeNmea0183Line } from "@/services/hardware/browserAdapters";
-import { DeviceIntegrationRuntime, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
+import { DeviceIntegrationRuntime, LocalObservationQueueStore, ResilientObservationDelivery } from "@/services/hardware/deviceRuntime";
 import type { DeviceObservation, DeviceRegistration } from "@/services/hardware/types";
 
 const device: DeviceRegistration = {
@@ -92,6 +92,18 @@ describe("hardware capability mapping", () => {
     expect(hardwareCapabilitySupportsMetric("wind", "wind_direction")).toBe(true);
     expect(hardwareCapabilitySupportsMetric("relative-humidity", "relative_humidity")).toBe(true);
     expect(hardwareCapabilitySupportsMetric("weight-measurement", "temperature")).toBe(false);
+  });
+});
+
+describe("account-scoped offline hardware storage", () => {
+  it("keeps one account's queued observations out of another account's queue", () => {
+    const first = new LocalObservationQueueStore("agroclimate:device-observation-queue:user-a");
+    const second = new LocalObservationQueueStore("agroclimate:device-observation-queue:user-b");
+    first.write([observation]);
+    expect(first.read()).toHaveLength(1);
+    expect(second.read()).toEqual([]);
+    localStorage.removeItem("agroclimate:device-observation-queue:user-a");
+    localStorage.removeItem("agroclimate:device-observation-queue:user-b");
   });
 });
 
