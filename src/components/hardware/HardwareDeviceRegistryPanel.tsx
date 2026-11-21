@@ -40,7 +40,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
   const [deviceName, setDeviceName] = useState("");
   const [hardwareId, setHardwareId] = useState("");
   const [model, setModel] = useState("");
-  const [protocol, setProtocol] = useState<DeviceProtocol>(profile.candidateProtocols[0]);
+  const [protocol, setProtocol] = useState<DeviceProtocol>(profile.candidateProtocols[0] ?? "manual");
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
