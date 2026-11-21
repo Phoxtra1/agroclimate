@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </CardHeader>
             <CardContent className="space-y-4 text-center">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                An unexpected system boundary exception occurred. The platform prevented a total screen collapse.
+                This page could not load. Reload to try again, or return to the home page.
               </p>
               {this.state.error?.message && (
                 <div className="bg-destructive/10 p-2.5 rounded-md text-[11px] font-mono text-destructive text-left overflow-x-auto">

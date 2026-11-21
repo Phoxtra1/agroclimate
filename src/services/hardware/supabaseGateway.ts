@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DeviceObservation, DeviceRegistration, HardwareComponent, DeviceProtocol } from "./types";
 import type { ObservationSink, PostHarvestReadingSink } from "./browserAdapters";
+import { DEVICE_CONTRACT_VERSION, toAminevaObservation } from "./interchange";
 
 export interface ProvisionedDevice {
   id: string; user_id: string; component: HardwareComponent; device_name: string;
@@ -35,10 +36,11 @@ export async function revokeAgroClimateDevice(deviceId: string): Promise<void> {
 /** The token resolver must read from a protected Amineva-managed secret store, never a UI field or localStorage. */
 export function createSupabaseDeviceObservationSink(resolveDeviceToken: (deviceId: string) => Promise<string | null>): ObservationSink {
   return async (item: DeviceObservation) => {
+    toAminevaObservation(item);
     const token = await resolveDeviceToken(item.deviceId);
     if (!token) throw new Error("No managed device credential is available for this device.");
     const { data, error } = await supabase.functions.invoke("agroclimate-device-gateway", {
-      body: { action: "ingest", metric: item.metric, value: item.value, unit: item.unit,
+      body: { action: "ingest", schema_version: DEVICE_CONTRACT_VERSION, expected_component: item.component, metric: item.metric, value: item.value, unit: item.unit,
         observed_at: item.measuredAt, idempotency_key: item.eventId, farm_id: item.farmId,
         site_id: item.siteId, latitude: item.latitude, longitude: item.longitude, metadata: item.metadata ?? {} },
       headers: { "x-device-token": token },

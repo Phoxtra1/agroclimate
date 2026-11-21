@@ -14,6 +14,7 @@
 
 # App updates
 - [ ] Restore published-app update notification and verify preview safety.
+- [ ] Diagnose and resolve the reported blank homepage before finishing current integration work.
 
 # Hardware integration
 - [ ] Standardize versioned, validated real-time device observations for Amineva interoperability and document the connection contract.

@@ -3,6 +3,7 @@
 // Device tokens are shown once, stored only as SHA-256 hashes, and never returned on ingest.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { acceptsDeviceContractVersion, DEVICE_CONTRACT_VERSION, normalizeDeviceMeasurement } from "../_shared/deviceContract.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,6 +53,7 @@ const COMPONENT_METRICS: Record<string, string[]> = {
   "agtrans": ["latitude", "longitude", "vehicle_speed"],
   "aerial-console": ["latitude", "longitude", "aircraft_altitude", "aircraft_battery"],
   "farm-handler": ["latitude", "longitude"],
+  "satellite": ["temperature", "relative_humidity", "rainfall", "wind_speed", "wind_direction", "water_level"],
 };
 const METRIC_CAPABILITIES: Record<string, string[]> = {
   temperature:["temperature"],relative_humidity:["relative-humidity"],soil_moisture:["soil-moisture"],soil_temperature:["soil-temperature"],soil_ph:["soil-ph"],electrical_conductivity:["electrical-conductivity"],rainfall:["rainfall"],wind_speed:["wind"],wind_direction:["wind"],water_level:["water-level"],weight:["weight-measurement"],barcode_count:["barcode-scan"],latitude:["location","vehicle-location","aircraft-telemetry"],longitude:["location","vehicle-location","aircraft-telemetry"],vehicle_speed:["vehicle-speed"],aircraft_altitude:["aircraft-telemetry"],aircraft_battery:["aircraft-telemetry"],
@@ -113,6 +115,7 @@ Deno.serve(async (req) => {
   let body: unknown;
   try { body = JSON.parse(raw); } catch { return json({ error: "A valid JSON body is required" }, 400); }
   if (!isObject(body)) return json({ error: "A JSON object is required" }, 400);
+  if (!acceptsDeviceContractVersion(body.schema_version)) return json({ error: "Unsupported device contract version" }, 400);
 
   if (body.action === "register") {
     const user = await ownerFromRequest(req, url, anonKey);
@@ -216,17 +219,17 @@ Deno.serve(async (req) => {
     const key = typeof body.idempotency_key === "string" ? body.idempotency_key.trim() : "";
     if (!Object.hasOwn(UNITS, metric) || !UNITS[metric].includes(unit) ||
         typeof value !== "number" || !Number.isFinite(value) ||
-        !metricValueIsPlausible(metric, value, unit) ||
+        !metricValueIsPlausible(metric, normalizeDeviceMeasurement(metric, value, unit).value, normalizeDeviceMeasurement(metric, value, unit).unit) ||
         !ISO_DATE.test(observedAt) || !Number.isFinite(Date.parse(observedAt)) ||
         Date.parse(observedAt) > Date.now() + 5 * 60_000 ||
         !key || key.length > 160) {
       return json({ error: "Invalid observation. Supply an allowlisted metric/unit, finite numeric value, timezone-aware observed_at, and idempotency_key." }, 400);
     }
-    if (body.expected_component !== undefined) {
+    {
       if (!COMPONENT_METRICS[device.component]?.includes(metric)) return json({ error: "Measurement is not valid for the registered AgroClimate component" }, 403);
       const capabilities = Array.isArray(device.capabilities) ? device.capabilities : [];
       const accepted = METRIC_CAPABILITIES[metric] ?? [];
-      if (capabilities.length > 0 && !capabilities.some((capability: string) => accepted.includes(capability))) return json({ error: "Registered device capabilities do not permit this metric" }, 403);
+      if (!capabilities.some((capability: string) => accepted.includes(capability))) return json({ error: "Registered device capabilities do not permit this metric" }, 403);
     }
     if (body.latitude !== undefined && (typeof body.latitude !== "number" || !Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90)) return json({ error: "Invalid latitude" }, 400);
     if (body.longitude !== undefined && (typeof body.longitude !== "number" || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180)) return json({ error: "Invalid longitude" }, 400);
@@ -258,14 +261,15 @@ Deno.serve(async (req) => {
         existing.site_id === row.site_id && existing.latitude === row.latitude &&
         existing.longitude === row.longitude && stableJson(existing.metadata) === stableJson(metadata);
       if (!same) return json({ error: "Idempotency key was already used for a different observation" }, 409);
-      await admin.from("agroclimate_devices").update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
-      return json({ accepted: true, duplicate: true, observation: existing });
+      const { error: touchError } = await admin.from("agroclimate_devices").update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
+      if (touchError) return json({ error: "Observation stored but heartbeat update failed" }, 500);
+      return json({ accepted: true, duplicate: true, schema_version: DEVICE_CONTRACT_VERSION, observation: existing, normalized_measurement: normalizeDeviceMeasurement(metric, value, unit) });
     }
     if (error || !inserted) return json({ error: "Observation could not be persisted" }, 500);
     const { error: touchError } = await admin.from("agroclimate_devices")
       .update({ last_seen_at: new Date().toISOString() }).eq("id", device.id);
     if (touchError) return json({ error: "Observation stored but device heartbeat update failed" }, 500);
-    return json({ accepted: true, duplicate: false, observation: inserted }, 201);
+    return json({ accepted: true, duplicate: false, schema_version: DEVICE_CONTRACT_VERSION, observation: inserted, normalized_measurement: normalizeDeviceMeasurement(metric, value, unit) }, 201);
   }
 
   return json({ error: "action must be register, revoke or ingest" }, 400);

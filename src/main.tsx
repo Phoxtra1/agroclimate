@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { registerAppSW } from "./lib/pwa/registerAppSW";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 
 const bootstrapRedirect = () => {
@@ -20,7 +21,8 @@ const bootstrapRedirect = () => {
 
 bootstrapRedirect();
 
-createRoot(document.getElementById("root")!).render(<App />);
+const root = document.getElementById("root");
+if (root) createRoot(root).render(<ErrorBoundary fallbackTitle="AgroClimate could not start"><App /></ErrorBoundary>);
 
 void registerAppSW();
 

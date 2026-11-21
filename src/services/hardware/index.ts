@@ -6,3 +6,4 @@ export * from "./browserAdapters";
 export * from "./deviceRuntime";
 export * from "./supabaseGateway";
 export * from "./bootstrap";
+export * from "./interchange";

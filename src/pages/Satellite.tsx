@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleMarker, GeoJSON, MapContainer, Marker, Polygon, Popup, ScaleControl, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { SatelliteMapControls } from "@/components/satellite/SatelliteMapControls";
+import { SatelliteRiskLayer } from "@/components/satellite/SatelliteRiskLayer";
+import type { SatelliteWeatherEvidence } from "@/services/satellite/weatherRisk";
 import L from "leaflet";
 import {
   Activity,
@@ -184,6 +186,7 @@ function MapEventsHandler({
 
 export default function Satellite() {
   const { user } = useAuth();
+  const [weatherEvidence, setWeatherEvidence] = useState<SatelliteWeatherEvidence | null>(null);
 
   // Mode: TRACK (intelligence boards) vs QUERY (search & navigation)
   const [activeMode, setActiveMode] = useState<"TRACK" | "QUERY">("TRACK");
@@ -405,6 +408,7 @@ export default function Satellite() {
               selectedSceneCloudCover: selectedScene?.cloudCover ?? null,
               selectedFieldAreaHectares: fieldArea || null,
               fieldSpectralStatistics: fieldStats,
+              mapCentreWeather: weatherEvidence,
               dataLimitations: [
                 "Use only the supplied observations and context.",
                 "Do not infer soil laboratory results, land ownership, crop identity or live conditions from coordinates alone.",
@@ -656,6 +660,8 @@ export default function Satellite() {
 
   const inspectPoint = async (point: GeoPoint) => {
     if (drawing || navPickMode) return;
+    setMapCenter([point.lat, point.lon]);
+    setCurrentLocation({ ...point, label: `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}` });
     if (!selectedScene) {
       const address = await reverseGeocode(point);
       setCurrentLocation({ ...point, label: address });
@@ -1357,6 +1363,7 @@ export default function Satellite() {
 
             {/* Zoom, north-up and scale controls */}
             <SatelliteMapControls />
+            <SatelliteRiskLayer onEvidence={setWeatherEvidence} />
             <ScaleControl position="bottomleft" imperial={false} />
 
             {/* Route Bounds Controller */}
