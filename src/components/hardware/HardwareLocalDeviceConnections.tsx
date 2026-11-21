@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bluetooth, Cable, Link2, Unplug } from "lucide-react";
+import { AlertCircle, Bluetooth, Link2, Unplug } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { createAgroClimateHardwareRuntime } from "@/services/hardware/bootstrap";
 import { toDeviceRegistration } from "@/services/hardware/supabaseGateway";
 import type { ProvisionedDevice } from "@/services/hardware/supabaseGateway";
-import type { DeviceObservation, ObservationMetric } from "@/services/hardware/types";
+import type { ObservationMetric } from "@/services/hardware/types";
 import { hardwareCapabilitySupportsMetric, type BleCharacteristicMapping } from "@/services/hardware/browserAdapters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,7 +126,8 @@ export function HardwareLocalDeviceConnections({ component }: { component: Compo
         setStates((prior) => ({ ...prior, [device.id]: result.detail || "Not connected" }));
         return;
       }
-      sessions.current.get(device.id)?.runtime.dispose();
+      const prior = sessions.current.get(device.id);
+      if (prior) await prior.runtime.dispose();
       sessions.current.set(device.id, { runtime, status: result.detail || "Connected" });
       setStates((prior) => ({ ...prior, [device.id]: result.detail || "Connected" }));
     } catch (cause) {
