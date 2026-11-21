@@ -59,6 +59,11 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
   const { user } = useAuth();
   const { profile } = useProfile();
   const { latestByMetric } = useHardwareObservations(["market-link"]);
+  const [product, setProduct] = useState("");
+  const [category, setCategory] = useState("Other");
+  const [region, setRegion] = useState(profile?.region || "");
+  const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState("kg");
   const latestWeight = latestByMetric.get("weight");
   const freshMatchingWeight = latestWeight
     && Date.now() - Date.parse(latestWeight.measuredAt) <= 5 * 60 * 1000
@@ -66,11 +71,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
     && latestWeight.unit === unit
     ? latestWeight
     : undefined;
-  const [product, setProduct] = useState("");
-  const [category, setCategory] = useState("Other");
-  const [region, setRegion] = useState(profile?.region || "");
-  const [qty, setQty] = useState("");
-  const [unit, setUnit] = useState("kg");
+
   const [grade, setGrade] = useState("A");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
