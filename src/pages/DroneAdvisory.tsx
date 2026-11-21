@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { HardwareDeviceRegistryPanel } from "@/components/hardware/HardwareDeviceRegistryPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +63,7 @@ export default function DroneAdvisory() {
 
   return (
     <div className="p-3 lg:p-6 max-w-[1600px] mx-auto">
+      <HardwareDeviceRegistryPanel component="aerial-console" />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <Plane className="h-6 w-6 text-primary" />
