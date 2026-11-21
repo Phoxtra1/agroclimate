@@ -184,6 +184,14 @@ describe("hardware runtime and browser adapters", () => {
     }
   });
 
+  it("rejects device registrations outside the authenticated queue tenant", () => {
+    const delivery = new ResilientObservationDelivery(async () => undefined, { read: () => [], write: () => undefined });
+    const runtime = new DeviceIntegrationRuntime(delivery, "user-001");
+    expect(() => runtime.registerDevice(device)).not.toThrow();
+    expect(() => runtime.registerDevice({ ...device, deviceId: "foreign-device", tenantId: "user-002" }))
+      .toThrow(/different authenticated tenant/);
+  });
+
   it("rejects observations from another tenant or component", () => {
     const delivery = new ResilientObservationDelivery(async () => undefined, { read: () => [], write: () => undefined });
     const runtime = new DeviceIntegrationRuntime(delivery);
