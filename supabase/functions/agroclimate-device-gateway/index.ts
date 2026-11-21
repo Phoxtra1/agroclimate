@@ -225,11 +225,22 @@ Deno.serve(async (req) => {
         !key || key.length > 160) {
       return json({ error: "Invalid observation. Supply an allowlisted metric/unit, finite numeric value, timezone-aware observed_at, and idempotency_key." }, 400);
     }
-    {
-      if (!COMPONENT_METRICS[device.component]?.includes(metric)) return json({ error: "Measurement is not valid for the registered AgroClimate component" }, 403);
+    // Enforce the stricter app/component capability contract for central
+    // AGSuite bridge events. Preserve the pre-existing direct AgroClimate
+    // gateway contract for devices registered before capability profiles
+    // were introduced (including legacy rows with an empty capability list).
+    if (body.expected_component !== undefined) {
+      if (typeof body.expected_component !== "string" || body.expected_component !== device.component) {
+        return json({ error: "The device credential is bound to a different AgroClimate component" }, 403);
+      }
+      if (!COMPONENT_METRICS[device.component]?.includes(metric)) {
+        return json({ error: "Measurement is not valid for the registered AgroClimate component" }, 403);
+      }
       const capabilities = Array.isArray(device.capabilities) ? device.capabilities : [];
       const accepted = METRIC_CAPABILITIES[metric] ?? [];
-      if (!capabilities.some((capability: string) => accepted.includes(capability))) return json({ error: "Registered device capabilities do not permit this metric" }, 403);
+      if (!capabilities.some((capability: string) => accepted.includes(capability))) {
+        return json({ error: "Registered device capabilities do not permit this metric" }, 403);
+      }
     }
     if (body.latitude !== undefined && (typeof body.latitude !== "number" || !Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90)) return json({ error: "Invalid latitude" }, 400);
     if (body.longitude !== undefined && (typeof body.longitude !== "number" || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180)) return json({ error: "Invalid longitude" }, 400);
