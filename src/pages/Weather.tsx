@@ -270,7 +270,7 @@ function TodayWeather({ weather }: { weather: WeatherDay }) {
         <div>
           <Leaf className="h-4 w-4 mx-auto opacity-70" />
           <p className="font-semibold mt-1">{weather.evapotranspiration ?? 4.5}</p>
-          <p className="text-xs opacity-70">ET₀ · {weather.evapotranspirationSource === "provider" ? "provider" : weather.evapotranspirationSource === "estimated" ? "estimated" : "sample"}</p>
+          <p className="text-xs opacity-70">ET₀ · {weather.evapotranspirationSource === "provider" ? "provider" : weather.evapotranspirationSource === "estimated" ? "estimated" : "not available"}</p>
         </div>
       </div>
     </div>
@@ -291,7 +291,7 @@ function ForecastRow({ day }: { day: WeatherDay }) {
       </div>
       <div className="flex items-center gap-1 text-xs w-14 justify-center">
         <Gauge className="h-3 w-3 text-amber-500" />
-        <span title={day.soilMoistureSource === "provider" ? "Provider-reported soil moisture" : day.soilMoistureSource === "estimated" ? "Estimated from forecast weather; not a ground sensor reading" : "Sample data"}>{day.soilMoisture}%</span>
+        <span title={day.soilMoistureSource === "provider" ? "Provider-reported soil moisture" : day.soilMoistureSource === "estimated" ? "Estimated from forecast weather; not a ground sensor reading" : "Not available"}>{day.soilMoisture}%</span>
       </div>
       <div className="text-sm font-medium text-right w-20">
         <span>{day.tempHigh}°</span>
@@ -342,7 +342,13 @@ export default function Weather() {
   const currentCrops = CROPS.filter((c) => c.season.includes(currentMonth));
   const isLoading = geoLoading || weatherLoading;
   const locationIsFresh = position?.source === "gps" || (position?.source === "cached" && !!position.updatedAt && Date.now() - position.updatedAt < 24 * 60 * 60 * 1000);
-  const advisoryAvailable = forecast.length > 0 && locationIsFresh && (source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000));
+  const forecastHasIrrigationInputs = forecast.length >= 3 && forecast.slice(0, 3).every((day) =>
+    Number.isFinite(day.evapotranspiration) && Number.isFinite(day.rainMm) &&
+    Number.isFinite(day.soilMoisture) && Number.isFinite(day.soilTemperature) &&
+    Number.isFinite(day.humidity)
+  );
+  const advisoryAvailable = forecastHasIrrigationInputs && locationIsFresh &&
+    (source === "live" || (source === "cache" && !!lastUpdated && Date.now() - lastUpdated.getTime() < 60 * 60 * 1000));
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
@@ -432,17 +438,17 @@ export default function Weather() {
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <CloudRain className="h-5 w-5 mx-auto text-blue-400" />
                 <p className="text-lg font-bold mt-2">{today.rainMm ?? 0} mm</p>
-                <p className="text-xs text-muted-foreground">{today.rainSource === "provider" ? "Rainfall · provider" : today.rainSource === "estimated" ? "Rainfall · estimated" : "Rainfall · sample"}</p>
+                <p className="text-xs text-muted-foreground">{today.rainSource === "provider" ? "Rainfall · provider" : today.rainSource === "estimated" ? "Rainfall · estimated" : "Rainfall · not available"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Gauge className="h-5 w-5 mx-auto text-amber-600" />
                 <p className="text-lg font-bold mt-2">{today.soilMoisture ?? 0}%</p>
-                <p className="text-xs text-muted-foreground">{today.soilMoistureSource === "provider" ? "Soil Moisture · provider" : today.soilMoistureSource === "estimated" ? "Estimated Soil Moisture" : "Sample Soil Moisture"}</p>
+                <p className="text-xs text-muted-foreground">{today.soilMoistureSource === "provider" ? "Soil Moisture · provider" : today.soilMoistureSource === "estimated" ? "Estimated Soil Moisture" : "Soil Moisture · not available"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Leaf className="h-5 w-5 mx-auto text-green-600" />
                 <p className="text-lg font-bold mt-2">{today.evapotranspiration ?? 0}</p>
-                <p className="text-xs text-muted-foreground">{today.evapotranspirationSource === "provider" ? "ET₀ · provider" : today.evapotranspirationSource === "estimated" ? "ET₀ · estimated" : "ET₀ · sample"} (mm/day)</p>
+                <p className="text-xs text-muted-foreground">{today.evapotranspirationSource === "provider" ? "ET₀ · provider" : today.evapotranspirationSource === "estimated" ? "ET₀ · estimated" : "ET₀ · not available"} (mm/day)</p>
               </div>
             </div>
 
