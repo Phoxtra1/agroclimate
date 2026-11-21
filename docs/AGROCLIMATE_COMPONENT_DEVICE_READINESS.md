@@ -26,9 +26,16 @@ This register describes software paths present in the repository. A component be
 - Component consumers read persisted, owner-scoped observations and refresh from Supabase Realtime.
 - A device appearing as Registered is not a connection confirmation. The device is considered to have signalled only after a successful accepted observation updates its last-seen timestamp.
 
-## Local browser adapter boundary
+## Local browser pairing
 
-Browser-native BLE, serial and HID adapter classes exist in the codebase, but the pages in this pass do not yet launch a user-facing local-pairing runtime for those adapters. The supported provisioning path completed here is device/gateway-to-HTTPS ingestion through the Edge Function. Keyboard-wedge barcode scanners continue to work through the existing input workflow. Direct BLE/USB/serial pairing from the browser remains a separate implementation item and must not be inferred from selecting a protocol in the registry.
+The component device registry now launches a user-facing browser pairing runtime for supported BLE GATT, USB HID, USB serial/NMEA and MAVLink serial devices. The operator pastes the one-time device token into the pairing control for the current browser session; it is held in memory only and is not written to localStorage. Disconnect and component unmount dispose the active adapter runtime. Offline observations are queued under the authenticated account scope and retried through the shared device gateway.
+
+- BLE: standard Environmental Sensing temperature/humidity and Bluetooth Weight Scale profiles are decoded directly. Custom probes can be configured with service UUID, characteristic UUID, metric, unit, data format and scale. The mapping must come from the exact manufacturer's documentation; no generic soil-probe protocol is assumed.
+- USB HID: the scale adapter can decode a configured little-endian 32-bit float at a chosen byte offset and multiplier. This is a configurable common layout, not a universal HID scale standard. Confirm report layout, signedness, byte order, unit and tare behavior against the exact device manual before operational use.
+- USB serial: AGTrans supports checksum-validated NMEA 0183 RMC/GGA. Other supported component serial devices can send newline-delimited JSON objects of the form {"metric":"soil_moisture","value":34.2,"unit":"%"}; the metric must match a capability registered for that device. MAVLink v1/v2 serial remains read-only for Aerial Console.
+- Networked devices and gateways continue to use the shared HTTPS Edge Function ingestion path. Browser local-network HTTP access is not treated as a substitute for authenticated HTTPS gateway ingestion.
+
+Web Bluetooth, WebHID and Web Serial require a secure context and browser support; direct pairing is generally intended for supported desktop Chromium-based browsers. Some Android/mobile browsers do not expose WebHID or Web Serial. The UI reports unsupported browser APIs rather than claiming a connection. Keyboard-wedge barcode scanners continue to work through the existing input workflow. Post-Harvest retains its dedicated BLE station driver and gateway rather than being routed through the shared component panel.
 
 ## Not yet certified
 
