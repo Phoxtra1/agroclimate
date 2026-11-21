@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { weeklyForecast, type WeatherDay } from "@/data/mock-data";
+import type { WeatherDay } from "@/data/mock-data";
 
 const CACHE_KEY = "agroclimate_weather_cache";
 const CACHE_DURATION = 15 * 60 * 1000;
@@ -171,8 +171,8 @@ export function mapRealtimeToWeatherDay(realtime: any): WeatherDay | null {
 
 export function useWeather(lat?: number, lon?: number) {
   const [forecast, setForecast] = useState<WeatherDay[]>(() => {
-    if (!isValidWeatherCoordinates(lat, lon)) return weeklyForecast;
-    return readLocationCache(lat, lon)?.data || weeklyForecast;
+    if (!isValidWeatherCoordinates(lat, lon)) return [];
+    return readLocationCache(lat, lon)?.data || [];
   });
   const [loading, setLoading] = useState(false);
   const [isLive, setIsLive] = useState(false);
@@ -205,7 +205,7 @@ export function useWeather(lat?: number, lon?: number) {
       setObservedAt(cached.observedAt ? new Date(cached.observedAt) : null);
       setSource("cache");
     } else {
-      setForecast(weeklyForecast);
+      setForecast([]);
       setIsLive(false);
       setLastUpdated(null);
       setObservedAt(null);
@@ -262,7 +262,7 @@ export function useWeather(lat?: number, lon?: number) {
       } catch (error) {
         if (!active || requestId !== latestRequest) return;
         console.warn("AgroForecast provider request failed", error);
-        setForecast(fallbackCache?.data || weeklyForecast);
+        setForecast(fallbackCache?.data || []);
         setIsLive(false);
         setLastUpdated(fallbackCache ? new Date(fallbackCache.timestamp) : null);
         setObservedAt(fallbackCache?.observedAt ? new Date(fallbackCache.observedAt) : null);
