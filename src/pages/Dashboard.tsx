@@ -48,7 +48,7 @@ export default function Dashboard() {
             ) : source === "cache" ? (
               <span className="flex items-center gap-1 text-warning text-xs"><WifiOff className="h-3 w-3" /> Cached data</span>
             ) : (
-              <span className="flex items-center gap-1 text-warning text-xs"><WifiOff className="h-3 w-3" /> Sample data</span>
+              <span className="flex items-center gap-1 text-warning text-xs"><WifiOff className="h-3 w-3" /> Weather unavailable</span>
             )}
           </div>
         </div>
