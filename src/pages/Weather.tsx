@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { HardwareDeviceRegistryPanel } from "@/components/hardware/HardwareDeviceRegistryPanel";
 import {
   Droplets,
   Thermometer,
@@ -357,6 +358,7 @@ export default function Weather() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
+      <HardwareDeviceRegistryPanel component="agroforecast" />
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-xl font-bold">Agro Forecast</h1>
