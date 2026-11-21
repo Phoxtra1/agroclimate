@@ -26,6 +26,10 @@ This register describes software paths present in the repository. A component be
 - Component consumers read persisted, owner-scoped observations and refresh from Supabase Realtime.
 - A device appearing as Registered is not a connection confirmation. The device is considered to have signalled only after a successful accepted observation updates its last-seen timestamp.
 
+## Local browser adapter boundary
+
+Browser-native BLE, serial and HID adapter classes exist in the codebase, but the pages in this pass do not yet launch a user-facing local-pairing runtime for those adapters. The supported provisioning path completed here is device/gateway-to-HTTPS ingestion through the Edge Function. Keyboard-wedge barcode scanners continue to work through the existing input workflow. Direct BLE/USB/serial pairing from the browser remains a separate implementation item and must not be inferred from selecting a protocol in the registry.
+
 ## Not yet certified
 
 The repository cannot certify hardware compatibility without named models and physical tests. No actual BLE sensor, USB/HID scale, NMEA tracker, MAVLink flight controller, storage station, or camera accessory has been tested as part of this software pass. Cloud deployment also remains unverified until migrations, Edge Functions, secrets, Realtime publication and scheduled jobs are confirmed in the target Supabase project.
