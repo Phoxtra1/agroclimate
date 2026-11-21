@@ -161,8 +161,10 @@ Deno.serve(async (req) => {
       device_id: device.id, user_id: device.user_id, component: device.component,
       metric, value, unit, observed_at: new Date(observedAt).toISOString(),
       idempotency_key: key,
-      farm_id: typeof body.farm_id === "string" ? body.farm_id.slice(0, 120) : device.farm_id,
-      site_id: typeof body.site_id === "string" ? body.site_id.slice(0, 120) : device.site_id,
+      // Device credentials are bound to the farm/site assigned at registration.
+      // Never let an ingest payload reassign observations to another farm or site.
+      farm_id: device.farm_id,
+      site_id: device.site_id,
       latitude: body.latitude ?? null, longitude: body.longitude ?? null, metadata,
     };
     const { data: inserted, error } = await admin.from("agroclimate_device_observations")
