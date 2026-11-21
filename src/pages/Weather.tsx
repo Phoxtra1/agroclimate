@@ -381,7 +381,7 @@ export default function Weather() {
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className={source === "live" ? "text-green-600 font-medium" : "text-amber-600 font-medium"}>
-            {source === "live" ? "Live provider data" : source === "cache" ? "Cached provider data" : "Demo sample data"}
+            {source === "live" ? "Live provider data" : source === "cache" ? "Cached provider data" : "Provider data unavailable"}
           </span>
           {lastUpdated && (
             <span>
@@ -544,7 +544,7 @@ export default function Weather() {
                 </>
               ) : (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-muted-foreground">
-                  Current live weather or a recent provider cache is unavailable. Demo values are shown for layout only; AgroClimate will not issue irrigation recommendations from sample or stale weather data. Refresh the forecast or enable GPS location and try again.
+                  Current live weather or a recent provider cache is unavailable. No forecast values are displayed and AgroClimate will not issue irrigation recommendations without reliable weather data. Refresh the forecast or enable GPS location and try again.
                 </p>
               )}
             </section>
