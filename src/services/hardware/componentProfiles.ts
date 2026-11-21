@@ -44,14 +44,14 @@ export const COMPONENT_HARDWARE_PROFILES: Record<HardwareComponent, ComponentHar
   agtrans: {
     component: "agtrans",
     capabilities: ["vehicle-location", "vehicle-speed"],
-    candidateProtocols: ["browser-geolocation", "https-api", "mqtt-tls"],
+    candidateProtocols: ["browser-geolocation", "usb-serial", "https-api", "mqtt-tls"],
     requiresPhysicalDevice: false,
     notes: "Driver phone GNSS and dedicated vehicle-tracker telemetry are distinct provenance sources.",
   },
   agroforecast: {
     component: "agroforecast",
     capabilities: ["temperature", "relative-humidity", "rainfall", "wind"],
-    candidateProtocols: ["https-api", "mqtt-tls", "ble-gatt"],
+    candidateProtocols: ["https-api", "mqtt-tls", "ble-gatt", "usb-serial"],
     requiresPhysicalDevice: false,
     notes: "External forecast providers remain valid; distinguish measured station data from forecasts and estimates.",
   },

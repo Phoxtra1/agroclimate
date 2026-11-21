@@ -90,7 +90,8 @@ export function calculateAgroRiskLocal(
   lon: number,
   boundary: [number, number][] | undefined,
   forecast: any[],
-  incidents: { lat: number; lon: number; type: string; date: string }[] = []
+  incidents: { lat: number; lon: number; type: string; date: string }[] = [],
+  fieldMeasurements: { soilMoisturePct?: number } = {},
 ): LocalAgroRiskResult {
   const today = forecast?.[0] || {};
   const temp = today.tempHigh ?? today.temp ?? 28;
@@ -98,7 +99,9 @@ export function calculateAgroRiskLocal(
   const wind = today.wind ?? 10;
   const rainProb = today.rainProb ?? 0;
   const rainMm = today.rainMm ?? 0;
-  const soilMoisture = today.soilMoisture ?? 40;
+  // A validated, calibrated live field measurement takes precedence over a
+  // provider/model estimate. Missing or uncalibrated sensors never become zero.
+  const soilMoisture = fieldMeasurements.soilMoisturePct ?? today.soilMoisture ?? 40;
 
   // 1. Terrain & Elevation details (Hills, Valleys, Slopes)
   let slope = 2; // degrees

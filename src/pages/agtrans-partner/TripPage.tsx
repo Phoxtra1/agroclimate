@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { HardwareDeviceRegistryPanel } from "@/components/hardware/HardwareDeviceRegistryPanel";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAGTrans } from "@/hooks/useAGTrans";
 import { useAuth } from "@/hooks/useAuth";
@@ -165,6 +166,7 @@ export default function TripPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
+      <HardwareDeviceRegistryPanel component="agtrans" />
       {/* Top Title HUD */}
       <div className="flex justify-between items-center border-b pb-4 border-border/40">
         <div>

@@ -13,6 +13,7 @@ import { FleetManagement } from "./FleetManagement";
 import { ConnectionProcedure } from "./ConnectionProcedure";
 import { ConnectionDiagnostics } from "./ConnectionDiagnostics";
 import { FleetThresholdsPanel } from "./FleetThresholdsPanel";
+import { useHardwareObservations } from "@/hooks/useHardwareObservations";
 import { AircraftRegistry } from "./AircraftRegistry";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ import { Maximize2, Minimize2 } from "lucide-react";
 
 export function DroneOperationsConsole() {
   const droneState = useDroneState();
+  const { latestByMetric: gatewayTelemetry } = useHardwareObservations(["aerial-console"]);
+  const gatewayReadings = [...gatewayTelemetry.values()].sort((a, b) => Date.parse(b.measuredAt) - Date.parse(a.measuredAt));
   const [activeTab, setActiveTab] = useState("mission-control");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -64,6 +67,16 @@ export function DroneOperationsConsole() {
         </div>
       </div>
 
+
+      {gatewayReadings.length > 0 && (
+        <section className="rounded-lg border border-cyan-900/60 bg-slate-900/70 p-3 space-y-2" aria-label="Registered aircraft gateway telemetry">
+          <div className="flex items-center justify-between gap-2"><h3 className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300">Registered Device Gateway · Read-only</h3><span className="text-[10px] text-slate-400">Independent of simulator and flight controls</span></div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {gatewayReadings.map((reading) => <div key={reading.metric} className="rounded border border-slate-800 bg-slate-950 p-2"><p className="text-[9px] uppercase text-slate-500">{reading.metric.replace(/_/g, " ")}</p><p className="text-sm font-mono text-cyan-200">{reading.value} {reading.unit}</p><p className="text-[9px] text-slate-500">{new Date(reading.measuredAt).toLocaleTimeString()}</p></div>)}
+          </div>
+          <p className="text-[10px] text-slate-500">Device-reported measurements are displayed for monitoring only. They do not arm, move, calibrate or otherwise command an aircraft.</p>
+        </section>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsContent value="mission-control" className="space-y-4 m-0">

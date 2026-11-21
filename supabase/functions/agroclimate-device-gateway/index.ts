@@ -91,6 +91,19 @@ Deno.serve(async (req) => {
       return json({ error: "capabilities must be an array of at most 32 short strings" }, 400);
     }
     const capabilities = body.capabilities ?? [];
+    const calibrationDueAt = body.calibration_due_at == null ? null : body.calibration_due_at;
+    if (calibrationDueAt !== null && (typeof calibrationDueAt !== "string" || !Number.isFinite(Date.parse(calibrationDueAt)) || Date.parse(calibrationDueAt) <= Date.now())) {
+      return json({ error: "calibration_due_at must be a future ISO 8601 timestamp" }, 400);
+    }
+    if (calibrationDueAt !== null && component !== "agrorisk" && component !== "agroforecast") {
+      return json({ error: "Calibration expiry is only supported for AgroRisk and AgroForecast sensors" }, 400);
+    }
+    const farmId = body.farm_id == null ? null : body.farm_id;
+    const siteId = body.site_id == null ? null : body.site_id;
+    if ((farmId !== null && (typeof farmId !== "string" || farmId.length > 120)) ||
+        (siteId !== null && (typeof siteId !== "string" || siteId.length > 120))) {
+      return json({ error: "farm_id and site_id must be strings no longer than 120 characters" }, 400);
+    }
     const token = newToken();
     const { data: device, error } = await admin.from("agroclimate_devices").insert({
       user_id: user.id, component, protocol, device_name: deviceName, hardware_id: hardwareId,
@@ -98,8 +111,9 @@ Deno.serve(async (req) => {
       model: typeof body.model === "string" ? body.model.trim().slice(0, 100) || null : null,
       firmware_version: typeof body.firmware_version === "string" ? body.firmware_version.trim().slice(0, 80) || null : null,
       capabilities,
-      farm_id: typeof body.farm_id === "string" ? body.farm_id.slice(0, 120) : null,
-      site_id: typeof body.site_id === "string" ? body.site_id.slice(0, 120) : null,
+      calibration_due_at: calibrationDueAt,
+      farm_id: farmId,
+      site_id: siteId,
     }).select("id,user_id,component,device_name,hardware_id,manufacturer,model,firmware_version,protocol,capabilities,farm_id,site_id,status,created_at").single();
     if (error) return json({ error: error.code === "23505" ? "This hardware ID is already registered for this component and account" : "Device registration failed" }, 400);
     const { error: credentialError } = await admin.from("agroclimate_device_credentials")
@@ -125,6 +139,23 @@ Deno.serve(async (req) => {
     const { error } = await admin.from("agroclimate_devices").update({ status: "revoked" })
       .eq("id", id).eq("user_id", user.id);
     return error ? json({ error: "Device status update failed" }, 500) : json({ revoked: true, device_id: id });
+  }
+
+  if (body.action === "rotate") {
+    const user = await ownerFromRequest(req, url, anonKey);
+    if (!user) return json({ error: "Valid owner authentication required" }, 401);
+    const id = typeof body.device_id === "string" ? body.device_id : "";
+    const { data: device } = await admin.from("agroclimate_devices").select("id")
+      .eq("id", id).eq("user_id", user.id).maybeSingle();
+    if (!device) return json({ error: "Device not found for this account" }, 404);
+    const token = newToken();
+    const { error: credentialError } = await admin.from("agroclimate_device_credentials")
+      .upsert({ device_id: id, token_hash: await sha256(token), created_at: new Date().toISOString(), revoked_at: null }, { onConflict: "device_id" });
+    if (credentialError) return json({ error: "Secure credential rotation failed" }, 500);
+    const { error: deviceError } = await admin.from("agroclimate_devices")
+      .update({ status: "active" }).eq("id", id).eq("user_id", user.id);
+    if (deviceError) return json({ error: "Credential rotated but device status could not be reactivated" }, 500);
+    return json({ rotated: true, device_id: id, device_token: token, token_notice: "Store this replacement token securely. It is returned once only." });
   }
 
   if (body.action === "ingest") {

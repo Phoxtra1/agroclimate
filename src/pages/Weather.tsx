@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { HardwareDeviceRegistryPanel } from "@/components/hardware/HardwareDeviceRegistryPanel";
 import {
   Droplets,
   Thermometer,
@@ -26,6 +27,7 @@ import { useWeather } from "@/hooks/useWeather";
 import type { WeatherDay } from "@/data/mock-data";
 import { useHardwareObservations } from "@/hooks/useHardwareObservations";
 import type { ObservationMetric } from "@/services/hardware/types";
+import { getCalibratedFieldMeasurements } from "@/services/hardware/fieldMeasurements";
 
 // ────────────────────────────────────────────────────────────
 // TYPES
@@ -114,7 +116,8 @@ const CROPS = [
 // ────────────────────────────────────────────────────────────
 function computeIrrigationAdvisories(
   forecast: WeatherDay[],
-  month: number
+  month: number,
+  measuredSoilMoisturePct?: number,
 ): { advisories: CropWaterAdvisory[]; summary: IrrigationSummary } {
   const shortTerm = forecast.slice(0, 3);
   const avgET = shortTerm.length
@@ -123,9 +126,9 @@ function computeIrrigationAdvisories(
   const avgRainMm = shortTerm.length
     ? shortTerm.reduce((s, d) => s + (d.rainMm ?? 0), 0) / shortTerm.length
     : 0;
-  const avgSoilMoisture = shortTerm.length
+  const avgSoilMoisture = measuredSoilMoisturePct ?? (shortTerm.length
     ? shortTerm.reduce((s, d) => s + (d.soilMoisture ?? 30), 0) / shortTerm.length
-    : 30;
+    : 30);
   const avgSoilTemp = shortTerm.length
     ? shortTerm.reduce((s, d) => s + (d.soilTemperature ?? 28), 0) / shortTerm.length
     : 28;
@@ -327,16 +330,19 @@ export default function Weather() {
 
   const today = forecast[0];
   const { latestByMetric } = useHardwareObservations(["agroforecast"]);
-  const stationReadings = (["temperature", "relative_humidity", "rainfall", "wind_speed"] as ObservationMetric[])
+  const stationReadings = (["temperature", "relative_humidity", "rainfall", "wind_speed", "soil_moisture"] as ObservationMetric[])
     .map((metric) => latestByMetric.get(metric)).filter((item) => item !== undefined);
+  const calibratedStationSoilMoisture = getCalibratedFieldMeasurements(
+    stationReadings, Date.now(), "agroforecast",
+  ).soilMoisturePct;
   const currentMonth = new Date().getMonth() + 1;
   const season = getCurrentSeason(currentMonth);
   const recommendations = getSeasonalRecommendations(currentMonth);
 
   // Compute live irrigation advisories from forecast data
   const { advisories, summary } = useMemo(
-    () => computeIrrigationAdvisories(forecast, currentMonth),
-    [forecast, currentMonth]
+    () => computeIrrigationAdvisories(forecast, currentMonth, calibratedStationSoilMoisture),
+    [forecast, currentMonth, calibratedStationSoilMoisture]
   );
 
   const currentCrops = CROPS.filter((c) => c.season.includes(currentMonth));
@@ -352,6 +358,7 @@ export default function Weather() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto min-h-screen">
+      <HardwareDeviceRegistryPanel component="agroforecast" />
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-xl font-bold">Agro Forecast</h1>

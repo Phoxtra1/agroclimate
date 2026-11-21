@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { HardwareDeviceRegistryPanel } from "@/components/hardware/HardwareDeviceRegistryPanel";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { saveFarm as dbSaveFarm, listFarms as dbListFarms } from "@/services/sat
 import { OpenInSatelliteButton } from "@/components/satellite/OpenInSatelliteButton";
 import { useHardwareObservations } from "@/hooks/useHardwareObservations";
 import type { ObservationMetric } from "@/services/hardware/types";
+import { getCalibratedFieldMeasurements } from "@/services/hardware/fieldMeasurements";
 import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -585,8 +587,15 @@ export default function EnvironmentalMonitor() {
   const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
   const { latestByMetric: latestFieldMetrics } = useHardwareObservations(["agrorisk", "agroforecast"]);
-  const fieldSensorReadings = (["soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity", "rainfall", "water_level"] as ObservationMetric[])
-    .map((metric) => latestFieldMetrics.get(metric)).filter((item) => item !== undefined);
+  const fieldSensorReadings = useMemo(
+    () => (["soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity", "rainfall", "water_level"] as ObservationMetric[])
+      .map((metric) => latestFieldMetrics.get(metric)).filter((item) => item !== undefined),
+    [latestFieldMetrics],
+  );
+  const calibratedFieldMeasurements = useMemo(
+    () => getCalibratedFieldMeasurements(fieldSensorReadings),
+    [fieldSensorReadings],
+  );
 
   // Tab State
   const [activeTab, setActiveTab] = useState<"sensors" | "agrorisk">("sensors");
@@ -697,7 +706,7 @@ export default function EnvironmentalMonitor() {
     setAiAgroRisk(null);
 
     // 1. Calculate Local deterministic Risk metrics (instant updates)
-    const localAssess = calculateAgroRiskLocal(lat, lon, boundary, forecast, incidents);
+    const localAssess = calculateAgroRiskLocal(lat, lon, boundary, forecast, incidents, calibratedFieldMeasurements);
     setAgroRiskData(localAssess);
 
     // 2. Trigger Advanced AI Risk Summary if online
@@ -722,7 +731,7 @@ export default function EnvironmentalMonitor() {
     } finally {
       setIsAiLoading(false);
     }
-  }, [forecast, incidents]);
+  }, [forecast, incidents, calibratedFieldMeasurements]);
 
   // Initial load or geolocation change
   useEffect(() => {
@@ -1006,6 +1015,7 @@ export default function EnvironmentalMonitor() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
+      <HardwareDeviceRegistryPanel component="agrorisk" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -1060,10 +1070,10 @@ export default function EnvironmentalMonitor() {
         <Card className="border-emerald-500/30 bg-emerald-500/5">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center justify-between gap-2">
-              Calibrated Field Sensor Readings
+              Field Sensor Readings
               <Badge variant="outline" className="border-emerald-600/40 text-emerald-700">Measured · device reported</Badge>
             </CardTitle>
-            <p className="text-xs text-muted-foreground">Physical observations are shown separately from weather-provider forecasts and model-based AgroRisk estimates.</p>
+            <p className="text-xs text-muted-foreground">Physical observations are shown separately from forecasts. Only fresh readings with explicit calibration metadata are used in deterministic risk calculations; uncalibrated readings remain informational.</p>
           </CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {fieldSensorReadings.map((reading) => (
