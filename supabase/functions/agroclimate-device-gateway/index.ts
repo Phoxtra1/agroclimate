@@ -45,6 +45,18 @@ const isObject = (value: unknown): value is Record<string, any> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
+const COMPONENT_METRICS: Record<string, string[]> = {
+  "agroforecast": ["temperature", "relative_humidity", "rainfall", "wind_speed", "wind_direction"],
+  "agrorisk": ["temperature", "soil_moisture", "soil_temperature", "soil_ph", "electrical_conductivity", "rainfall", "water_level"],
+  "agro-inventory": ["weight", "barcode_count"], "market-link": ["weight"],
+  "agtrans": ["latitude", "longitude", "vehicle_speed"],
+  "aerial-console": ["latitude", "longitude", "aircraft_altitude", "aircraft_battery"],
+  "farm-handler": ["latitude", "longitude"],
+};
+const METRIC_CAPABILITIES: Record<string, string[]> = {
+  temperature:["temperature"],relative_humidity:["relative-humidity"],soil_moisture:["soil-moisture"],soil_temperature:["soil-temperature"],soil_ph:["soil-ph"],electrical_conductivity:["electrical-conductivity"],rainfall:["rainfall"],wind_speed:["wind"],wind_direction:["wind"],water_level:["water-level"],weight:["weight-measurement"],barcode_count:["barcode-scan"],latitude:["location","vehicle-location","aircraft-telemetry"],longitude:["location","vehicle-location","aircraft-telemetry"],vehicle_speed:["vehicle-speed"],aircraft_altitude:["aircraft-telemetry"],aircraft_battery:["aircraft-telemetry"],
+};
+
 async function ownerFromRequest(req: Request, url: string, anonKey: string) {
   const authorization = req.headers.get("Authorization");
   if (!authorization) return null;
@@ -162,11 +174,12 @@ Deno.serve(async (req) => {
     const token = req.headers.get("x-device-token") || "";
     if (token.length < 32 || token.length > 256) return json({ error: "Valid x-device-token required" }, 401);
     const { data: credential } = await admin.from("agroclimate_device_credentials")
-      .select("device_id,revoked_at,agroclimate_devices!inner(id,user_id,component,status,farm_id,site_id)")
+      .select("device_id,revoked_at,agroclimate_devices!inner(id,user_id,component,status,farm_id,site_id,capabilities)")
       .eq("token_hash", await sha256(token)).maybeSingle();
     if (!credential || credential.revoked_at) return json({ error: "Invalid or revoked device credential" }, 401);
     const device = (credential as any).agroclimate_devices;
     if (device.status !== "active") return json({ error: "Device is not active" }, 403);
+    if (body.expected_component !== undefined && (typeof body.expected_component !== "string" || body.expected_component !== device.component)) return json({ error: "The device credential is bound to a different AgroClimate component" }, 403);
     const metric = typeof body.metric === "string" ? body.metric : "";
     const unit = typeof body.unit === "string" ? body.unit : "";
     const value = body.value;
@@ -179,6 +192,12 @@ Deno.serve(async (req) => {
         Date.parse(observedAt) > Date.now() + 5 * 60_000 ||
         !key || key.length > 160) {
       return json({ error: "Invalid observation. Supply an allowlisted metric/unit, finite numeric value, timezone-aware observed_at, and idempotency_key." }, 400);
+    }
+    if (body.expected_component !== undefined) {
+      if (!COMPONENT_METRICS[device.component]?.includes(metric)) return json({ error: "Measurement is not valid for the registered AgroClimate component" }, 403);
+      const capabilities = Array.isArray(device.capabilities) ? device.capabilities : [];
+      const accepted = METRIC_CAPABILITIES[metric] ?? [];
+      if (capabilities.length > 0 && !capabilities.some((capability: string) => accepted.includes(capability))) return json({ error: "Registered device capabilities do not permit this metric" }, 403);
     }
     if (body.latitude !== undefined && (typeof body.latitude !== "number" || !Number.isFinite(body.latitude) || body.latitude < -90 || body.latitude > 90)) return json({ error: "Invalid latitude" }, 400);
     if (body.longitude !== undefined && (typeof body.longitude !== "number" || !Number.isFinite(body.longitude) || body.longitude < -180 || body.longitude > 180)) return json({ error: "Invalid longitude" }, 400);
