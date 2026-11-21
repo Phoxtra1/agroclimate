@@ -86,6 +86,9 @@ jobs:
           src/services/hardware/browserAdapters.ts
           src/services/hardware/bootstrap.ts
           src/services/hardware/deviceRuntime.ts
+          src/services/hardware/componentProfiles.ts
+          src/components/hardware/HardwareDeviceRegistryPanel.tsx
+          src/components/hardware/HardwareLocalDeviceConnections.tsx
           src/components/PostHarvestStationPanel.tsx
           src/pages/Satellite.tsx
           src/pages/admin/AdminDashboard.tsx
