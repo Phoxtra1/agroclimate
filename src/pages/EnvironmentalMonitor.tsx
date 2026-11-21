@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { HardwareDeviceRegistryPanel } from "@/components/hardware/HardwareDeviceRegistryPanel";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeather } from "@/hooks/useWeather";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1014,6 +1015,7 @@ export default function EnvironmentalMonitor() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
+      <HardwareDeviceRegistryPanel component="agrorisk" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
