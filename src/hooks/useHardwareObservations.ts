@@ -26,6 +26,7 @@ type GatewayObservationRow = {
     model: string | null;
     firmware_version: string | null;
     status: "active" | "revoked";
+    calibration_due_at: string | null;
   } | null;
 };
 
@@ -51,7 +52,13 @@ function toDeviceObservation(row: GatewayObservationRow): DeviceObservation | nu
     firmwareVersion: row.device.firmware_version ?? undefined,
     latitude: row.latitude ?? undefined,
     longitude: row.longitude ?? undefined,
-    metadata: row.metadata ?? undefined,
+    metadata: {
+      ...(row.metadata ?? {}),
+      ...(row.device.calibration_due_at ? {
+        calibration_status: "calibrated",
+        calibration_due_at: row.device.calibration_due_at,
+      } : {}),
+    },
   };
 }
 
@@ -82,7 +89,7 @@ export function useHardwareObservations(components?: DeviceObservation["componen
 
     let query = supabase
       .from("agroclimate_device_observations" as any)
-      .select("id,device_id,user_id,component,metric,value,unit,observed_at,received_at,idempotency_key,farm_id,site_id,latitude,longitude,metadata,device:agroclimate_devices!inner(protocol,model,firmware_version,status)")
+      .select("id,device_id,user_id,component,metric,value,unit,observed_at,received_at,idempotency_key,farm_id,site_id,latitude,longitude,metadata,device:agroclimate_devices!inner(protocol,model,firmware_version,status,calibration_due_at)")
       .eq("user_id", userId)
       .order("observed_at", { ascending: false })
       .limit(200);
