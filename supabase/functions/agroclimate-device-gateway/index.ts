@@ -91,6 +91,10 @@ Deno.serve(async (req) => {
       return json({ error: "capabilities must be an array of at most 32 short strings" }, 400);
     }
     const capabilities = body.capabilities ?? [];
+    const calibrationDueAt = body.calibration_due_at == null ? null : body.calibration_due_at;
+    if (calibrationDueAt !== null && (typeof calibrationDueAt !== "string" || !Number.isFinite(Date.parse(calibrationDueAt)) || Date.parse(calibrationDueAt) <= Date.now())) {
+      return json({ error: "calibration_due_at must be a future ISO 8601 timestamp" }, 400);
+    }
     const token = newToken();
     const { data: device, error } = await admin.from("agroclimate_devices").insert({
       user_id: user.id, component, protocol, device_name: deviceName, hardware_id: hardwareId,
@@ -98,6 +102,7 @@ Deno.serve(async (req) => {
       model: typeof body.model === "string" ? body.model.trim().slice(0, 100) || null : null,
       firmware_version: typeof body.firmware_version === "string" ? body.firmware_version.trim().slice(0, 80) || null : null,
       capabilities,
+      calibration_due_at: calibrationDueAt,
       farm_id: typeof body.farm_id === "string" ? body.farm_id.slice(0, 120) : null,
       site_id: typeof body.site_id === "string" ? body.site_id.slice(0, 120) : null,
     }).select("id,user_id,component,device_name,hardware_id,manufacturer,model,firmware_version,protocol,capabilities,farm_id,site_id,status,created_at").single();
