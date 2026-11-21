@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Ban, Check, Copy, Cpu, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -74,7 +75,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
     return () => { void supabase.removeChannel(channel); };
   }, [component, refresh, user]);
 
-  const register = async (event: React.FormEvent) => {
+  const register = async (event: FormEvent) => {
     event.preventDefault();
     if (!user || !deviceName.trim() || !hardwareId.trim()) return;
     setSaving(true); setError(null); setIssuedToken(null);
@@ -122,7 +123,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
     }
   };
 
-  const protocols = useMemo(() => profile.candidateProtocols, [profile.candidateProtocols]);
+  const protocols = profile.candidateProtocols;
 
   return (
     <details className="group">
