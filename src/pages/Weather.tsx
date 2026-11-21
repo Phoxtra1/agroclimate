@@ -269,7 +269,7 @@ function TodayWeather({ weather }: { weather: WeatherDay }) {
         </div>
         <div>
           <Leaf className="h-4 w-4 mx-auto opacity-70" />
-          <p className="font-semibold mt-1">{weather.evapotranspiration ?? 4.5}</p>
+          <p className="font-semibold mt-1">{weather.evapotranspiration ?? "—"}</p>
           <p className="text-xs opacity-70">ET₀ · {weather.evapotranspirationSource === "provider" ? "provider" : weather.evapotranspirationSource === "estimated" ? "estimated" : "not available"}</p>
         </div>
       </div>
@@ -437,17 +437,17 @@ export default function Weather() {
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <CloudRain className="h-5 w-5 mx-auto text-blue-400" />
-                <p className="text-lg font-bold mt-2">{today.rainMm ?? 0} mm</p>
+                <p className="text-lg font-bold mt-2">{today.rainMm ?? "—"} {today.rainMm == null ? "" : "mm"}</p>
                 <p className="text-xs text-muted-foreground">{today.rainSource === "provider" ? "Rainfall · provider" : today.rainSource === "estimated" ? "Rainfall · estimated" : "Rainfall · not available"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Gauge className="h-5 w-5 mx-auto text-amber-600" />
-                <p className="text-lg font-bold mt-2">{today.soilMoisture ?? 0}%</p>
+                <p className="text-lg font-bold mt-2">{today.soilMoisture ?? "—"}{today.soilMoisture == null ? "" : "%"}</p>
                 <p className="text-xs text-muted-foreground">{today.soilMoistureSource === "provider" ? "Soil Moisture · provider" : today.soilMoistureSource === "estimated" ? "Estimated Soil Moisture" : "Soil Moisture · not available"}</p>
               </div>
               <div className="bg-card rounded-xl p-4 text-center shadow-sm border border-border/40">
                 <Leaf className="h-5 w-5 mx-auto text-green-600" />
-                <p className="text-lg font-bold mt-2">{today.evapotranspiration ?? 0}</p>
+                <p className="text-lg font-bold mt-2">{today.evapotranspiration ?? "—"}</p>
                 <p className="text-xs text-muted-foreground">{today.evapotranspirationSource === "provider" ? "ET₀ · provider" : today.evapotranspirationSource === "estimated" ? "ET₀ · estimated" : "ET₀ · not available"} (mm/day)</p>
               </div>
             </div>
