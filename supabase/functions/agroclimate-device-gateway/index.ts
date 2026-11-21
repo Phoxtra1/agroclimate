@@ -95,6 +95,15 @@ Deno.serve(async (req) => {
     if (calibrationDueAt !== null && (typeof calibrationDueAt !== "string" || !Number.isFinite(Date.parse(calibrationDueAt)) || Date.parse(calibrationDueAt) <= Date.now())) {
       return json({ error: "calibration_due_at must be a future ISO 8601 timestamp" }, 400);
     }
+    if (calibrationDueAt !== null && component !== "agrorisk" && component !== "agroforecast") {
+      return json({ error: "Calibration expiry is only supported for AgroRisk and AgroForecast sensors" }, 400);
+    }
+    const farmId = body.farm_id == null ? null : body.farm_id;
+    const siteId = body.site_id == null ? null : body.site_id;
+    if ((farmId !== null && (typeof farmId !== "string" || farmId.length > 120)) ||
+        (siteId !== null && (typeof siteId !== "string" || siteId.length > 120))) {
+      return json({ error: "farm_id and site_id must be strings no longer than 120 characters" }, 400);
+    }
     const token = newToken();
     const { data: device, error } = await admin.from("agroclimate_devices").insert({
       user_id: user.id, component, protocol, device_name: deviceName, hardware_id: hardwareId,
@@ -103,8 +112,8 @@ Deno.serve(async (req) => {
       firmware_version: typeof body.firmware_version === "string" ? body.firmware_version.trim().slice(0, 80) || null : null,
       capabilities,
       calibration_due_at: calibrationDueAt,
-      farm_id: typeof body.farm_id === "string" ? body.farm_id.slice(0, 120) : null,
-      site_id: typeof body.site_id === "string" ? body.site_id.slice(0, 120) : null,
+      farm_id: farmId,
+      site_id: siteId,
     }).select("id,user_id,component,device_name,hardware_id,manufacturer,model,firmware_version,protocol,capabilities,farm_id,site_id,status,created_at").single();
     if (error) return json({ error: error.code === "23505" ? "This hardware ID is already registered for this component and account" : "Device registration failed" }, 400);
     const { error: credentialError } = await admin.from("agroclimate_device_credentials")
