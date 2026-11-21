@@ -24,7 +24,7 @@ AgroClimate is an independently developed solution in the Amineva ecosystem. Its
 2. Enter the project:
    `cd agroclimate`
 3. Install dependencies:
-   `npm ci`
+   `npm install`
 4. Create a local environment file:
    `cp .env.example .env`
 5. Fill in the environment values from the authorised project configuration.
