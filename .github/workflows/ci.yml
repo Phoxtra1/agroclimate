@@ -49,6 +49,12 @@ jobs:
       - name: Type-check build configuration
         run: npx tsc --project tsconfig.node.json --noEmit --pretty false
 
+      - name: Install Deno for Supabase Edge Function validation
+        run: curl -fsSL https://deno.land/install.sh | sh
+
+      - name: Type-check component-bound device gateway
+        run: ~/.deno/bin/deno check --no-lock supabase/functions/agroclimate-device-gateway/index.ts
+
       # Existing Supabase data calls still contain explicit any casts because this
       # repository's generated database types do not yet include these new tables.
       # Keep all other ESLint rules active across every changed application source file.
