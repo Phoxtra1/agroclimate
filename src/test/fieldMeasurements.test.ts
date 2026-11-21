@@ -15,6 +15,11 @@ describe("calibrated AgroRisk field measurements", () => {
   it("converts calibrated volumetric moisture to percent for the risk engine", () => {
     expect(getCalibratedFieldMeasurements([base], now)).toEqual({ soilMoisturePct: 32 });
   });
+  it("supports a separately scoped AgroForecast station calibration record", () => {
+    const station = { ...base, component: "agroforecast" as const };
+    expect(getCalibratedFieldMeasurements([station], now, "agroforecast")).toEqual({ soilMoisturePct: 32 });
+    expect(getCalibratedFieldMeasurements([station], now)).toEqual({});
+  });
   it("does not use uncalibrated or expired-calibration readings", () => {
     expect(getCalibratedFieldMeasurements([{ ...base, metadata: {} }], now)).toEqual({});
     expect(getCalibratedFieldMeasurements([{ ...base, metadata: { ...base.metadata, calibration_due_at: "2026-11-20T00:00:00.000Z" } }], now)).toEqual({});
