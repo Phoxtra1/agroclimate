@@ -49,14 +49,14 @@ describe("NMEA 0183 vehicle tracker decoder", () => {
     return "$" + body + "*" + checksum.toString(16).toUpperCase().padStart(2, "0");
   };
 
-  it("decodes checked RMC position and speed in knots", () => {
+  it("decodes checked RMC position and normalizes tracker speed to metres per second", () => {
     const decoded = decodeNmea0183Line(sentence("GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W"));
     expect(decoded.map((item) => [item.metric, item.unit])).toEqual([
-      ["latitude", "°"], ["longitude", "°"], ["vehicle_speed", "kn"],
+      ["latitude", "°"], ["longitude", "°"], ["vehicle_speed", "m/s"],
     ]);
     expect(decoded[0].value).toBeCloseTo(48.1173, 6);
     expect(decoded[1].value).toBeCloseTo(11.5166666667, 6);
-    expect(decoded[2].value).toBe(22.4);
+    expect(decoded[2].value).toBeCloseTo(22.4 * 0.514444, 6);
   });
 
   it("decodes valid GGA fixes and rejects bad checksums or no-fix records", () => {
