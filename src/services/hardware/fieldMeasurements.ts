@@ -14,10 +14,11 @@ const MAX_READING_AGE_MS = 30 * 60 * 1000;
 export function getCalibratedFieldMeasurements(
   observations: readonly DeviceObservation[],
   now = Date.now(),
+  component: DeviceObservation["component"] = "agrorisk",
 ): CalibratedFieldMeasurements {
   const reading = observations
     .filter((item) => item.metric === "soil_moisture" && item.quality === "valid")
-    .filter((item) => item.component === "agrorisk")
+    .filter((item) => item.component === component)
     .filter((item) => {
       const measuredAt = Date.parse(item.measuredAt);
       return Number.isFinite(measuredAt) && measuredAt <= now && now - measuredAt <= MAX_READING_AGE_MS;
