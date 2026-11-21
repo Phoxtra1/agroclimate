@@ -40,6 +40,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
   const [deviceName, setDeviceName] = useState("");
   const [hardwareId, setHardwareId] = useState("");
   const [model, setModel] = useState("");
+  const [calibrationDueAt, setCalibrationDueAt] = useState("");
   const [protocol, setProtocol] = useState<DeviceProtocol>(profile.candidateProtocols[0] ?? "manual");
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,6 +85,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
         body: {
           action: "register", component, protocol, device_name: deviceName.trim(),
           hardware_id: hardwareId.trim(), model: model.trim() || null,
+          calibration_due_at: calibrationDueAt ? new Date(`${calibrationDueAt}T23:59:59.999Z`).toISOString() : null,
           capabilities: [...profile.capabilities],
         },
       });
@@ -92,7 +94,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
         throw new Error(data?.error || "The gateway did not return a device credential.");
       }
       setIssuedToken(data.device_token);
-      setDeviceName(""); setHardwareId(""); setModel("");
+      setDeviceName(""); setHardwareId(""); setModel(""); setCalibrationDueAt("");
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Device registration failed.");
@@ -146,6 +148,7 @@ export function HardwareDeviceRegistryPanel({ component }: { component: Register
             <div><Label>Device name</Label><Input value={deviceName} onChange={(e) => setDeviceName(e.target.value)} maxLength={100} required placeholder="e.g. North field soil probe" /></div>
             <div><Label>Hardware ID / serial</Label><Input value={hardwareId} onChange={(e) => setHardwareId(e.target.value)} maxLength={160} required placeholder="Unique device serial" /></div>
             <div><Label>Model (optional)</Label><Input value={model} onChange={(e) => setModel(e.target.value)} maxLength={100} placeholder="Manufacturer model" /></div>
+            {(component === "agrorisk" || component === "agroforecast") && <div><Label>Sensor calibration valid through (owner-entered)</Label><Input type="date" value={calibrationDueAt} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setCalibrationDueAt(e.target.value)} /><p className="text-[10px] text-muted-foreground">Only enter a date supported by the sensor calibration record. This is an owner declaration, not independent certification.</p></div>}
             <div><Label>Connection protocol</Label><select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={protocol} onChange={(e) => setProtocol(e.target.value as DeviceProtocol)}>{protocols.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
             <div className="sm:col-span-2"><Button type="submit" disabled={saving || !deviceName.trim() || !hardwareId.trim()}>{saving ? "Registering…" : "Register device and issue token"}</Button></div>
           </form>
