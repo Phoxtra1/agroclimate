@@ -52,12 +52,13 @@ export class DeviceIntegrationRuntime {
   private registrations = new Map<string, DeviceRegistration>();
   private active = new Map<string, HardwareAdapter>();
   private readonly onOnline = () => { void this.delivery.flush(); };
-  constructor(private readonly delivery: ResilientObservationDelivery) {
+  constructor(private readonly delivery: ResilientObservationDelivery, private readonly tenantScope?: string) {
     if (typeof window !== "undefined") window.addEventListener("online", this.onOnline);
   }
   registerAdapter(adapter: HardwareAdapter): void { this.registry.register(adapter); }
   registerDevice(device: DeviceRegistration): void {
     if (!device.deviceId.trim() || !device.tenantId.trim() || !device.ownerUserId.trim()) throw new Error("Device ID, tenant ID and owner user ID are required.");
+    if (this.tenantScope && device.tenantId !== this.tenantScope) throw new Error("Device belongs to a different authenticated tenant.");
     const existing = this.registrations.get(device.deviceId);
     if (existing && (existing.tenantId !== device.tenantId || existing.ownerUserId !== device.ownerUserId)) throw new Error("Device ID is already assigned to another owner.");
     this.registrations.set(device.deviceId, { ...device, capabilities: [...device.capabilities] });
