@@ -51,7 +51,7 @@ export const COMPONENT_HARDWARE_PROFILES: Record<HardwareComponent, ComponentHar
   agroforecast: {
     component: "agroforecast",
     capabilities: ["temperature", "relative-humidity", "rainfall", "wind"],
-    candidateProtocols: ["https-api", "mqtt-tls", "ble-gatt"],
+    candidateProtocols: ["https-api", "mqtt-tls", "ble-gatt", "usb-serial"],
     requiresPhysicalDevice: false,
     notes: "External forecast providers remain valid; distinguish measured station data from forecasts and estimates.",
   },
