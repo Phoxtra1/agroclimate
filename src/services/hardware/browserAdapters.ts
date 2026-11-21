@@ -291,7 +291,7 @@ export function decodeNmea0183Line(line: string): Array<{ metric: ObservationMet
     { metric: "latitude", value: latitude, unit: "°" },
     { metric: "longitude", value: longitude, unit: "°" },
   ];
-  if (speedKnots !== null) result.push({ metric: "vehicle_speed", value: speedKnots, unit: "kn" });
+  if (speedKnots !== null) result.push({ metric: "vehicle_speed", value: speedKnots * 0.514444, unit: "m/s" });
   return result;
 }
 
