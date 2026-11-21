@@ -141,6 +141,23 @@ Deno.serve(async (req) => {
     return error ? json({ error: "Device status update failed" }, 500) : json({ revoked: true, device_id: id });
   }
 
+  if (body.action === "rotate") {
+    const user = await ownerFromRequest(req, url, anonKey);
+    if (!user) return json({ error: "Valid owner authentication required" }, 401);
+    const id = typeof body.device_id === "string" ? body.device_id : "";
+    const { data: device } = await admin.from("agroclimate_devices").select("id")
+      .eq("id", id).eq("user_id", user.id).maybeSingle();
+    if (!device) return json({ error: "Device not found for this account" }, 404);
+    const token = newToken();
+    const { error: credentialError } = await admin.from("agroclimate_device_credentials")
+      .upsert({ device_id: id, token_hash: await sha256(token), created_at: new Date().toISOString(), revoked_at: null }, { onConflict: "device_id" });
+    if (credentialError) return json({ error: "Secure credential rotation failed" }, 500);
+    const { error: deviceError } = await admin.from("agroclimate_devices")
+      .update({ status: "active" }).eq("id", id).eq("user_id", user.id);
+    if (deviceError) return json({ error: "Credential rotated but device status could not be reactivated" }, 500);
+    return json({ rotated: true, device_id: id, device_token: token, token_notice: "Store this replacement token securely. It is returned once only." });
+  }
+
   if (body.action === "ingest") {
     const token = req.headers.get("x-device-token") || "";
     if (token.length < 32 || token.length > 256) return json({ error: "Valid x-device-token required" }, 401);
