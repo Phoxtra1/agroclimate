@@ -28,6 +28,7 @@ import { estimateMarketPrice } from "@/lib/pricingEngine";
 import { AGTransSupplierPanel } from "@/components/market/AGTransSupplierPanel";
 import { PotentialBuyersPanel } from "@/components/market/PotentialBuyersPanel";
 import { ProduceSafety } from "@/components/produce-safety/ProduceSafety";
+import { useHardwareObservations } from "@/hooks/useHardwareObservations";
 
 const CATEGORIES = ["Cash Crop", "Cereal", "Tuber", "Vegetable", "Fruit", "Legume", "Livestock", "Fish", "Mineral", "Raw Material", "Refined Material", "Other"];
 
@@ -56,6 +57,14 @@ function OverviewCards({ totalSupply, totalDemand, activeContracts, balance }: {
 function SupplyForm({ onAdded }: { onAdded: () => void }) {
   const { user } = useAuth();
   const { profile } = useProfile();
+  const { latestByMetric } = useHardwareObservations(["market-link"]);
+  const latestWeight = latestByMetric.get("weight");
+  const freshMatchingWeight = latestWeight
+    && Date.now() - Date.parse(latestWeight.measuredAt) <= 5 * 60 * 1000
+    && Date.now() >= Date.parse(latestWeight.measuredAt)
+    && latestWeight.unit === unit
+    ? latestWeight
+    : undefined;
   const [product, setProduct] = useState("");
   const [category, setCategory] = useState("Other");
   const [region, setRegion] = useState(profile?.region || "");
@@ -177,7 +186,7 @@ function SupplyForm({ onAdded }: { onAdded: () => void }) {
     <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
       <div><Label>Product Name</Label><Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="e.g. Yellow Maize, Roma Tomatoes" required /></div>
       <div><Label>Category</Label><Select value={category} onValueChange={setCategory}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
-      <div><Label>Quantity</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required /></div>
+      <div className="space-y-1"><Label>Quantity</Label><Input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value)} required />{freshMatchingWeight ? <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setQty(String(freshMatchingWeight.value))}>Use scale reading: {freshMatchingWeight.value} {freshMatchingWeight.unit}</Button> : latestWeight ? <p className="text-[10px] text-muted-foreground">Last scale reading: {latestWeight.value} {latestWeight.unit}. A fresh reading in the selected unit is required to use it.</p> : null}</div>
       <div><Label>Unit</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{MARKET_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select></div>
       <div><Label>Quality Grade</Label><Select value={grade} onValueChange={setGrade}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="A">A — Premium Quality</SelectItem><SelectItem value="B">B — Standard Grade</SelectItem><SelectItem value="C">C — Commercial/Economy</SelectItem></SelectContent></Select></div>
       <div><Label>Price / {unit} <span className="text-[10px] text-muted-foreground">(blank to auto-estimate)</span></Label><Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. GHS 250" /></div>
