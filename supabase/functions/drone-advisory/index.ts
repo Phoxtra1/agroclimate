@@ -15,7 +15,14 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const { missionType, targetLocation, plannedDate, droneType, altitude, weatherData } = await req.json();
+    const { missionType, targetLocation, plannedDate, droneType, altitude, weatherData, weatherFetchedAt } = await req.json();
+    const fetched = Date.parse(weatherFetchedAt || "");
+    const dated = Date.parse(weatherData?.isoDate || "");
+    if (!Number.isFinite(fetched) || Date.now() - fetched > 3600000 || fetched > Date.now() + 300000 ||
+        !Number.isFinite(dated) || Math.abs(Date.now() - dated) > 86400000 ||
+        ![weatherData?.tempHigh, weatherData?.humidity, weatherData?.wind, weatherData?.rainProb].every(value => typeof value === "number" && Number.isFinite(value))) {
+      return new Response(JSON.stringify({ advisory: null, error: "Current weather is unavailable; flight assessment withheld." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const systemPrompt = `You are a drone flight safety advisor for agricultural operations in West Africa.
 Evaluate flight conditions and provide clear Go/Caution/No-Go recommendations.
@@ -33,11 +40,11 @@ Drone type: ${droneType || "Generic multirotor"}
 Planned altitude: ${altitude || "50"}m
 
 Current weather at location:
-- Temperature: ${weatherData?.tempHigh || 30}°C
-- Humidity: ${weatherData?.humidity || 60}%
-- Wind speed: ${weatherData?.wind || 5} km/h
-- Rain probability: ${weatherData?.rainProb || 0}%
-- Conditions: ${weatherData?.description || "clear"}
+- Temperature: ${weatherData.tempHigh}°C
+- Humidity: ${weatherData.humidity}%
+- Wind speed: ${weatherData.wind} km/h
+- Rain probability: ${weatherData.rainProb}%
+- Conditions: ${weatherData.description || "Unavailable"}
 
 Provide flight safety advisory.`;
 

@@ -36,15 +36,20 @@ export default function DroneAdvisory() {
   const [advisory, setAdvisory] = useState<FlightAdvisory | null>(null);
   const [loading, setLoading] = useState(false);
   const { position } = useGeolocation();
-  const { forecast } = useWeather(position.lat, position.lon);
+  const { usableForecast: forecast, lastUpdated, error: weatherError } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
   const { isNew, markVisited } = useNewTag();
 
   const evaluate = async () => {
+    if (!forecast[0]) {
+      toast({ title: "Weather unavailable", description: weatherError || "Current weather is required before evaluating flight safety.", variant: "destructive" });
+      return;
+    }
+    setAdvisory(null);
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("drone-advisory", {
-        body: { missionType, targetLocation: position.locationName, plannedDate: new Date().toISOString(), droneType: droneType || undefined, altitude: Number(altitude), weatherData: forecast[0] },
+        body: { missionType, targetLocation: position.locationName, plannedDate: new Date().toISOString(), droneType: droneType || undefined, altitude: Number(altitude), weatherData: forecast[0], weatherFetchedAt: lastUpdated?.toISOString() },
       });
       if (error || data?.error) throw new Error(data?.error || "Evaluation failed");
       setAdvisory(data.advisory);
@@ -143,7 +148,8 @@ export default function DroneAdvisory() {
                     </div>
                   </div>
                 )}
-                <Button onClick={evaluate} disabled={loading} className="w-full">
+                {!forecast[0] && <p role="status" className="text-xs text-warning">{weatherError || "Current weather unavailable. Flight evaluation is withheld."}</p>}
+                <Button onClick={evaluate} disabled={loading || !forecast[0]} className="w-full">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Shield className="h-4 w-4 mr-2" />}
                   Evaluate Flight Safety
                 </Button>

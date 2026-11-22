@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { requestWeather } from "@/lib/weatherRequest";
 import { parseSatelliteWeather, weatherEvidenceIsFresh, type SatelliteWeatherEvidence } from "@/services/satellite/weatherRisk";
 
 const cache = new Map<string, SatelliteWeatherEvidence>();
@@ -9,7 +9,7 @@ export function useSatelliteWeather(lat: number, lon: number) {
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   const [now, setNow] = useState(Date.now());
-  const refresh = useCallback(() => { cache.delete(`${lat},${lon}`); setRevision(value => value + 1); }, [lat, lon]);
+  const refresh = useCallback(() => { setRevision(value => value + 1); }, []);
   useEffect(() => {
     let active = true;
     let request = 0;
@@ -24,7 +24,7 @@ export function useSatelliteWeather(lat: number, lon: number) {
       const id = ++request;
       setLoading(true);
       try {
-        const { data, error: failure } = await supabase.functions.invoke("weather", { body: { lat, lon } });
+        const { data, error: failure } = await requestWeather(lat, lon);
         if (failure || data?.error) throw new Error(data?.error || "Weather is unavailable for this location.");
         nextFetchAt = Math.max(Date.now() + 10 * 60 * 1000, Date.parse(data?.retryAt || "") || 0);
         if (data?.status === "unavailable") throw new Error(data.message || "Weather is unavailable for this location.");
@@ -36,6 +36,7 @@ export function useSatelliteWeather(lat: number, lon: number) {
         setError(data?.message || "");
         setNow(Date.now());
       } catch (failure) {
+        nextFetchAt = Math.max(nextFetchAt, Date.now() + 60000);
         if (active && id === request) setError(failure instanceof Error ? failure.message : "Weather unavailable");
       } finally {
         inFlight = false;
@@ -43,7 +44,7 @@ export function useSatelliteWeather(lat: number, lon: number) {
       }
     };
     const cached = cache.get(key);
-    if (!cached || Date.now() - Date.parse(cached.fetchedAt) >= 10 * 60 * 1000) void load();
+    if (revision > 0 || !cached || Date.now() - Date.parse(cached.fetchedAt) >= 10 * 60 * 1000) void load();
     const interval = window.setInterval(() => { setNow(Date.now()); if (document.visibilityState === "visible") void load(); }, 10 * 60 * 1000);
     const clock = window.setInterval(() => setNow(Date.now()), 60000);
     const wake = () => { setNow(Date.now()); if (document.visibilityState === "visible") void load(); };

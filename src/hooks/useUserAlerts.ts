@@ -272,7 +272,7 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   const [aiError, setAiError] = useState<string | null>(null);
 
   const fetchAiAdvisory = useCallback(async (force = false) => {
-    if (!forecast || forecast.length === 0 || !location) return;
+    if (!forecast || forecast.length === 0 || !location) { setAiAdvisory(null); return; }
     
     const cacheKey = `agroclimate_ai_alerts_${location.replace(/[^a-zA-Z]/g, "").toLowerCase()}`;
     if (!force) {
@@ -418,7 +418,7 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   }, [user]);
 
   const aiAlerts = useMemo(() => {
-    if (!aiAdvisory) return [];
+    if (!aiAdvisory || !forecast?.length) return [];
     const list: Alert[] = [];
     aiAdvisory.forEach((adv) => {
       adv.proactiveAlerts.forEach((pa, idx) => {
@@ -434,7 +434,7 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
       });
     });
     return list;
-  }, [aiAdvisory]);
+  }, [aiAdvisory, forecast]);
 
   const allAlerts = [...aiAlerts, ...dynamicAlerts, ...dbAlerts];
 

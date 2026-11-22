@@ -15,10 +15,10 @@ import { DashboardHeaderMenu } from "@/components/DashboardHeaderMenu";
 
 export default function Dashboard() {
   const { position, loading: geoLoading } = useGeolocation();
-  const { forecast, loading: weatherLoading, isLive, lastUpdated, observedAt, source, refresh } = useWeather(position.lat, position.lon);
+  const { forecast, usableForecast, loading: weatherLoading, isLive, lastUpdated, observedAt, source, refresh, error: weatherError } = useWeather(position.lat, position.lon);
   const { user } = useAuth();
   const { profile } = useProfile();
-  const { unreadAlerts, alerts, markRead, dismiss, deleteAlert } = useUserAlerts(forecast, position.locationName);
+  const { unreadAlerts, alerts, markRead, dismiss, deleteAlert } = useUserAlerts(usableForecast, position.locationName);
 
   const displayName = profile?.display_name || user?.email?.split("@")[0] || "Farmer";
 
@@ -60,9 +60,10 @@ export default function Dashboard() {
         />
       </div>
 
+      {weatherError && <p role="status" className="text-sm text-warning">{weatherError}</p>}
       {/* AgroClimate Intelligence Summary Banner */}
       <AgroClimateIntelligence
-        forecast={forecast}
+        forecast={usableForecast}
         location={position.locationName}
         isLive={isLive}
         loading={weatherLoading}
@@ -87,7 +88,7 @@ export default function Dashboard() {
               Current temperature and rainfall are unavailable. Refresh when your connection returns.
             </div>
           )}
-          {forecast[0] && <AdvisoryCard {...dynamicAdvisory} />}
+          {usableForecast[0] && <AdvisoryCard {...dynamicAdvisory} />}
         </section>
 
         {/* Block 2: 7-Day Forecast */}

@@ -323,7 +323,7 @@ function SoilStatusBadge({ status }: { status: CropWaterAdvisory["soilStatus"] }
 // ────────────────────────────────────────────────────────────
 export default function Weather() {
   const { position, loading: geoLoading, retry: retryLocation } = useGeolocation();
-  const { forecast, source, loading: weatherLoading, lastUpdated, refresh } = useWeather(
+  const { forecast, source, loading: weatherLoading, lastUpdated, refresh, error: weatherError } = useWeather(
     position?.lat,
     position?.lon
   );
@@ -404,6 +404,7 @@ export default function Weather() {
         </div>
       </div>
 
+      {weatherError && <p role="status" className="mb-4 text-sm text-warning">{weatherError}</p>}
       {isLoading && !today ? (
         <div className="flex items-center justify-center py-20">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />

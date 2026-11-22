@@ -3,6 +3,7 @@ import type { DipaProvider, SummaryRequest, PredictionRequest, ChatMessage, Risk
 import { levelFromScore } from "./index";
 
 import { getActiveModelSync } from "@/hooks/useAiModel";
+import { requireCurrentWeather } from "@/lib/weatherAvailability";
 
 // Calls the `dipa-intelligence` edge function which proxies Lovable AI.
 // The active model is chosen in the admin AI Layer and forwarded per call so
@@ -56,6 +57,7 @@ export const lovableProvider: DipaProvider = {
     return String(r?.text || "");
   },
   async generateAlertsAdvisory(location: string, forecast: any[]): Promise<AIAlertAdvisory[]> {
+    requireCurrentWeather(forecast);
     const prompt = `Analyze the 7-day weather forecast for the location: ${location}.
 Forecast data: ${JSON.stringify(forecast)}.
 
@@ -109,6 +111,7 @@ Do not wrap your output in markdown code blocks like \`\`\`json. Return only the
     }
   },
   async generateEnvironmentalAssessment(location: string, forecast: any[]): Promise<AIEnvironmentalAssessment> {
+    requireCurrentWeather(forecast);
     const prompt = `Analyze the 7-day weather forecast for the location: ${location}.
 Forecast data: ${JSON.stringify(forecast)}.
 
@@ -153,6 +156,7 @@ Do not wrap your output in markdown code blocks like \`\`\`json. Return only the
     }
   },
   async generateAgroRiskAssessment(location: string, lat: number, lon: number, boundary?: [number, number][], forecast?: any[]): Promise<AIAgroRiskAssessment> {
+    requireCurrentWeather(forecast || []);
     const boundaryStr = boundary ? JSON.stringify(boundary) : "Not specified";
     const prompt = `Analyze the environmental and terrain risks for the agricultural plot/location at: ${location} (Coordinates: Lat ${lat}, Lon ${lon}).
 Boundary vertices: ${boundaryStr}.

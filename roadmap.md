@@ -13,6 +13,7 @@
 - [ ] Resolve app errors and verify the Satellite experience.
 
 # App updates
+- [x] Handle weather outages across screens and flight services; verified live responses, public homepage outages and 19 regression tests. Signed-in verification was declined.
 - [ ] Restore published-app update notification and verify preview safety.
 - [ ] Diagnose and resolve the reported blank homepage before finishing current integration work.
 

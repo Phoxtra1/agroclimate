@@ -30,7 +30,7 @@ export function parseSatelliteWeather(payload: any): SatelliteWeatherEvidence {
       rainMm: numeric(day.values?.rainAccumulationSum),
       windKmh: numeric(day.values?.windSpeedMax) === null ? null : day.values.windSpeedMax * 3.6,
     }));
-  if (forecast.length === 0) throw new Error("No dated forecast was returned for this location.");
+  if (forecast.length === 0 && !timestamp(payload?.realtime?.data?.time)) throw new Error("No dated weather was returned for this location.");
   const fetchedAt = timestamp(payload?.fetchedAt);
   if (!fetchedAt) throw new Error("Weather retrieval time is unavailable.");
   return {
@@ -46,7 +46,7 @@ export function parseSatelliteWeather(payload: any): SatelliteWeatherEvidence {
 
 export function weatherEvidenceIsFresh(evidence: SatelliteWeatherEvidence, now = Date.now()) {
   const age = now - Date.parse(evidence.fetchedAt);
-  const firstDay = Date.parse(evidence.forecast[0]?.time ?? "");
+  const firstDay = Date.parse(evidence.forecast[0]?.time ?? evidence.observedAt ?? "");
   return age >= -300000 && age <= 30 * 60 * 1000 && Number.isFinite(firstDay) && Math.abs(firstDay - now) <= 36 * 60 * 60 * 1000;
 }
 

@@ -27,6 +27,12 @@ export function useFlightAdvisor(args: {
 
   const evaluate = async () => {
     if (inFlight.current) return;
+    const observedAt = Date.parse(environment?.observedAt || "");
+    if (!Number.isFinite(observedAt) || Date.now() - observedAt > 3600000 || observedAt > Date.now() + 300000 || !["provider", "sensor"].includes(environment?.source)) {
+      setAdvisory(null);
+      setError("Current measured weather is unavailable; flight safety assessment is withheld.");
+      return;
+    }
     inFlight.current = true;
     setLoading(true);
     setError(null);
@@ -38,6 +44,7 @@ export function useFlightAdvisor(args: {
       if ((data as any)?.error) throw new Error((data as any).error);
       if ((data as any)?.advisory) setAdvisory((data as any).advisory);
     } catch (e: any) {
+      setAdvisory(null);
       setError(e.message || "Advisory unavailable");
     } finally {
       setLoading(false);
@@ -53,5 +60,7 @@ export function useFlightAdvisor(args: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  return { advisory, loading, error, evaluate };
+  const measuredAt = Date.parse(environment?.observedAt || "");
+  const weatherAvailable = Number.isFinite(measuredAt) && Date.now() - measuredAt <= 3600000 && measuredAt <= Date.now() + 300000 && ["provider", "sensor"].includes(environment?.source);
+  return { advisory: weatherAvailable ? advisory : null, loading, error, evaluate, weatherAvailable };
 }

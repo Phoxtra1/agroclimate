@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { createWeatherProvider } from "../../supabase/functions/weather/provider";
+import { createWeatherProvider } from "../../supabase/functions/_shared/weather-provider";
 
 const forecast = { timelines: { daily: [{ time: "2026-11-22T00:00:00Z", values: { temperatureMax: 30, temperatureMin: 22 } }] } };
 const realtime = { data: { time: "2026-11-22T02:00:00Z", values: { temperature: 26 } } };

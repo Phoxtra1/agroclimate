@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { lovableProvider } from "@/lib/aiProviders/lovableProvider";
 import { reverseGeocodeLocation, type ResolvedLocation } from "@/lib/location";
+import { requireCurrentWeather } from "@/lib/weatherAvailability";
 
 // ==========================================
 // 1. DATA TYPES & INTERFACES FOR INTELLIGENCE
@@ -249,6 +250,7 @@ export const DipaEngine = {
     locationName?: string,
     forecast: any[] = []
   ): Promise<DynamicRiskAssessment> {
+    requireCurrentWeather(forecast);
     const geo = await reverseGeocodeLocation(lat, lon).catch(() => ({
       community: "",
       district: "",
@@ -388,6 +390,7 @@ export const DipaEngine = {
     soilType?: string,
     forecast: any[] = []
   ): Promise<CropSuitabilityResult> {
+    requireCurrentWeather(forecast);
     const geo = await reverseGeocodeLocation(lat, lon).catch(() => ({
       country: "Global",
       region: "Region",
@@ -471,6 +474,7 @@ export const DipaEngine = {
     forecastDay?: any,
     droneModel?: string
   ): Promise<FlightMissionAdvisory> {
+    requireCurrentWeather(forecastDay ? [forecastDay] : []);
     const tempC = Number(forecastDay?.tempHigh ?? 28);
     const windKph = Number(forecastDay?.wind ?? 14);
     const rainProb = Number(forecastDay?.rainProb ?? 15);

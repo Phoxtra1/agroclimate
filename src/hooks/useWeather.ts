@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { requestWeather } from "@/lib/weatherRequest";
+import { weatherIsCurrent } from "@/lib/weatherAvailability";
 import type { WeatherDay } from "@/data/mock-data";
 
 const CACHE_KEY = "agroclimate_weather_cache";
@@ -51,7 +52,7 @@ function readLocationCache(lat: number, lon: number): CachedWeather | null {
       Math.abs(parsed.lat - lat) < 0.1 && Math.abs(parsed.lon - lon) < 0.1;
     const validData = Array.isArray(parsed.data) && parsed.data.length > 0 &&
       parsed.data.every((day) => isFiniteNumber(day?.tempHigh) && isFiniteNumber(day?.tempLow));
-    if (!sameArea || !validData || !isFiniteNumber(parsed.timestamp) || parsed.timestamp <= 0) return null;
+    if (!sameArea || !validData || !isFiniteNumber(parsed.timestamp) || parsed.timestamp <= 0 || Date.now() - parsed.timestamp > 6 * 60 * 60 * 1000) return null;
     return parsed;
   } catch {
     return null;
@@ -138,7 +139,7 @@ export function mapRealtimeToWeatherDay(realtime: any): WeatherDay | null {
   const now = new Date();
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const tempHigh = Math.round(values.temperature);
-  const tempLow = Math.round(values.temperature - 4);
+  const tempLow = tempHigh;
   const humidity = Math.round(isFiniteNumber(values.humidity) ? values.humidity : 60);
   const windSpeedMps = isFiniteNumber(values.windSpeed) ? values.windSpeed : 0;
   const windKmh = Math.round(windSpeedMps * 3.6);
@@ -181,6 +182,7 @@ export function useWeather(lat?: number, lon?: number) {
   const [observedAt, setObservedAt] = useState<Date | null>(null);
   const [source, setSource] = useState<"live" | "cache" | "none">("none");
   const [error, setError] = useState("");
+  const [now, setNow] = useState(Date.now());
 
   const refresh = useCallback(() => {
     setSource("none");
@@ -189,7 +191,10 @@ export function useWeather(lat?: number, lon?: number) {
   }, []);
 
   useEffect(() => {
-    if (!isValidWeatherCoordinates(lat, lon)) return;
+    if (!isValidWeatherCoordinates(lat, lon)) {
+      setForecast([]); setSource("none"); setIsLive(false); setLastUpdated(null); setObservedAt(null);
+      return;
+    }
     const latitude = lat;
     const longitude = lon;
     let active = true;
@@ -200,6 +205,7 @@ export function useWeather(lat?: number, lon?: number) {
     let nextFetchAt = 0;
     let inFlight = false;
     setLoading(false);
+    setError("");
     if (cached) {
       setForecast(cached.data);
       setIsLive(false);
@@ -220,9 +226,7 @@ export function useWeather(lat?: number, lon?: number) {
       const requestId = ++latestRequest;
       setLoading(true);
       try {
-        const { data, error } = await supabase.functions.invoke("weather", {
-          body: { lat: latitude, lon: longitude },
-        });
+        const { data, error } = await requestWeather(latitude, longitude);
         if (error) throw new Error(error.message || "Weather provider request failed");
         if (data?.error) throw new Error(data.error);
         nextFetchAt = Math.max(Date.now() + CACHE_DURATION, Date.parse(data?.retryAt || "") || 0);
@@ -256,6 +260,7 @@ export function useWeather(lat?: number, lon?: number) {
         setIsLive(data?.status !== "cached");
         setError(data?.message || "");
         setLastUpdated(new Date(timestamp));
+        setNow(Date.now());
         setObservedAt(typeof observed === "string" ? new Date(observed) : null);
         setSource(data?.status === "cached" ? "cache" : "live");
         fallbackCache = { data: forecastDays, timestamp, observedAt: observed, lat: latitude, lon: longitude };
@@ -269,6 +274,7 @@ export function useWeather(lat?: number, lon?: number) {
         console.warn("AgroForecast provider request failed", error);
         setError(error instanceof Error ? error.message : "Weather temporarily unavailable.");
         nextFetchAt = Math.max(nextFetchAt, Date.now() + 60000);
+        if (fallbackCache && Date.now() - fallbackCache.timestamp > 6 * 60 * 60 * 1000) fallbackCache = null;
         setForecast(fallbackCache?.data || []);
         setIsLive(false);
         setLastUpdated(fallbackCache ? new Date(fallbackCache.timestamp) : null);
@@ -284,6 +290,7 @@ export function useWeather(lat?: number, lon?: number) {
     if (!cacheIsFresh || refreshTrigger > 0) void fetchWeather();
 
     const interval = window.setInterval(() => { void fetchWeather(); }, 10 * 60 * 1000);
+    const clock = window.setInterval(() => setNow(Date.now()), 60000);
     const onWake = () => { if (document.visibilityState === "visible") void fetchWeather(); };
     window.addEventListener("focus", onWake);
     window.addEventListener("online", onWake);
@@ -293,11 +300,14 @@ export function useWeather(lat?: number, lon?: number) {
       active = false;
       latestRequest += 1;
       window.clearInterval(interval);
+      window.clearInterval(clock);
       window.removeEventListener("focus", onWake);
       window.removeEventListener("online", onWake);
       document.removeEventListener("visibilitychange", onWake);
     };
   }, [lat, lon, refreshTrigger]);
 
-  return { forecast, loading, isLive, lastUpdated, observedAt, source, refresh, error };
+  const fresh = !!lastUpdated && now - lastUpdated.getTime() <= 60 * 60 * 1000 && weatherIsCurrent(forecast, now);
+  const usableForecast = useMemo(() => fresh ? forecast : [], [forecast, fresh]);
+  return { forecast, usableForecast, fresh, loading, isLive: isLive && fresh, lastUpdated, observedAt, source, refresh, error };
 }

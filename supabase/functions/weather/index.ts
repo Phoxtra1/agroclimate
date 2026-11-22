@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createWeatherProvider } from "./provider.ts";
+import { createWeatherProvider } from "../_shared/weather-provider.ts";
 
 const provider = createWeatherProvider();
 

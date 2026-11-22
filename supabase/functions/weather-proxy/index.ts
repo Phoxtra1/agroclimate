@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createWeatherProvider } from "../_shared/weather-provider.ts";
+
+const provider = createWeatherProvider();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +17,7 @@ serve(async (req) => {
   try {
     const { lat, lon } = await req.json();
 
-    if (!lat || !lon) {
+    if (typeof lat !== "number" || !Number.isFinite(lat) || Math.abs(lat) > 90 || typeof lon !== "number" || !Number.isFinite(lon) || Math.abs(lon) > 180) {
       return new Response(
         JSON.stringify({ error: "lat and lon are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -23,27 +26,19 @@ serve(async (req) => {
 
     const API_KEY = Deno.env.get("TOMORROW_IO_API_KEY");
     if (!API_KEY) {
-      throw new Error("TOMORROW_IO_API_KEY is not configured");
+      return new Response(JSON.stringify({ status: "unavailable", message: "Weather provider is not configured", forecast: [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const url = `https://api.tomorrow.io/v4/weather/forecast?location=${lat},${lon}&timesteps=1d&units=metric&apikey=${API_KEY}`;
-
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(`Tomorrow.io API error [${response.status}]: ${JSON.stringify(data)}`);
-    }
+    const data = await provider.load(lat, lon, API_KEY) as { status: string; fetchedAt: string | null; message?: string; retryAt?: string; forecast: any };
 
     // Transform to WeatherDataPoint[] format
-    const timelines = data?.timelines?.daily ?? [];
+    const timelines = data.forecast?.timelines?.daily ?? [];
     const forecast = timelines.map((day: any) => ({
       date: day.time?.split("T")[0] ?? "",
-      temp: day.values?.temperatureMax ?? day.values?.temperature ?? 0,
-      humidity: day.values?.humidityAvg ?? day.values?.humidity ?? 0,
-      windSpeed: day.values?.windSpeedMax ?? day.values?.windSpeed ?? 0,
+      temp: day.values?.temperatureMax ?? day.values?.temperature ?? null,
+      humidity: day.values?.humidityAvg ?? day.values?.humidity ?? null,
+      windSpeed: day.values?.windSpeedMax ?? day.values?.windSpeed ?? null,
       windGust: day.values?.windGustMax ?? day.values?.windGust ?? undefined,
-      rainfall: day.values?.precipitationIntensityMax ?? day.values?.rainIntensity ?? 0,
+      rainfall: day.values?.rainAccumulationSum ?? null,
       description: day.values?.weatherCodeMax?.toString() ?? "",
       pressure: day.values?.pressureSurfaceLevelAvg ?? undefined,
       visibility: day.values?.visibilityAvg ?? undefined,
@@ -51,14 +46,14 @@ serve(async (req) => {
       soilMoisture: day.values?.soilMoistureVolumetric0To10 ?? undefined,
     }));
 
-    return new Response(JSON.stringify({ forecast }), {
+    return new Response(JSON.stringify({ forecast, status: data.status, fetchedAt: data.fetchedAt, message: data.message, retryAt: data.retryAt }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error("Weather proxy error:", error);
     return new Response(
-      JSON.stringify({ error: (error as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ status: "unavailable", message: "Weather temporarily unavailable.", forecast: [] }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

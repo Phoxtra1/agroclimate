@@ -23,4 +23,10 @@ describe("Satellite evidence-based risk", () => {
   it("never claims parcel flood or landslide risk from weather alone", () => {
     expect(assessSatelliteWeatherRisk(parseSatelliteWeather(payload), now)[3].level).toBe("unavailable");
   });
+  it("keeps dated current conditions when the daily forecast is unavailable without inventing forecast risks", () => {
+    const evidence = parseSatelliteWeather({ ...payload, forecast: null });
+    expect(evidence.temperatureC).toBe(30);
+    expect(evidence.forecast).toEqual([]);
+    expect(assessSatelliteWeatherRisk(evidence, now).every(r => r.level === "unavailable")).toBe(true);
+  });
 });

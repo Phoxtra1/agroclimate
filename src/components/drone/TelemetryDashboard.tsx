@@ -82,6 +82,7 @@ export function TelemetryDashboard({ telemetry, environment }: TelemetryDashboar
             <Wind className="h-4 w-4" /> Environmental Conditions
           </CardTitle>
         </CardHeader>
+        {!environment.observedAt && <p role="status" className="px-4 pt-3 text-xs text-warning">Sample environment values — not current measured weather.</p>}
         <CardContent className="p-4 grid grid-cols-3 gap-4 font-mono text-sm">
           <div>
             <div className="text-slate-500 text-xs mb-1">WIND</div>

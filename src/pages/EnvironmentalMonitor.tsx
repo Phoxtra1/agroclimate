@@ -584,7 +584,7 @@ function useEnvironmentState(forecast: any[]): EnvironmentState | null {
 // =============================================================================
 export default function EnvironmentalMonitor() {
   const { position } = useGeolocation();
-  const { forecast, source: weatherSource } = useWeather(position.lat, position.lon);
+  const { usableForecast: forecast, source: weatherSource, error: weatherError, loading: weatherLoading, refresh: refreshWeather, lastUpdated } = useWeather(position.lat, position.lon);
   const envState = useEnvironmentState(forecast);
   const { latestByMetric: latestFieldMetrics } = useHardwareObservations(["agrorisk", "agroforecast"]);
   const fieldSensorReadings = useMemo(
@@ -700,7 +700,11 @@ export default function EnvironmentalMonitor() {
   // RISK EVALUATION TRIGGERS (DYNAMIC UPDATES)
   // ---------------------------------------------------------------------------
   const updateRiskAssessment = useCallback(async (lat: number, lon: number, boundary?: [number, number][], locName = "Selected Coordinates") => {
-    if (!forecast || forecast.length === 0) return;
+    if (!forecast || forecast.length === 0) {
+      setAgroRiskData(null); setAiAgroRisk(null); setAiEnv(null);
+      setAiError("Current weather is unavailable; risk assessment is withheld.");
+      return;
+    }
 
     setAiError(null);
     setAiAgroRisk(null);
@@ -735,6 +739,7 @@ export default function EnvironmentalMonitor() {
 
   // Initial load or geolocation change
   useEffect(() => {
+    if (forecast.length === 0) { setAgroRiskData(null); setAiAgroRisk(null); setAiEnv(null); }
     if (position.lat && position.lon && forecast && forecast.length > 0) {
       setMapCenter([position.lat, position.lon]);
       setClickPoint([position.lat, position.lon]);
@@ -977,8 +982,10 @@ export default function EnvironmentalMonitor() {
     return (
       <div className="p-4 lg:p-8 max-w-5xl mx-auto">
         <div className="text-center py-16 text-muted-foreground">
-          <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-3" />
-          <p className="text-sm">Loading environmental monitor…</p>
+          {weatherLoading && <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-3" />}
+          <h1 className="mb-2 font-bold">Agro &amp; Climate Risk Intelligence</h1>
+          <p role="status" className="text-sm">{weatherLoading ? "Loading environmental monitor…" : weatherError || "Current weather unavailable; environmental risk assessment is withheld."}</p>
+          <Button variant="outline" className="mt-4" disabled={weatherLoading} onClick={refreshWeather}><RefreshCw className="mr-2 h-4 w-4" />Retry weather</Button>
         </div>
       </div>
     );
@@ -1016,6 +1023,7 @@ export default function EnvironmentalMonitor() {
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
       <HardwareDeviceRegistryPanel component="agrorisk" />
+      {weatherError && <p role="status" className="text-sm text-warning">{weatherError}</p>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -1057,13 +1065,13 @@ export default function EnvironmentalMonitor() {
           </div>
           <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground">
             <RefreshCw className="h-3 w-3" />
-            <span>Weather input: {weatherSource === "live" ? "Live provider" : weatherSource === "cache" ? "Cached provider" : "Sample fallback"} · Updated {envState.lastUpdated.toLocaleTimeString()}</span>
+            <span>Weather input: {weatherSource === "live" ? "Live provider" : weatherSource === "cache" ? "Cached provider" : "Unavailable"} · Updated {lastUpdated?.toLocaleString() || "Unavailable"}</span>
           </div>
         </div>
       </div>
 
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-        AgroRisk scores are model-based estimates using weather-provider forecasts or fallback sample data, coordinate-based terrain heuristics and incident reports saved in this browser. They are not field-sensor measurements, surveyed terrain results or verified hazard boundaries. Confirm local conditions before making operational decisions.
+        AgroRisk scores are model-based estimates using dated weather-provider forecasts, coordinate-based terrain heuristics and incident reports saved in this browser. They are not field-sensor measurements, surveyed terrain results or verified hazard boundaries. Confirm local conditions before making operational decisions.
       </div>
 
       {fieldSensorReadings.length > 0 && (

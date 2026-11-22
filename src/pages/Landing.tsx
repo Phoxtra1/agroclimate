@@ -7,7 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TodayWeather, ForecastRow } from "@/components/WeatherCard";
-import { weeklyForecast } from "@/data/mock-data";
+import { useWeather } from "@/hooks/useWeather";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { Cloud, Sprout, Bell, Fish, ArrowRight, Loader2, Bot, Plane, Leaf, Shield, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
@@ -18,6 +19,9 @@ import { APP_VERSION_LABEL, WHATS_NEW, APP_NAME, APP_FOOTER } from "@/config/ver
 export default function Landing() {
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
+  const { position } = useGeolocation();
+  const { forecast, loading: weatherLoading, source, lastUpdated, error: weatherError } = useWeather(position.lat, position.lon);
+  const today = forecast[0];
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [regName, setRegName] = useState("");
@@ -254,7 +258,8 @@ export default function Landing() {
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Main Column: Live Weather Overview + Agro Learning & Market Link Hub Cards */}
           <div className="lg:col-span-2 space-y-4">
-            <TodayWeather weather={weeklyForecast[0]} />
+            {today ? <TodayWeather weather={today} /> : <p role="status" className="rounded-lg border bg-card p-5 text-sm text-muted-foreground">{weatherLoading ? "Loading weather…" : weatherError || "Weather is temporarily unavailable."}</p>}
+            <p className="text-xs text-muted-foreground">{position.locationName} · {source === "live" ? "Provider data" : source === "cache" ? "Cached provider data" : "Weather unavailable"}{lastUpdated ? ` · Updated ${lastUpdated.toLocaleString()}` : ""}</p>
 
             {/* Agro Learning & Market Link Hub Cards side-by-side filling the former forecast list area */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -300,13 +305,13 @@ export default function Landing() {
               <h4 className="font-bold text-sm mb-3 flex items-center gap-1.5">
                 <span>📅</span> {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
               </h4>
-              <div className="space-y-2 text-xs text-muted-foreground font-medium">
-                <p className="flex justify-between border-b pb-1.5"><span>🌡️ High / Low:</span><strong className="text-foreground">{weeklyForecast[0].tempHigh}°C / {weeklyForecast[0].tempLow}°C</strong></p>
-                <p className="flex justify-between border-b pb-1.5"><span>💧 Humidity:</span><strong className="text-foreground">{weeklyForecast[0].humidity}%</strong></p>
-                <p className="flex justify-between border-b pb-1.5"><span>🌧️ Rain probability:</span><strong className="text-foreground">{weeklyForecast[0].rainProb}%</strong></p>
-                <p className="flex justify-between border-b pb-1.5"><span>💨 Wind speed:</span><strong className="text-foreground">{weeklyForecast[0].wind} km/h</strong></p>
-                <p className="flex justify-between pt-0.5"><span>☁️ Conditions:</span><strong className="text-foreground">{weeklyForecast[0].description}</strong></p>
-              </div>
+              {today ? <div className="space-y-2 text-xs text-muted-foreground font-medium">
+                <p className="flex justify-between border-b pb-1.5"><span>🌡️ High / Low:</span><strong className="text-foreground">{today.tempHigh}°C / {today.tempLow}°C</strong></p>
+                <p className="flex justify-between border-b pb-1.5"><span>💧 Humidity:</span><strong className="text-foreground">{today.humidity}%</strong></p>
+                <p className="flex justify-between border-b pb-1.5"><span>🌧️ Rain probability:</span><strong className="text-foreground">{today.rainProb}%</strong></p>
+                <p className="flex justify-between border-b pb-1.5"><span>💨 Wind speed:</span><strong className="text-foreground">{today.wind} km/h</strong></p>
+                <p className="flex justify-between pt-0.5"><span>☁️ Conditions:</span><strong className="text-foreground">{today.description}</strong></p>
+              </div> : <p className="text-xs text-muted-foreground">Current conditions unavailable.</p>}
             </div>
 
             <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 space-y-3 text-xs">

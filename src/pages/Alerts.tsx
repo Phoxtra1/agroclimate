@@ -96,7 +96,7 @@ function filterLabel(value: AlertFilter | "aquaculture" | "general") {
 export default function Alerts() {
   const { user } = useAuth();
   const { position } = useGeolocation();
-  const { forecast, loading: weatherLoading } = useWeather(position.lat, position.lon);
+  const { usableForecast: forecast, loading: weatherLoading, error: weatherError } = useWeather(position.lat, position.lon);
   const { toast } = useToast();
   const {
     alerts,
@@ -649,6 +649,7 @@ export default function Alerts() {
 
             <div className="rounded-xl border border-border bg-card p-4">
               <h3 className="text-sm font-semibold text-foreground">Live Data Source</h3>
+              {weatherError && <p role="status" className="mt-2 text-xs text-warning">{weatherError}</p>}
               <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
                 <li>• Alerts are generated from your current weather and environment feed.</li>
                 <li>• Categories cover crops, livestock, aquaculture, environment, weather, and flight risk.</li>

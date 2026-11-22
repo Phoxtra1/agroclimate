@@ -9,6 +9,8 @@ import { logConnectionEvent } from "@/lib/drone/eventLog";
 export type DroneStatus = FlightStatus;
 export type TelemetryData = DroneTelemetry;
 export interface EnvironmentData {
+  observedAt?: string;
+  source?: "provider" | "sensor" | "sample";
   windSpeed: number;
   windDirection: string;
   temperature: number;

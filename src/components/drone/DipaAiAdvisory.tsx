@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<string, { label: string; color: string }> = {
 export function DipaAiAdvisory({
   telemetry, environment, status = "flying",
 }: { telemetry: TelemetryData; environment: EnvironmentData; status?: DroneStatus }) {
-  const { advisory, loading, evaluate, error } = useFlightAdvisor({
+  const { advisory, loading, evaluate, error, weatherAvailable } = useFlightAdvisor({
     telemetry, environment, status,
   });
 
@@ -37,7 +37,7 @@ export function DipaAiAdvisory({
   // Local fast alerts (instant)
   const localAlerts = (() => {
     const a: { type: string; severity: keyof typeof SEVERITY_CLS; message: string; icon: any }[] = [];
-    if (environment?.windSpeed > 25) {
+    if (weatherAvailable && environment?.windSpeed > 25) {
       a.push({ type: "high_wind", severity: "warning", message: `High wind: ${environment.windSpeed.toFixed(0)} km/h`, icon: Wind });
     }
     if (telemetry.battery < 25) {
@@ -119,7 +119,7 @@ export function DipaAiAdvisory({
           </div>
           <div>
             <div className="text-slate-500 mb-1">AIRSPACE ADVISORY</div>
-            <div className="text-cyan-400 text-[10px] leading-tight">{advisory?.route_optimization || "Clear corridor flight pattern"}</div>
+            <div className="text-cyan-400 text-[10px] leading-tight">{advisory?.route_optimization || "Current weather assessment unavailable"}</div>
           </div>
         </div>
       </CardContent>

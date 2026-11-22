@@ -13,6 +13,10 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const { telemetry, environment, mission } = await req.json();
+    const observedAt = Date.parse(environment?.observedAt || "");
+    if (!Number.isFinite(observedAt) || Date.now() - observedAt > 3600000 || observedAt > Date.now() + 300000 || !["provider", "sensor"].includes(environment?.source)) {
+      return new Response(JSON.stringify({ advisory: null, error: "Current measured weather is unavailable; flight assessment withheld." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const system = `You are Dipa — an aviation-grade drone flight safety analyst for West African agricultural operations. Be concise, factual, and decisive. If data is missing or low-confidence, say so. Never invent telemetry. Output ONLY via the structured tool.`;
 
