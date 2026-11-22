@@ -47,7 +47,7 @@ export const PLANS: Plan[] = [
       "Handler",
       "Post-Harvest Tracker",
       "Market Link",
-      "SMS Alerts",
+      "SMS Alerts (currently unavailable)",
     ],
     components: ["ai_assistant", "handler", "post_harvest", "market_link"],
   },

@@ -941,7 +941,8 @@ replaces the `id` column, so `id` is omitted from the attribute lists.
 |---|---|---|
 | admin-agtrans-drivers | admin-agtrans-drivers | APPWRITE_API_KEY, SMS key |
 | send-sms | send-sms | AFRICASTALKING_API_KEY |
-| weather / weather-proxy / weather-sms-alerts | same names | OPENWEATHERMAP_API_KEY, TOMORROW_IO_API_KEY |
+| weather / weather-proxy | same names | OPENWEATHERMAP_API_KEY, TOMORROW_IO_API_KEY |
+| weather-sms-alerts | side-effect-free disabled-status endpoint (HTTP 200, sent: 0); never broadcast on alert rendering | None |
 | dipa-ai / dipa-vision / dipa-flight-ops / dipa-intelligence / dipa-route-generator | same names | AI provider key |
 | agro-recommendation, crop-advisory, drone-advisory | same names | AI provider key |
 | paystack-init / paystack-verify | same names | PAYSTACK_SECRET_KEY |

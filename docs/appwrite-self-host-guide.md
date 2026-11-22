@@ -240,7 +240,7 @@ The system generates alerts from multiple domains based on real-time weather:
 Alert delivery channels:
 - **Dashboard**: real-time cards with mark-read, dismiss, and delete actions
 - **Browser notifications**: prompted on first visit, sent for critical (danger) alerts
-- **SMS**: triggered for critical weather via weather-sms-alerts backend function to all users with phone numbers
+- **Weather SMS**: disabled. Alert rendering must not invoke broadcasts. Keep the compatibility endpoint side-effect-free until recipient opt-in, regional targeting and delivery controls exist.
 
 Alert IDs are deterministic (prefix + location + date) ensuring stable read/dismiss states across sessions.
 
@@ -248,7 +248,7 @@ Alert IDs are deterministic (prefix + location + date) ensuring stable read/dism
 
 - **create-handler**: create auth account, assign handler role, create handler profile, auto-cleanup on failure.
 - **weather**: fetch live weather and daily forecast from Tomorrow.io.
-- **weather-sms-alerts**: evaluate critical conditions and send SMS alerts to users with phone numbers, with 6-hour deduplication.
+- **weather-sms-alerts**: return HTTP 200 with `status: "disabled"` and `sent: 0`; do not query recipients or send messages. Preserve this behavior when porting.
 - **crop-advisory**: generate crop guidance using AI.
 - **dipa-ai**: AI advisory and research responses.
 - **send-sms**: single-message delivery helper.
