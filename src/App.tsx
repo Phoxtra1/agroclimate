@@ -10,7 +10,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
-import Landing from "./pages/Landing";
+const Landing = lazy(() => import("./pages/Landing"));
 const AdminDashboard = lazy(() => import("@/pages/admin/AdminDashboard"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Satellite = lazy(() => import("./pages/Satellite"));
