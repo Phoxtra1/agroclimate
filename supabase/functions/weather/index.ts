@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createWeatherProvider } from "./provider.ts";
+
+const provider = createWeatherProvider();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +24,7 @@ serve(async (req) => {
 
   try {
     const apiKey = Deno.env.get("TOMORROW_IO_API_KEY");
-    if (!apiKey) return json({ error: "Weather provider is not configured" }, 503);
+    if (!apiKey) return json({ status: "unavailable", message: "Weather provider is not configured", forecast: null, realtime: null });
 
     const body = await req.json().catch(() => null);
     const lat = body?.lat;
@@ -33,53 +36,10 @@ serve(async (req) => {
       return json({ error: "Valid numeric latitude and longitude are required" }, 400);
     }
 
-    const makeUrl = (path: string) => {
-      const url = new URL(`https://api.tomorrow.io/v4/weather/${path}`);
-      url.searchParams.set("location", `${lat},${lon}`);
-      url.searchParams.set("units", "metric");
-      url.searchParams.set("apikey", apiKey);
-      if (path === "forecast") url.searchParams.set("timesteps", "1d");
-      return url.toString();
-    };
-
-    // A failed realtime call must not discard an otherwise usable daily forecast.
-    const [realtimeResult, forecastResult] = await Promise.allSettled([
-      fetch(makeUrl("realtime"), { signal: AbortSignal.timeout(12000) }),
-      fetch(makeUrl("forecast"), { signal: AbortSignal.timeout(15000) }),
-    ]);
-
-    if (forecastResult.status !== "fulfilled" || !forecastResult.value.ok) {
-      const status = forecastResult.status === "fulfilled" ? forecastResult.value.status : 502;
-      console.error("[weather] daily forecast provider request failed", status);
-      return json({ error: "The weather provider could not return a daily forecast. Retry shortly." }, 502);
-    }
-
-    const forecast = await forecastResult.value.json();
-    const daily = forecast?.timelines?.daily;
-    if (!Array.isArray(daily) || daily.length === 0) {
-      return json({ error: "The weather provider returned no daily forecast data." }, 502);
-    }
-
-    let realtime: unknown = null;
-    if (realtimeResult.status === "fulfilled" && realtimeResult.value.ok) {
-      try {
-        realtime = await realtimeResult.value.json();
-      } catch {
-        realtime = null;
-      }
-    } else {
-      console.warn("[weather] realtime conditions unavailable; returning forecast only");
-    }
-
-    return json({
-      provider: "Tomorrow.io",
-      fetchedAt: new Date().toISOString(),
-      realtime,
-      forecast,
-    });
+    return json(await provider.load(lat, lon, apiKey));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown weather service error";
     console.error("[weather] request failed", message);
-    return json({ error: "Weather service temporarily unavailable. Retry shortly." }, 502);
+    return json({ status: "unavailable", message: "Weather service temporarily unavailable. Retry shortly.", forecast: null, realtime: null });
   }
 });

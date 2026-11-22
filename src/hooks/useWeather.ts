@@ -180,9 +180,9 @@ export function useWeather(lat?: number, lon?: number) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [observedAt, setObservedAt] = useState<Date | null>(null);
   const [source, setSource] = useState<"live" | "cache" | "none">("none");
+  const [error, setError] = useState("");
 
   const refresh = useCallback(() => {
-    try { localStorage.removeItem(CACHE_KEY); } catch { /* storage unavailable */ }
     setSource("none");
     setIsLive(false);
     setRefreshTrigger((previous) => previous + 1);
@@ -196,7 +196,9 @@ export function useWeather(lat?: number, lon?: number) {
     let latestRequest = 0;
 
     const cached = readLocationCache(latitude, longitude);
-    const fallbackCache = cached;
+    let fallbackCache = cached;
+    let nextFetchAt = 0;
+    let inFlight = false;
     setLoading(false);
     if (cached) {
       setForecast(cached.data);
@@ -213,6 +215,8 @@ export function useWeather(lat?: number, lon?: number) {
     }
 
     const fetchWeather = async () => {
+      if (inFlight || Date.now() < nextFetchAt) return;
+      inFlight = true;
       const requestId = ++latestRequest;
       setLoading(true);
       try {
@@ -221,6 +225,8 @@ export function useWeather(lat?: number, lon?: number) {
         });
         if (error) throw new Error(error.message || "Weather provider request failed");
         if (data?.error) throw new Error(data.error);
+        nextFetchAt = Math.max(Date.now() + CACHE_DURATION, Date.parse(data?.retryAt || "") || 0);
+        if (data?.status === "unavailable") throw new Error(data.message || "Weather temporarily unavailable.");
 
         const dailyTimelines = Array.isArray(data?.forecast?.timelines?.daily)
           ? data.forecast.timelines.daily
@@ -229,10 +235,6 @@ export function useWeather(lat?: number, lon?: number) {
           .filter(isUsableDailyForecast)
           .slice(0, 7)
           .map(mapTomorrowToWeatherDay);
-
-        if (forecastDays.length === 0) {
-          throw new Error("Weather provider returned no usable daily forecast data.");
-        }
 
         const realtimeDay = mapRealtimeToWeatherDay(data?.realtime);
         if (realtimeDay) {
@@ -245,15 +247,18 @@ export function useWeather(lat?: number, lon?: number) {
             forecastDays.unshift(realtimeDay);
           }
         }
+        if (forecastDays.length === 0) throw new Error("Weather provider returned no usable weather data.");
 
         if (!active || requestId !== latestRequest) return;
-        const timestamp = Date.now();
+        const timestamp = Date.parse(data?.fetchedAt || "") || Date.now();
         const observed = data?.realtime?.data?.time ?? null;
         setForecast(forecastDays);
-        setIsLive(true);
+        setIsLive(data?.status !== "cached");
+        setError(data?.message || "");
         setLastUpdated(new Date(timestamp));
         setObservedAt(typeof observed === "string" ? new Date(observed) : null);
-        setSource("live");
+        setSource(data?.status === "cached" ? "cache" : "live");
+        fallbackCache = { data: forecastDays, timestamp, observedAt: observed, lat: latitude, lon: longitude };
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             data: forecastDays, timestamp, observedAt: observed, lat: latitude, lon: longitude,
@@ -262,12 +267,15 @@ export function useWeather(lat?: number, lon?: number) {
       } catch (error) {
         if (!active || requestId !== latestRequest) return;
         console.warn("AgroForecast provider request failed", error);
+        setError(error instanceof Error ? error.message : "Weather temporarily unavailable.");
+        nextFetchAt = Math.max(nextFetchAt, Date.now() + 60000);
         setForecast(fallbackCache?.data || []);
         setIsLive(false);
         setLastUpdated(fallbackCache ? new Date(fallbackCache.timestamp) : null);
         setObservedAt(fallbackCache?.observedAt ? new Date(fallbackCache.observedAt) : null);
         setSource(fallbackCache ? "cache" : "none");
       } finally {
+        inFlight = false;
         if (active && requestId === latestRequest) setLoading(false);
       }
     };
@@ -291,5 +299,5 @@ export function useWeather(lat?: number, lon?: number) {
     };
   }, [lat, lon, refreshTrigger]);
 
-  return { forecast, loading, isLive, lastUpdated, observedAt, source, refresh };
+  return { forecast, loading, isLive, lastUpdated, observedAt, source, refresh, error };
 }

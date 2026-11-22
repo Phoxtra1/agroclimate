@@ -13,25 +13,32 @@ export function useSatelliteWeather(lat: number, lon: number) {
   useEffect(() => {
     let active = true;
     let request = 0;
+    let inFlight = false;
+    let nextFetchAt = 0;
     const key = `${lat},${lon}`;
     setEvidence(cache.get(key) ?? null);
     setError("");
     const load = async () => {
+      if (inFlight || Date.now() < nextFetchAt) return;
+      inFlight = true;
       const id = ++request;
       setLoading(true);
       try {
         const { data, error: failure } = await supabase.functions.invoke("weather", { body: { lat, lon } });
         if (failure || data?.error) throw new Error(data?.error || "Weather is unavailable for this location.");
+        nextFetchAt = Math.max(Date.now() + 10 * 60 * 1000, Date.parse(data?.retryAt || "") || 0);
+        if (data?.status === "unavailable") throw new Error(data.message || "Weather is unavailable for this location.");
         const result = parseSatelliteWeather(data);
         if (!active || id !== request) return;
         if (cache.size >= 50) cache.clear();
         cache.set(key, result);
         setEvidence(result);
-        setError("");
+        setError(data?.message || "");
         setNow(Date.now());
       } catch (failure) {
         if (active && id === request) setError(failure instanceof Error ? failure.message : "Weather unavailable");
       } finally {
+        inFlight = false;
         if (active && id === request) setLoading(false);
       }
     };
