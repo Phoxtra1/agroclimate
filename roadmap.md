@@ -13,6 +13,7 @@
 - [ ] Resolve app errors and verify the Satellite experience.
 
 # App updates
+- [x] Stop disabled weather SMS calls from generating errors without enabling broadcasts; live disabled response and regression tests verified. Signed-in browser verification remains unavailable.
 - [x] Handle weather outages across screens and flight services; verified live responses, public homepage outages and 19 regression tests. Signed-in verification was declined.
 - [ ] Restore published-app update notification and verify preview safety.
 - [ ] Diagnose and resolve the reported blank homepage before finishing current integration work.

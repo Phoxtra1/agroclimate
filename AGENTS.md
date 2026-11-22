@@ -8,3 +8,4 @@
 - Device integration extends the existing shared gateway and optional adapters rather than introducing a second registry; keep server-derived ownership, receipt time and retry-safe event identities.
 - Load the public landing page eagerly and wrap application startup in a recovery boundary so route-chunk or provider failures cannot leave an empty screen.
 - Keep the resilient weather provider in the edge-function shared directory so both weather endpoints deploy with the same cache and rate-limit behavior.
+- Alert rendering must not trigger SMS broadcasts; the disabled SMS endpoint returns a side-effect-free status for older clients until server-side consent, targeting and delivery controls exist.

@@ -265,7 +265,6 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
   const { user } = useAuth();
   const [alertStates, setAlertStates] = useState<UserAlertState[]>([]);
   const [loading, setLoading] = useState(true);
-  const [smsSent, setSmsSent] = useState(false);
 
   const [aiAdvisory, setAiAdvisory] = useState<AIAlertAdvisory[] | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -348,18 +347,8 @@ export function useUserAlerts(forecast?: WeatherDay[], location?: string) {
     });
   }, [forecast, location, alertStates]);
 
-  // Trigger SMS for critical conditions (once per session)
-  useEffect(() => {
-    if (!forecast || !location || smsSent || !forecast[0]) return;
-    const today = forecast[0];
-    const isCritical = today.rainProb > 70 || today.tempHigh > 38 || today.wind > 40 || (today.humidity > 90 && today.tempHigh > 28);
-    if (isCritical) {
-      setSmsSent(true);
-      supabase.functions.invoke("weather-sms-alerts", {
-        body: { weatherData: today, location },
-      }).catch(console.warn);
-    }
-  }, [forecast, location, smsSent]);
+  // SMS broadcasts remain disabled. Loading alerts must never initiate a broadcast;
+  // recipient consent, regional targeting and delivery controls belong server-side.
 
   const getState = (alertId: string) =>
     alertStates.find((s) => s.alert_id === alertId);
