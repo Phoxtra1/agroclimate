@@ -1,10 +1,27 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
+
+// Public (publishable) backend values used when an external host builds without
+// a .env, so the app never starts with an empty backend address.
+const PUBLIC_BACKEND = {
+  VITE_SUPABASE_URL: "https://apoqexuhlysoirtcvgfo.supabase.co",
+  VITE_SUPABASE_PUBLISHABLE_KEY:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwb3FleHVobHlzb2lydGN2Z2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2NjI5NTgsImV4cCI6MjA4NzIzODk1OH0.IeChoUJk5nSsg1taOB2HMONcZfpRvy1Y1pf-rmgz6aM",
+  VITE_SUPABASE_PROJECT_ID: "apoqexuhlysoirtcvgfo",
+};
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const env = { ...process.env, ...loadEnv(mode, process.cwd(), "VITE_") };
+  const define = Object.fromEntries(
+    Object.entries(PUBLIC_BACKEND)
+      .filter(([k]) => !env[k])
+      .map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)]),
+  );
+  return {
+  define,
   server: {
     host: "::",
     port: 8080,
@@ -243,4 +260,5 @@ export default defineConfig(({ mode }) => ({
 
     chunkSizeWarningLimit: 1500,
   },
-}));
+};
+});
